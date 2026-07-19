@@ -30,15 +30,15 @@ export default function PlayersPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      <h1 className="text-3xl font-bold text-slate-900">Players</h1>
-      <p className="mt-1 text-sm text-slate-500">{players.length} players</p>
+      <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Players</h1>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{players.length} players</p>
 
       <input
         type="text"
         placeholder="Search by name…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="mt-4 w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        className="mt-4 w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 px-4 py-2.5 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
       />
 
       <div className="mt-6">
