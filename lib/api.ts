@@ -50,6 +50,54 @@ export async function fetchPlayer(id: number): Promise<PlayerDetail> {
   return res.json();
 }
 
+// ── Fantasy ──────────────────────────────────────────────────────────────────
+
+export interface FantasyTeam {
+  team_id: string;
+  name: string;
+  short_name: string;
+  logo: string | null;
+  rank: number | null;
+  wins: number | null;
+  losses: number | null;
+  ties: number | null;
+  points_for: number | null;
+  points_against: number | null;
+}
+
+export interface FantasyPlayer {
+  name: string;
+  short_name: string;
+  nba_team: string;
+  nba_team_short: string;
+  position: string;
+  status: "Active" | "Reserve" | "IR" | "?";
+  photo: string | null;
+  nba_id: number | null;
+  salary_2026_27: string | null;
+  injury: string | null;
+}
+
+export interface FantasyRoster {
+  team_id: string;
+  team_name: string;
+  logo: string | null;
+  owner: string | null;
+  players: FantasyPlayer[];
+}
+
+export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<FantasyTeam[]> {
+  const res = await fetch(`${BASE}/api/fantasy/${league}/standings`, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error("Failed to fetch standings");
+  return res.json();
+}
+
+export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string): Promise<FantasyRoster> {
+  const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error("Failed to fetch roster");
+  return res.json();
+}
+
 export async function fetchTopContracts(n = 50): Promise<(Player & { rank: number; contract: Contract })[]> {
   const res = await fetch(`${BASE}/api/nba/contracts/top?n=${n}`, {
     next: { revalidate: 3600 },

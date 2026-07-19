@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
         hostname: "mybackend.dimikog.org",
         pathname: "/photos/**",
       },
+      {
+        protocol: "https",
+        hostname: "fantraximg.com",
+      },
     ],
   },
 };
