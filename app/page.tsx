@@ -1,12 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
-import { fetchScoreboard, fetchNews, fetchFantasyStandings } from "@/lib/api";
+import {
+  fetchScoreboard,
+  fetchNews,
+  fetchFantasyStandings,
+  fetchPersonalFantasyMatchups,
+  type FantasyMatchup,
+  type FantasyMatchupPeriod,
+} from "@/lib/api";
 
 export default async function Home() {
-  const [games, news, ldlTeams] = await Promise.all([
+  const [games, news, ldlTeams, personalFantasy] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
     fetchFantasyStandings("ldl").catch(() => []),
+    fetchPersonalFantasyMatchups("ldl").catch(() => null),
   ]);
 
   const top5ldl = ldlTeams.slice(0, 5);
@@ -36,6 +44,9 @@ export default async function Home() {
           </div>
         )}
       </section>
+
+      {/* Personal fantasy snapshot */}
+      <PersonalFantasySection data={personalFantasy} />
 
       {/* LDL + News */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -104,6 +115,148 @@ export default async function Home() {
         </section>
       </div>
     </main>
+  );
+}
+
+function PersonalFantasySection({ data }: { data: FantasyMatchupPeriod | null }) {
+  if (!data) {
+    return (
+      <section>
+        <SectionHeading label="My Fantasy Team" href="/fantasy/ldl" />
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-6 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+          Personal fantasy data is temporarily unavailable.
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <SectionHeading label="My Fantasy Team" href={`/fantasy/${data.league.slug}`} />
+      <div className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-sm dark:border-blue-900 dark:from-blue-950/60 dark:via-slate-900 dark:to-indigo-950/50">
+        <div className="flex flex-col gap-3 border-b border-blue-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-blue-900/70">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+                {data.league.name}
+              </span>
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {data.period.caption}
+              </p>
+            </div>
+            <h2 className="mt-2 text-xl font-bold text-slate-950 dark:text-white">
+              {data.league.personal_team_name}
+            </h2>
+          </div>
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            {data.period.date_range}
+          </p>
+        </div>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-2">
+          {data.matchups.map((matchup) => (
+            <PersonalMatchupCard
+              key={matchup.matchup_id}
+              matchup={matchup}
+              personalTeamId={data.team_id}
+            />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PersonalMatchupCard({
+  matchup,
+  personalTeamId,
+}: {
+  matchup: FantasyMatchup;
+  personalTeamId: string;
+}) {
+  const isAway = matchup.away_team.id === personalTeamId;
+  const myTeam = isAway ? matchup.away_team : matchup.home_team;
+  const opponent = isAway ? matchup.home_team : matchup.away_team;
+  const myRecord = isAway ? matchup.away_record : matchup.home_record;
+  const recordTotal = myRecord?.reduce((total, value) => total + value, 0) ?? 0;
+  const scheduled = recordTotal === 0;
+
+  return (
+    <article className="rounded-xl border border-white/80 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/90">
+      <div className="flex items-center justify-between gap-3">
+        <TeamIdentity team={myTeam} align="left" />
+        <div className="shrink-0 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            {scheduled ? "Scheduled" : "Categories"}
+          </p>
+          <p className="mt-1 text-lg font-black tabular-nums text-slate-900 dark:text-white">
+            {scheduled || !myRecord ? "vs" : `${myRecord[0]}-${myRecord[1]}-${myRecord[2]}`}
+          </p>
+        </div>
+        <TeamIdentity team={opponent} align="right" />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+        {matchup.categories.map((category) => {
+          const mine = isAway ? category.away_result_points : category.home_result_points;
+          const theirs = isAway ? category.home_result_points : category.away_result_points;
+          const winning = !scheduled && mine !== null && theirs !== null && mine > theirs;
+          const losing = !scheduled && mine !== null && theirs !== null && mine < theirs;
+          return (
+            <span
+              key={category.id}
+              className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
+                winning
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  : losing
+                    ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                    : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+              }`}
+            >
+              {category.short_name}
+            </span>
+          );
+        })}
+      </div>
+    </article>
+  );
+}
+
+function TeamIdentity({
+  team,
+  align,
+}: {
+  team: { name: string; logoUrl128?: string | null };
+  align: "left" | "right";
+}) {
+  return (
+    <div className={`flex min-w-0 flex-1 items-center gap-2.5 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
+      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+        {team.logoUrl128 ? (
+          <Image src={team.logoUrl128} alt="" fill className="object-cover" unoptimized />
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm font-bold text-slate-400">
+            {team.name.charAt(0)}
+          </div>
+        )}
+      </div>
+      <p className="line-clamp-2 text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">
+        {team.name}
+      </p>
+    </div>
+  );
+}
+
+function SectionHeading({ label, href }: { label: string; href: string }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+        {label}
+      </h2>
+      <Link href={href} className="text-xs font-medium text-blue-500 hover:underline">
+        View league →
+      </Link>
+    </div>
   );
 }
 
