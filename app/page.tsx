@@ -7,17 +7,9 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
-      <div className="mb-8 flex items-end justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">NBA DApp</h1>
-          <p className="mt-1 text-slate-500 dark:text-slate-400">2026-27 Season · Top Contracts</p>
-        </div>
-        <Link
-          href="/players"
-          className="rounded-full bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-800"
-        >
-          All Players
-        </Link>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Top Contracts</h1>
+        <p className="mt-1 text-slate-500 dark:text-slate-400">2026-27 Season</p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
