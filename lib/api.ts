@@ -86,6 +86,54 @@ export interface FantasyRoster {
   players: FantasyPlayer[];
 }
 
+export interface FantasyLeague {
+  slug: string;
+  name: string;
+  league_id: string;
+  personal_team_id: string;
+  personal_team_name: string;
+  enabled: boolean;
+}
+
+export interface MatchupTeam {
+  id: string;
+  name: string;
+  logoUrl128?: string | null;
+  isMyTeam?: boolean;
+}
+
+export interface MatchupCategory {
+  id: string;
+  name: string;
+  short_name: string;
+  sort_direction: 1 | -1;
+  away_result_points: number | null;
+  home_result_points: number | null;
+}
+
+export interface FantasyMatchup {
+  matchup_id: string;
+  matchup_code: string | null;
+  away_team: MatchupTeam;
+  home_team: MatchupTeam;
+  away_record: [number, number, number] | null;
+  home_record: [number, number, number] | null;
+  categories: MatchupCategory[];
+}
+
+export interface FantasyMatchupPeriod {
+  league: FantasyLeague;
+  team_id: string;
+  period: {
+    number: number;
+    caption: string;
+    date_range: string;
+    is_playoffs: boolean;
+  };
+  categories: Omit<MatchupCategory, "away_result_points" | "home_result_points">[];
+  matchups: FantasyMatchup[];
+}
+
 export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<FantasyTeam[]> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/standings`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error("Failed to fetch standings");
@@ -95,6 +143,29 @@ export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<Fant
 export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string): Promise<FantasyRoster> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error("Failed to fetch roster");
+  return res.json();
+}
+
+export async function fetchFantasyLeagues(): Promise<FantasyLeague[]> {
+  const res = await fetch(`${BASE}/api/fantasy/leagues`, {
+    next: { revalidate: 3600 },
+  });
+  if (!res.ok) throw new Error("Failed to fetch fantasy leagues");
+  return res.json();
+}
+
+export async function fetchPersonalFantasyMatchups(
+  leagueSlug: string,
+): Promise<FantasyMatchupPeriod | null> {
+  const leagues = await fetchFantasyLeagues();
+  const league = leagues.find((item) => item.slug === leagueSlug && item.enabled);
+  if (!league?.personal_team_id) return null;
+
+  const res = await fetch(
+    `${BASE}/api/fantasy/${encodeURIComponent(league.slug)}/matchups/${encodeURIComponent(league.personal_team_id)}`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch personal fantasy matchups");
   return res.json();
 }
 
