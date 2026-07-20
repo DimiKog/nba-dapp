@@ -98,6 +98,34 @@ export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string):
   return res.json();
 }
 
+// ── Scoreboard & News ────────────────────────────────────────────────────────
+
+export interface GameTeam {
+  name: string; short: string; logo: string | null;
+  score: string | null; winner: boolean;
+}
+export interface Game {
+  id: string; date: string; status: string;
+  completed: boolean; home: GameTeam; away: GameTeam;
+}
+export interface NewsItem {
+  headline: string; description: string | null;
+  published: string; link: string | null;
+  image: string | null; categories: string[];
+}
+
+export async function fetchScoreboard(): Promise<Game[]> {
+  const res = await fetch(`${BASE}/api/nba/scoreboard`, { next: { revalidate: 60 } });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchNews(limit = 8): Promise<NewsItem[]> {
+  const res = await fetch(`${BASE}/api/nba/news?limit=${limit}`, { next: { revalidate: 300 } });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function fetchTopContracts(n = 50): Promise<(Player & { rank: number; contract: Contract })[]> {
   const res = await fetch(`${BASE}/api/nba/contracts/top?n=${n}`, {
     next: { revalidate: 3600 },
