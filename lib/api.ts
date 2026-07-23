@@ -28,6 +28,7 @@ export interface PlayerDetail extends Player {
 }
 
 export function photoUrl(filename: string | null, nbaId?: number | null): string | null {
+  if (filename && /^https?:\/\//i.test(filename)) return filename;
   if (filename) return `${BASE}/photos/${filename}`;
   if (nbaId) return `${BASE}/photos/${nbaId}.png`;
   return null;
