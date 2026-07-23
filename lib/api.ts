@@ -86,6 +86,79 @@ export interface FantasyRoster {
   players: FantasyPlayer[];
 }
 
+export interface FantasyPlayerStats {
+  games: number;
+  minutes?: number | null;
+  fg_pct: number | null;
+  three_pm: number;
+  ft_pct: number | null;
+  points: number;
+  oreb: number;
+  dreb: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  turnovers: number;
+  assist_turnover: number | null;
+  fgm?: number;
+  fga?: number;
+  ftm?: number;
+  fta?: number;
+}
+
+export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> {
+  injury: {
+    status: string;
+    body_part: string | null;
+    detail: string | null;
+    source: string;
+    updated_at: string | null;
+  } | null;
+  latest_game: {
+    date: string;
+    game_id: string;
+    team: string;
+    opponent: string;
+    is_home: boolean;
+    minutes: number | null;
+    stats: Omit<FantasyPlayerStats, "games" | "fg_pct" | "ft_pct" | "assist_turnover"> & {
+      fgm: number;
+      fga: number;
+      ftm: number;
+      fta: number;
+    };
+  } | null;
+  window_stats: FantasyPlayerStats;
+  season_average: FantasyPlayerStats | null;
+  category_strengths: string[];
+  impact_rank: number | null;
+  impact_score: number | null;
+  freshness: {
+    roster: string | null;
+    stats: string | null;
+    injury: string | null;
+  };
+}
+
+export interface FantasyRosterPerformance {
+  league: FantasyLeague;
+  team: {
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  };
+  window: {
+    days: number;
+    from: string;
+    to: string;
+    season: string;
+  };
+  categories: string[];
+  ranking_method: string;
+  players: FantasyPlayerPerformance[];
+}
+
 export interface FantasyLeague {
   slug: string;
   name: string;
@@ -143,6 +216,18 @@ export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<Fant
 export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string): Promise<FantasyRoster> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error("Failed to fetch roster");
+  return res.json();
+}
+
+export async function fetchFantasyRosterPerformance(
+  league: "ldl" | "bdb",
+  window = 7,
+): Promise<FantasyRosterPerformance> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/my-team/players?window=${window}`,
+    { next: { revalidate: 300 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch roster performance");
   return res.json();
 }
 

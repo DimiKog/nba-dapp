@@ -1,19 +1,32 @@
 import Image from "next/image";
 import Link from "next/link";
-import { fetchFantasyRoster, photoUrl } from "@/lib/api";
+import {
+  fetchFantasyLeagues,
+  fetchFantasyRoster,
+  fetchFantasyRosterPerformance,
+  photoUrl,
+} from "@/lib/api";
+import RosterPerformanceTable from "@/components/RosterPerformanceTable";
 import { notFound } from "next/navigation";
-
-const STATUS_COLOR: Record<string, string> = {
-  Active:  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  Reserve: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
-  IR:      "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-};
 
 export default async function LDLRosterPage({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId } = await params;
   let roster;
+  let performance = null;
   try {
-    roster = await fetchFantasyRoster("ldl", teamId);
+    const [rosterResult, leagues] = await Promise.all([
+      fetchFantasyRoster("ldl", teamId),
+      fetchFantasyLeagues(),
+    ]);
+    roster = rosterResult;
+    const ldl = leagues.find((league) => league.slug === "ldl");
+    if (ldl?.personal_team_id === teamId) {
+      try {
+        performance = await fetchFantasyRosterPerformance("ldl");
+      } catch {
+        performance = null;
+      }
+    }
   } catch {
     notFound();
   }
@@ -23,7 +36,7 @@ export default async function LDLRosterPage({ params }: { params: Promise<{ team
   const ir      = roster.players.filter((p) => p.status === "IR");
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full min-w-0 max-w-3xl px-4 py-10">
       <Link href="/fantasy/ldl" className="text-sm text-blue-500 hover:underline">
         ← LDL Standings
       </Link>
@@ -40,6 +53,9 @@ export default async function LDLRosterPage({ params }: { params: Promise<{ team
         </div>
       </div>
 
+      {performance ? (
+        <RosterPerformanceTable performance={performance} />
+      ) : (
       <div className="mt-8 space-y-6">
         {[
           { label: "Active", players: active },
@@ -100,6 +116,7 @@ export default async function LDLRosterPage({ params }: { params: Promise<{ team
           )
         )}
       </div>
+      )}
     </main>
   );
 }
