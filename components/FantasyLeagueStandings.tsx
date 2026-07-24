@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import TeamLogo from "@/components/TeamLogo";
 import type { FantasyTeam } from "@/lib/api";
 
 type LeagueSlug = "ldl" | "bdb";
@@ -32,7 +32,7 @@ export default function FantasyLeagueStandings({
               <th className="px-4 py-3 text-center">W</th>
               <th className="px-4 py-3 text-center">L</th>
               <th className="hidden px-4 py-3 text-center sm:table-cell">T</th>
-              <th className="px-4 py-3 text-right">Cap status</th>
+              <th className="px-4 py-3 text-right">Cap +/-</th>
               <th className="hidden px-4 py-3 text-right lg:table-cell">PF</th>
               <th className="hidden px-4 py-3 text-right lg:table-cell">PA</th>
             </tr>
@@ -43,9 +43,7 @@ export default function FantasyLeagueStandings({
                 <td className="px-4 py-3 font-medium tabular-nums text-slate-400">{team.rank ?? "—"}</td>
                 <td className="px-4 py-3">
                   <Link href={`/fantasy/${active}/roster/${team.team_id}`} className="group flex items-center gap-3">
-                    {team.logo && (
-                      <Image src={team.logo} alt={team.name} width={32} height={32} className="rounded-full" unoptimized />
-                    )}
+                    <TeamLogo league={active} name={team.name} logo={team.logo} />
                     <span className="font-semibold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100 dark:group-hover:text-blue-400">
                       {team.name}
                     </span>
@@ -70,7 +68,7 @@ export default function FantasyLeagueStandings({
 
 function CapStatus({ team }: { team: FantasyTeam }) {
   if (team.cap_status === "at_cap") {
-    return <span className="font-semibold text-slate-600 dark:text-slate-300">At cap</span>;
+    return <span className="font-semibold tabular-nums text-slate-600 dark:text-slate-300">$0</span>;
   }
   if (
     (team.cap_status !== "over" && team.cap_status !== "under")
@@ -83,7 +81,7 @@ function CapStatus({ team }: { team: FantasyTeam }) {
   const over = team.cap_status === "over";
   return (
     <span className={`font-bold tabular-nums ${over ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
-      {amount} {over ? "over" : "under"}
+      {over ? "−" : "+"}{amount}
     </span>
   );
 }
