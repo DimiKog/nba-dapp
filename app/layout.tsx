@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NBA DApp",
-  description: "NBA players, contracts and fantasy",
+  title: "My NBA",
+  description: "NBA fantasy decisions, player performance and payroll",
 };
 
 export default function RootLayout({

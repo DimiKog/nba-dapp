@@ -178,16 +178,27 @@ export default function RosterPerformanceTable({
           </div>
           <p className="text-xs text-slate-500">Players without a contract count as $0</p>
         </div>
-        <div className="grid gap-px bg-slate-200 dark:bg-slate-700 sm:grid-cols-2 xl:grid-cols-5">
-          {performance.payroll.seasons.map((season) => (
-            <div key={season.season} className="bg-white p-4 dark:bg-slate-900">
+        <div className="grid gap-px bg-slate-200 dark:bg-slate-700 sm:grid-cols-2 xl:grid-cols-6">
+          {performance.payroll.seasons.map((season, index) => {
+            const current = index === 0;
+            return (
+            <div
+              key={season.season}
+              className={`${
+                current
+                  ? "bg-blue-50 p-5 sm:col-span-2 dark:bg-blue-950/40"
+                  : "bg-white p-4 dark:bg-slate-900"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-bold text-slate-500">{season.season}</p>
+                <p className={`font-bold ${current ? "text-sm text-blue-700 dark:text-blue-300" : "text-xs text-slate-500"}`}>
+                  {season.season}{current ? " · Current season" : ""}
+                </p>
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${capStatusClasses(season.status)}`}>
                   {capStatusLabel(season.status)}
                 </span>
               </div>
-              <p className="mt-2 text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+              <p className={`mt-2 font-bold tabular-nums text-slate-900 dark:text-slate-100 ${current ? "text-3xl" : "text-lg"}`}>
                 {formatMoney(season.total)}
               </p>
               {season.cap != null ? (
@@ -208,7 +219,7 @@ export default function RosterPerformanceTable({
                 </p>
               )}
             </div>
-          ))}
+          )})}
         </div>
       </section>
       )}
