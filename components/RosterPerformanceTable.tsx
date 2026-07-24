@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import {
   FantasyPlayerPerformance,
@@ -31,6 +32,10 @@ const SECTIONS = [
   { label: "Injured Reserve", status: "IR" },
 ] as const;
 
+function playerKey(player: FantasyPlayerPerformance) {
+  return String(player.player_id ?? player.fantrax_scorer_id ?? player.name);
+}
+
 function latestStats(player: FantasyPlayerPerformance): FantasyPlayerStats | null {
   if (!player.latest_game) return null;
   const stats = player.latest_game.stats;
@@ -41,7 +46,7 @@ function latestStats(player: FantasyPlayerPerformance): FantasyPlayerStats | nul
     ft_pct: stats.fta ? Math.round((stats.ftm / stats.fta) * 1000) / 10 : null,
     assist_turnover: stats.turnovers
       ? Math.round((stats.assists / stats.turnovers) * 100) / 100
-      : null,
+      : stats.assists || null,
   };
 }
 
@@ -75,19 +80,48 @@ function freshnessLabel(value: string | null) {
   }).format(new Date(value))}`;
 }
 
+function statusClasses(status: FantasyPlayerPerformance["status"]) {
+  if (status === "Active") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300";
+  if (status === "IR") return "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300";
+  return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
+}
+
 export default function RosterPerformanceTable({
   performance,
 }: {
   performance: FantasyRosterPerformance;
 }) {
-  const [view, setView] = useState<View>("window");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const hasWindowGames = performance.players.some((player) => player.window_stats.games > 0);
+  const [view, setView] = useState<View>(hasWindowGames ? "window" : "season");
+  const [selectedKey, setSelectedKey] = useState(() => (
+    performance.players[0] ? playerKey(performance.players[0]) : ""
+  ));
+  const selected = (
+    performance.players.find((player) => playerKey(player) === selectedKey)
+    ?? performance.players[0]
+  );
   const injured = performance.players.filter((player) => player.injury);
   const freshest = performance.players
     .map((player) => player.freshness.stats)
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1) ?? null;
+
+  if (!selected) return null;
+
+  const selectedStats = statsFor(selected, view);
+  const selectedPhoto = photoUrl(selected.photo, selected.nba_id);
+  const selectPlayer = (key: string) => {
+    setSelectedKey(key);
+    if (window.matchMedia("(max-width: 1023px)").matches) {
+      window.requestAnimationFrame(() => {
+        document.getElementById("player-performance-detail")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    }
+  };
 
   return (
     <>
@@ -111,120 +145,189 @@ export default function RosterPerformanceTable({
         </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-          {([
-            ["window", `Last ${performance.window.days} days`],
-            ["latest", "Latest game"],
-            ["season", "Season average"],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setView(key)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                view === key
-                  ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      {!hasWindowGames && (
+        <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+          No NBA games were played in the last {performance.window.days} days. Season averages are shown by default.
         </div>
-        <p className="text-xs text-slate-500">Select a player for all 11 categories</p>
-      </div>
+      )}
 
-      <div className="mt-6 space-y-6">
-        {SECTIONS.map(({ label, status }) => {
-          const players = performance.players.filter((player) => player.status === status);
-          if (!players.length) return null;
-          return (
-            <section key={status}>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</h2>
-              <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                {players.map((player) => {
-                  const isExpanded = expanded === player.name;
-                  const photo = photoUrl(player.photo, player.nba_id);
-                  const stats = statsFor(player, view);
-                  return (
-                    <div key={player.name} className="border-b border-slate-100 bg-white last:border-b-0 dark:border-slate-700 dark:bg-slate-900">
+      <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(380px,1.1fr)]">
+        <div className="space-y-5">
+          {SECTIONS.map(({ label, status }) => {
+            const players = performance.players.filter((player) => player.status === status);
+            if (!players.length) return null;
+            return (
+              <section key={status}>
+                <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</h2>
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                  {players.map((player) => {
+                    const key = playerKey(player);
+                    const isSelected = key === playerKey(selected);
+                    const photo = photoUrl(player.photo, player.nba_id);
+                    return (
                       <button
+                        key={key}
                         type="button"
-                        aria-expanded={isExpanded}
-                        onClick={() => setExpanded(isExpanded ? null : player.name)}
-                        className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 sm:grid-cols-[minmax(220px,1fr)_minmax(210px,1fr)_auto]"
+                        aria-pressed={isSelected}
+                        onClick={() => selectPlayer(key)}
+                        className={`flex w-full items-center gap-3 border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 dark:border-slate-800 ${
+                          isSelected
+                            ? "bg-blue-50 ring-1 ring-inset ring-blue-300 dark:bg-blue-950/40 dark:ring-blue-700"
+                            : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                        }`}
                       >
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                            {photo ? <Image src={photo} alt="" fill className="object-cover" unoptimized /> : null}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate font-semibold text-slate-900 dark:text-slate-100">{player.name}</span>
-                            <span className="block truncate text-xs text-slate-500">
-                              {player.nba_team_short || "N/A"} · {player.position}
-                            </span>
-                            {player.injury && (
-                              <span className="mt-1 block truncate text-xs font-medium text-red-500">
-                                {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
-                              </span>
-                            )}
-                          </span>
-                        </span>
-                        <span className="hidden min-w-0 sm:block">
-                          <span className="block truncate text-sm font-medium text-slate-700 dark:text-slate-300">{summary(player, view)}</span>
-                          {view === "latest" && player.latest_game && (
-                            <span className="block text-xs text-slate-500">
-                              {player.latest_game.date} {player.latest_game.is_home ? "vs" : "@"} {player.latest_game.opponent}
-                            </span>
-                          )}
-                        </span>
-                        <span className="flex items-center gap-3">
-                          <span className="hidden text-right text-xs font-semibold text-blue-700 dark:text-blue-400 md:block">
-                            {player.salary_2026_27 ?? "—"}
-                          </span>
-                          <span aria-hidden="true" className={`text-slate-400 transition-transform ${isExpanded ? "rotate-180" : ""}`}>⌄</span>
-                        </span>
-                        <span className="col-span-2 truncate text-xs font-medium text-slate-600 dark:text-slate-400 sm:hidden">
-                          {summary(player, view)}
-                        </span>
-                      </button>
-
-                      {isExpanded && (
-                        <div className="border-t border-slate-100 bg-slate-50 px-4 py-4 dark:border-slate-700 dark:bg-slate-950/50">
-                          {view === "window" && stats?.games === 0 ? (
-                            <p className="rounded-lg border border-dashed border-slate-300 px-4 py-5 text-center text-sm text-slate-500 dark:border-slate-700">
-                              No NBA games in the selected seven-day window. Season averages remain available above.
-                            </p>
+                        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                          {photo ? (
+                            <Image src={photo} alt="" fill className="object-cover" unoptimized />
                           ) : (
-                            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                              {CATEGORIES.map(([label, key]) => (
-                                <div key={key} className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                                  <p className="mt-1 font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                                    {formatStat(key, stats?.[key], view)}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
+                            <span className="flex h-full items-center justify-center text-sm text-slate-400">{player.name[0]}</span>
                           )}
-                          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                            <span>{view === "window" ? `${stats?.games ?? 0} games` : view === "season" ? `${stats?.games ?? 0} season games` : player.latest_game ? `${player.latest_game.minutes ?? "—"} minutes` : "No latest game"}</span>
-                            {player.category_strengths.length > 0 && (
-                              <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                                Strengths: {player.category_strengths.join(", ")}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{player.name}</span>
+                            {player.injury && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="Injury alert" />}
+                          </span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {player.nba_team_short || "N/A"} · {player.position}
+                          </span>
+                          <span className="mt-0.5 block truncate text-xs font-medium text-slate-600 dark:text-slate-400">
+                            {summary(player, view)}
+                          </span>
+                        </span>
+                        <span className="text-slate-400" aria-hidden="true">›</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        <aside
+          id="player-performance-detail"
+          className="scroll-mt-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:sticky lg:top-20"
+        >
+          <div className="border-b border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50 p-5 dark:border-slate-700 dark:from-slate-900 dark:to-blue-950/40">
+            <div className="flex items-start gap-4">
+              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-slate-200 shadow-sm dark:bg-slate-700">
+                {selectedPhoto ? (
+                  <Image src={selectedPhoto} alt={selected.name} fill className="object-cover" priority unoptimized />
+                ) : (
+                  <span className="flex h-full items-center justify-center text-3xl text-slate-400">{selected.name[0]}</span>
+                )}
               </div>
-            </section>
-          );
-        })}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">{selected.name}</h2>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClasses(selected.status)}`}>
+                    {selected.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">
+                  {selected.nba_team_short || selected.nba_team || "N/A"} · {selected.position}
+                </p>
+                <p className="mt-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
+                  {selected.salary_2026_27 ?? "Salary unavailable"}
+                </p>
+                {selected.player_id && (
+                  <Link href={`/players/${selected.player_id}`} className="mt-1 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
+                    View full contract →
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {selected.injury && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900 dark:bg-red-950/40">
+                <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">Injury alert</p>
+                <p className="mt-0.5 text-sm font-medium text-red-800 dark:text-red-300">
+                  {selected.injury.body_part ? `${selected.injury.body_part} · ` : ""}{selected.injury.detail}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="p-5">
+            <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+              {([
+                ["window", `Last ${performance.window.days} days`],
+                ["latest", "Latest game"],
+                ["season", "Season average"],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setView(key)}
+                  className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors sm:text-xs ${
+                    view === key
+                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === "latest" && selected.latest_game && (
+              <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800">
+                <span className="font-medium text-slate-700 dark:text-slate-300">
+                  {selected.latest_game.date} · {selected.latest_game.is_home ? "vs" : "@"} {selected.latest_game.opponent}
+                </span>
+                <span className="text-slate-500">{selected.latest_game.minutes ?? "—"} min</span>
+              </div>
+            )}
+
+            {view === "window" && selectedStats?.games === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-700">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No games in this window</p>
+                <button type="button" onClick={() => setView("season")} className="mt-2 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                  Show season averages
+                </button>
+              </div>
+            ) : (
+              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {CATEGORIES.map(([label, key]) => (
+                  <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                    <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                      {formatStat(key, selectedStats?.[key], view)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fantasy impact</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {selected.impact_rank ? `#${selected.impact_rank} on your roster` : "Available when the window has games"}
+                </p>
+                {selected.category_strengths.length > 0 && (
+                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                    Strengths: {selected.category_strengths.join(", ")}
+                  </p>
+                )}
+              </div>
+              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Sample</p>
+                <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  {view === "latest"
+                    ? selected.latest_game ? "1 game" : "No latest game"
+                    : `${selectedStats?.games ?? 0} games`}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">{performance.window.season} season</p>
+              </div>
+            </div>
+
+            <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800">
+              {freshnessLabel(selected.freshness.stats)}
+            </p>
+          </div>
+        </aside>
       </div>
     </>
   );
