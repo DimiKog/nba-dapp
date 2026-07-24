@@ -36,14 +36,14 @@ export default async function LDLRosterPage({ params }: { params: Promise<{ team
   const ir      = roster.players.filter((p) => p.status === "IR");
 
   return (
-    <main className="mx-auto w-full min-w-0 max-w-3xl px-4 py-10">
+    <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-10">
       <Link href="/fantasy/ldl" className="text-sm text-blue-500 hover:underline">
         ← LDL Standings
       </Link>
 
       <div className="mt-6 flex items-center gap-4">
         {roster.logo && (
-          <Image src={roster.logo} alt={roster.team_name ?? ""} width={56} height={56} className="rounded-full" unoptimized />
+          <Image src={roster.logo} alt={roster.team_name ?? ""} width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />
         )}
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{roster.team_name}</h1>

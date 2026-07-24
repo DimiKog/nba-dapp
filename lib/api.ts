@@ -67,6 +67,8 @@ export interface FantasyTeam {
 }
 
 export interface FantasyPlayer {
+  player_id: number | null;
+  fantrax_scorer_id: string | null;
   name: string;
   short_name: string;
   nba_team: string;
