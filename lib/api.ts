@@ -244,11 +244,12 @@ export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string):
 
 export async function fetchFantasyRosterPerformance(
   league: "ldl" | "bdb",
+  teamId: string,
   window = 7,
 ): Promise<FantasyRosterPerformance> {
   const res = await fetch(
-    `${BASE}/api/fantasy/${league}/my-team/players?window=${window}`,
-    { next: { revalidate: 300 } },
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/performance?window=${window}`,
+    { next: { revalidate: 60 } },
   );
   if (!res.ok) throw new Error("Failed to fetch roster performance");
   return res.json();

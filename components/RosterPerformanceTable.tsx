@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useState } from "react";
 import {
   FantasyPlayerPerformance,
@@ -300,11 +299,6 @@ export default function RosterPerformanceTable({
                 <p className="mt-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
                   {selected.salary_2026_27 ?? "Salary unavailable"}
                 </p>
-                {selected.player_id && (
-                  <Link href={`/players/${selected.player_id}`} className="mt-1 inline-block text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">
-                    View full contract →
-                  </Link>
-                )}
               </div>
             </div>
 
