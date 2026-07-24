@@ -246,7 +246,7 @@ export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string):
 }
 
 export async function fetchFantasyRosterPerformance(
-  league: "ldl" | "bdb",
+  league: string,
   teamId: string,
   window = 7,
 ): Promise<FantasyRosterPerformance> {
@@ -260,7 +260,7 @@ export async function fetchFantasyRosterPerformance(
 
 export async function fetchFantasyLeagues(): Promise<FantasyLeague[]> {
   const res = await fetch(`${BASE}/api/fantasy/leagues`, {
-    next: { revalidate: 3600 },
+    next: { revalidate: 60 },
   });
   if (!res.ok) throw new Error("Failed to fetch fantasy leagues");
   return res.json();
@@ -282,7 +282,7 @@ export async function fetchPersonalFantasyMatchups(
 }
 
 export async function fetchPersonalFantasyPerformance(
-  leagueSlug: "ldl" | "bdb",
+  leagueSlug: string,
 ): Promise<FantasyRosterPerformance | null> {
   const leagues = await fetchFantasyLeagues();
   const league = leagues.find((item) => item.slug === leagueSlug && item.enabled);
