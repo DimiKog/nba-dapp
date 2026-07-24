@@ -278,6 +278,15 @@ export async function fetchPersonalFantasyMatchups(
   return res.json();
 }
 
+export async function fetchPersonalFantasyPerformance(
+  leagueSlug: "ldl" | "bdb",
+): Promise<FantasyRosterPerformance | null> {
+  const leagues = await fetchFantasyLeagues();
+  const league = leagues.find((item) => item.slug === leagueSlug && item.enabled);
+  if (!league?.personal_team_id) return null;
+  return fetchFantasyRosterPerformance(leagueSlug, league.personal_team_id);
+}
+
 // ── Scoreboard & News ────────────────────────────────────────────────────────
 
 export interface GameTeam {

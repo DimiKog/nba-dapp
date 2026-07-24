@@ -5,16 +5,19 @@ import {
   fetchNews,
   fetchFantasyStandings,
   fetchPersonalFantasyMatchups,
+  fetchPersonalFantasyPerformance,
   type FantasyMatchup,
   type FantasyMatchupPeriod,
+  type FantasyRosterPerformance,
 } from "@/lib/api";
 
 export default async function Home() {
-  const [games, news, ldlTeams, personalFantasy] = await Promise.all([
+  const [games, news, ldlTeams, personalFantasy, personalPerformance] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
     fetchFantasyStandings("ldl").catch(() => []),
     fetchPersonalFantasyMatchups("ldl").catch(() => null),
+    fetchPersonalFantasyPerformance("ldl").catch(() => null),
   ]);
 
   const top5ldl = ldlTeams.slice(0, 5);
@@ -44,6 +47,8 @@ export default async function Home() {
           </div>
         )}
       </section>
+
+      <DecisionStrip performance={personalPerformance} />
 
       {/* Personal fantasy snapshot */}
       <PersonalFantasySection data={personalFantasy} />
@@ -116,6 +121,80 @@ export default async function Home() {
       </div>
     </main>
   );
+}
+
+function DecisionStrip({ performance }: { performance: FantasyRosterPerformance | null }) {
+  if (!performance) return null;
+  const currentPayroll = performance.payroll?.seasons[0];
+  const injured = performance.players.filter((player) => player.injury);
+  const leader = [...performance.players]
+    .filter((player) => (player.season_average?.games ?? 0) > 0)
+    .sort((a, b) => (b.season_average?.points ?? 0) - (a.season_average?.points ?? 0))[0];
+
+  return (
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+          At a glance
+        </h2>
+        <Link
+          href={`/fantasy/ldl/roster/${performance.team.id}`}
+          className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+        >
+          Open my roster →
+        </Link>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/40">
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            {currentPayroll?.season ?? "Current"} cap
+          </p>
+          <p className="mt-1 text-xl font-black tabular-nums text-slate-950 dark:text-white">
+            {currentPayroll ? formatMoney(currentPayroll.total) : "Unavailable"}
+          </p>
+          <p className={`mt-1 text-xs font-semibold ${
+            (currentPayroll?.remaining ?? 0) < 0
+              ? "text-red-600 dark:text-red-400"
+              : "text-emerald-600 dark:text-emerald-400"
+          }`}>
+            {currentPayroll?.remaining == null
+              ? "Cap not configured"
+              : currentPayroll.remaining < 0
+                ? `${formatMoney(Math.abs(currentPayroll.remaining))} over cap`
+                : `${formatMoney(currentPayroll.remaining)} available`}
+          </p>
+        </div>
+        <div className={`rounded-xl border p-4 ${
+          injured.length
+            ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+        }`}>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Injury alerts</p>
+          <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{injured.length}</p>
+          <p className="mt-1 truncate text-xs text-slate-500">
+            {injured.map((player) => player.short_name).join(", ") || "No active alerts"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Season scoring leader</p>
+          <p className="mt-1 truncate text-base font-black text-slate-950 dark:text-white">
+            {leader?.name ?? "No games yet"}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">
+            {leader ? `${leader.season_average?.points ?? 0} PTS · ${leader.season_average?.games ?? 0} games` : "—"}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function PersonalFantasySection({ data }: { data: FantasyMatchupPeriod | null }) {
