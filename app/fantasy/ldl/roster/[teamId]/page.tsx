@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
-  fetchFantasyLeagues,
   fetchFantasyRoster,
   fetchFantasyRosterPerformance,
   photoUrl,
@@ -14,19 +13,12 @@ export default async function LDLRosterPage({ params }: { params: Promise<{ team
   let roster;
   let performance = null;
   try {
-    const [rosterResult, leagues] = await Promise.all([
+    const [rosterResult, performanceResult] = await Promise.all([
       fetchFantasyRoster("ldl", teamId),
-      fetchFantasyLeagues(),
+      fetchFantasyRosterPerformance("ldl", teamId).catch(() => null),
     ]);
     roster = rosterResult;
-    const ldl = leagues.find((league) => league.slug === "ldl");
-    if (ldl?.personal_team_id === teamId) {
-      try {
-        performance = await fetchFantasyRosterPerformance("ldl");
-      } catch {
-        performance = null;
-      }
-    }
+    performance = performanceResult;
   } catch {
     notFound();
   }
