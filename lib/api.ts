@@ -172,10 +172,10 @@ export interface FantasyRosterPerformance {
       season: string;
       total: number;
       known_players: number;
-      missing_players: number;
+      free_agents: number;
       cap: number | null;
       remaining: number | null;
-      status: "under" | "over" | "incomplete" | "cap_unavailable";
+      status: "under" | "over" | "cap_unavailable";
       cap_provisional: boolean | null;
     }>;
   };

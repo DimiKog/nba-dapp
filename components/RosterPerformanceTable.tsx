@@ -48,7 +48,6 @@ type PayrollSeason = NonNullable<FantasyRosterPerformance["payroll"]>["seasons"]
 function capStatusLabel(status: PayrollSeason["status"]) {
   if (status === "under") return "Under cap";
   if (status === "over") return "Over cap";
-  if (status === "incomplete") return "Incomplete";
   return "Cap not set";
 }
 
@@ -178,7 +177,7 @@ export default function RosterPerformanceTable({
             <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Team payroll</h2>
             <p className="text-xs text-slate-500">Active, Reserve and Injured Reserve players</p>
           </div>
-          <p className="text-xs text-slate-500">Missing salaries are not counted as $0</p>
+          <p className="text-xs text-slate-500">Players without a contract count as $0</p>
         </div>
         <div className="grid gap-px bg-slate-200 dark:bg-slate-700 sm:grid-cols-2 xl:grid-cols-5">
           {performance.payroll.seasons.map((season) => (
@@ -199,15 +198,16 @@ export default function RosterPerformanceTable({
               ) : (
                 <p className="mt-1 text-xs text-slate-500">No cap configured</p>
               )}
-              {season.missing_players > 0 ? (
-                <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                  {season.missing_players} salary {season.missing_players === 1 ? "is" : "are"} missing
-                </p>
-              ) : season.remaining != null ? (
+              {season.remaining != null && (
                 <p className={`mt-1 text-xs font-medium ${season.remaining >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                   {season.remaining >= 0 ? `${formatMoney(season.remaining)} available` : `${formatMoney(Math.abs(season.remaining))} over`}
                 </p>
-              ) : null}
+              )}
+              {season.free_agents > 0 && (
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  {season.free_agents} free {season.free_agents === 1 ? "agent" : "agents"} · $0
+                </p>
+              )}
             </div>
           ))}
         </div>
