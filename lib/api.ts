@@ -64,6 +64,9 @@ export interface FantasyTeam {
   ties: number | null;
   points_for: number | null;
   points_against: number | null;
+  cap_season: string | null;
+  cap_status: "over" | "under" | "at_cap" | "cap_unavailable";
+  cap_difference: number | null;
 }
 
 export interface FantasyPlayer {
