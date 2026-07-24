@@ -78,6 +78,13 @@ export interface FantasyPlayer {
   photo: string | null;
   nba_id: number | null;
   salary_2026_27: string | null;
+  salaries?: {
+    "2026-27": string | null;
+    "2027-28": string | null;
+    "2028-29": string | null;
+    "2029-30": string | null;
+    "2030-31": string | null;
+  };
   injury: string | null;
 }
 
@@ -159,6 +166,19 @@ export interface FantasyRosterPerformance {
   };
   categories: string[];
   ranking_method: string;
+  payroll?: {
+    includes_statuses: Array<"Active" | "Reserve" | "IR">;
+    seasons: Array<{
+      season: string;
+      total: number;
+      known_players: number;
+      free_agents: number;
+      cap: number | null;
+      remaining: number | null;
+      status: "under" | "over" | "cap_unavailable";
+      cap_provisional: boolean | null;
+    }>;
+  };
   players: FantasyPlayerPerformance[];
 }
 

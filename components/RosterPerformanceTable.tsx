@@ -32,6 +32,31 @@ const SECTIONS = [
   { label: "Injured Reserve", status: "IR" },
 ] as const;
 
+const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
+
+function formatMoney(value: number | null) {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+type PayrollSeason = NonNullable<FantasyRosterPerformance["payroll"]>["seasons"][number];
+
+function capStatusLabel(status: PayrollSeason["status"]) {
+  if (status === "under") return "Under cap";
+  if (status === "over") return "Over cap";
+  return "Cap not set";
+}
+
+function capStatusClasses(status: PayrollSeason["status"]) {
+  if (status === "under") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300";
+  if (status === "over") return "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300";
+  return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
+}
+
 function playerKey(player: FantasyPlayerPerformance) {
   return String(player.player_id ?? player.fantrax_scorer_id ?? player.name);
 }
@@ -145,6 +170,50 @@ export default function RosterPerformanceTable({
         </div>
       </div>
 
+      {performance.payroll && (
+      <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Team payroll</h2>
+            <p className="text-xs text-slate-500">Active, Reserve and Injured Reserve players</p>
+          </div>
+          <p className="text-xs text-slate-500">Players without a contract count as $0</p>
+        </div>
+        <div className="grid gap-px bg-slate-200 dark:bg-slate-700 sm:grid-cols-2 xl:grid-cols-5">
+          {performance.payroll.seasons.map((season) => (
+            <div key={season.season} className="bg-white p-4 dark:bg-slate-900">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold text-slate-500">{season.season}</p>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${capStatusClasses(season.status)}`}>
+                  {capStatusLabel(season.status)}
+                </span>
+              </div>
+              <p className="mt-2 text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {formatMoney(season.total)}
+              </p>
+              {season.cap != null ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Cap {formatMoney(season.cap)}{season.cap_provisional ? " · provisional" : ""}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-slate-500">No cap configured</p>
+              )}
+              {season.remaining != null && (
+                <p className={`mt-1 text-xs font-medium ${season.remaining >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {season.remaining >= 0 ? `${formatMoney(season.remaining)} available` : `${formatMoney(Math.abs(season.remaining))} over`}
+                </p>
+              )}
+              {season.free_agents > 0 && (
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  {season.free_agents} free {season.free_agents === 1 ? "agent" : "agents"} · $0
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+      )}
+
       {!hasWindowGames && (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
           No NBA games were played in the last {performance.window.days} days. Season averages are shown by default.
@@ -247,6 +316,17 @@ export default function RosterPerformanceTable({
                 </p>
               </div>
             )}
+
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {SALARY_SEASONS.map((season) => (
+                <div key={season} className="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 dark:border-slate-700 dark:bg-slate-900/60">
+                  <p className="text-[10px] font-semibold text-slate-500">{season}</p>
+                  <p className="mt-0.5 truncate text-xs font-bold tabular-nums text-slate-800 dark:text-slate-200">
+                    {selected.salaries?.[season] ?? (season === "2026-27" ? selected.salary_2026_27 : null) ?? "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="p-5">
