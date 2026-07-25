@@ -7,12 +7,14 @@ import {
   fetchFantasyLeagues,
   fetchPersonalFantasyMatchups,
   fetchPersonalFantasyPerformance,
+  fetchFantasyTeamCategoryProfile,
   fetchFreeAgentRadar,
   photoUrl,
   type FantasyFreeAgentRadar,
   type FantasyMatchup,
   type FantasyMatchupPeriod,
   type FantasyRosterPerformance,
+  type FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 
@@ -26,13 +28,22 @@ export default async function Home() {
       .then((leagues) => Promise.all(
         leagues
           .filter((league) => league.enabled && league.personal_team_id)
-          .map(async (league) => ({
-            league: league.slug,
-            leagueName: league.name,
-            teamName: league.personal_team_name,
-            matchup: await fetchPersonalFantasyMatchups(league.slug).catch(() => null),
-            performance: await fetchPersonalFantasyPerformance(league.slug).catch(() => null),
-          })),
+          .map(async (league) => {
+            const slug = league.slug as "ldl" | "bdb";
+            const [matchup, performance, profile] = await Promise.all([
+              fetchPersonalFantasyMatchups(league.slug).catch(() => null),
+              fetchPersonalFantasyPerformance(league.slug).catch(() => null),
+              fetchFantasyTeamCategoryProfile(slug, league.personal_team_id!).catch(() => null),
+            ]);
+            return {
+              league: league.slug,
+              leagueName: league.name,
+              teamName: league.personal_team_name,
+              matchup,
+              performance,
+              profile,
+            };
+          }),
       ))
       .catch(() => []),
     Promise.all([
@@ -207,6 +218,7 @@ type PersonalTeamDashboard = {
   teamName: string;
   matchup: FantasyMatchupPeriod | null;
   performance: FantasyRosterPerformance | null;
+  profile: FantasyTeamCategoryProfile | null;
 };
 
 function PersonalTeamsGrid({ teams }: { teams: PersonalTeamDashboard[] }) {
@@ -233,6 +245,7 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
   const teamName = performance?.team.name ?? matchup?.league.personal_team_name ?? dashboard.teamName;
   const teamId = performance?.team.id ?? matchup?.team_id;
   const rosterHref = teamId ? `/fantasy/${league}/roster/${teamId}` : `/fantasy/${league}`;
+  const analysisHref = `${rosterHref}#team-analysis`;
 
   if (!performance && !matchup) {
     return (
@@ -308,6 +321,36 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         </div>
       </div>
 
+      {dashboard.profile && (
+        <div className="border-b border-blue-100 bg-white/80 px-5 py-4 dark:border-blue-900/70 dark:bg-slate-950/30">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              Category outlook
+            </p>
+            <Link
+              href={analysisHref}
+              className="text-[11px] font-semibold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Full analysis →
+            </Link>
+          </div>
+          <div className="mt-2 grid gap-3 sm:grid-cols-2">
+            <HomeProfileLine
+              label="Strengths"
+              values={dashboard.profile.strengths}
+              tone="strength"
+              empty="No top-third categories"
+            />
+            <HomeProfileLine
+              label="Weaknesses"
+              values={dashboard.profile.weaknesses}
+              tone="weakness"
+              empty="No bottom-third categories"
+            />
+          </div>
+        </div>
+      )}
+
       <div className="p-4">
         {matchup ? (
           <>
@@ -330,6 +373,31 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         )}
       </div>
     </article>
+  );
+}
+
+function HomeProfileLine({
+  label,
+  values,
+  tone,
+  empty,
+}: {
+  label: string;
+  values: string[];
+  tone: "strength" | "weakness";
+  empty: string;
+}) {
+  const color =
+    tone === "strength"
+      ? "text-emerald-700 dark:text-emerald-400"
+      : "text-rose-700 dark:text-rose-400";
+  return (
+    <div className="min-w-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-0.5 truncate text-xs font-bold ${values.length ? color : "text-slate-400"}`}>
+        {values.slice(0, 3).join(" · ") || empty}
+      </p>
+    </div>
   );
 }
 
