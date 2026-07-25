@@ -193,6 +193,74 @@ export interface FantasyRosterPerformance {
   players: FantasyPlayerPerformance[];
 }
 
+export type FantasyCategoryVerdict =
+  | "strength"
+  | "neutral"
+  | "weakness"
+  | "insufficient_data";
+
+export interface FantasyTeamCategory {
+  key: string;
+  label: string;
+  value: number | null;
+  league_rank: number | null;
+  eligible_teams: number;
+  percentile: number | null;
+  league_mean: number | null;
+  z: number | null;
+  verdict: FantasyCategoryVerdict;
+  sample: {
+    makes?: number;
+    attempts?: number;
+    assists?: number;
+    turnovers?: number;
+  } | null;
+}
+
+export interface FantasyTeamCategoryProfile {
+  league: FantasyLeague;
+  team: {
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  };
+  basis_requested: "season" | "window";
+  basis_used: "season" | "window";
+  scope: "roster_rate";
+  window: {
+    days: number;
+    from: string;
+    to: string;
+    season: string;
+  };
+  snapshot: {
+    captured_at: string | null;
+    generated_at: string;
+    source: "database_cache";
+  };
+  sample: {
+    league_teams: number;
+    players_included: number;
+    players_missing_stats: number;
+    league_players_included: {
+      minimum: number;
+      maximum: number;
+      average: number;
+    };
+  };
+  categories: FantasyTeamCategory[];
+  weaknesses: string[];
+  strengths: string[];
+  severe_weaknesses: string[];
+  method: {
+    ranking: string;
+    ratios: string;
+    turnovers: string;
+    window_scope: string;
+  };
+}
+
 export interface LeaguePlayerExplorer {
   league: FantasyLeague;
   snapshot: {
@@ -345,6 +413,25 @@ export async function fetchFantasyRosterPerformance(
     { next: { revalidate: 60 } },
   );
   if (!res.ok) throw new Error("Failed to fetch roster performance");
+  return res.json();
+}
+
+export async function fetchFantasyTeamCategoryProfile(
+  league: "ldl" | "bdb",
+  teamId: string,
+  basis: "season" | "window" = "season",
+  window = 14,
+): Promise<FantasyTeamCategoryProfile> {
+  const params = new URLSearchParams({
+    basis,
+    scope: "roster_rate",
+    window: String(window),
+  });
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/category-profile?${params}`,
+    { next: { revalidate: 300 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch team category profile");
   return res.json();
 }
 

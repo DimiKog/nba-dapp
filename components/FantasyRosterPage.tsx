@@ -3,9 +3,11 @@ import Link from "next/link";
 import {
   fetchFantasyRoster,
   fetchFantasyRosterPerformance,
+  fetchFantasyTeamCategoryProfile,
   photoUrl,
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
+import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
 import { notFound } from "next/navigation";
 
 type LeagueSlug = "ldl" | "bdb";
@@ -19,13 +21,19 @@ export default async function FantasyRosterPage({
 }) {
   let roster;
   let performance = null;
+  let seasonProfile = null;
+  let windowProfile = null;
   try {
-    const [rosterResult, performanceResult] = await Promise.all([
+    const [rosterResult, performanceResult, seasonResult, windowResult] = await Promise.all([
       fetchFantasyRoster(league, teamId),
       fetchFantasyRosterPerformance(league, teamId).catch(() => null),
+      fetchFantasyTeamCategoryProfile(league, teamId).catch(() => null),
+      fetchFantasyTeamCategoryProfile(league, teamId, "window", 14).catch(() => null),
     ]);
     roster = rosterResult;
     performance = performanceResult;
+    seasonProfile = seasonResult;
+    windowProfile = windowResult;
   } catch {
     notFound();
   }
@@ -51,6 +59,13 @@ export default async function FantasyRosterPage({
           )}
         </div>
       </div>
+
+      {seasonProfile && (
+        <TeamCategoryProfilePanel
+          seasonProfile={seasonProfile}
+          windowProfile={windowProfile}
+        />
+      )}
 
       {performance ? (
         <RosterPerformanceTable performance={performance} />
