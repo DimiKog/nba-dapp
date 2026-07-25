@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  fetchFantasyWatchlist,
   fetchLeaguePlayerExplorer,
   photoUrl,
   type FantasyPlayerPerformance,
@@ -39,13 +40,22 @@ export default function LeaguePlayerExplorer() {
   const [direction, setDirection] = useState<Direction>("asc");
   const [selectedId, setSelectedId] = useState("");
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
+  const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
+  const [watchPending, setWatchPending] = useState<number | null>(null);
+  const [watchError, setWatchError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
-    fetchLeaguePlayerExplorer(league)
-      .then((data) => {
+    Promise.all([
+      fetchLeaguePlayerExplorer(league),
+      fetchFantasyWatchlist(league).catch(() => null),
+    ])
+      .then(([data, watchlist]) => {
         if (!active) return;
         setPayload(data);
+        setWatchedIds(new Set(
+          watchlist?.entries.map((entry) => entry.nba_player_id) ?? [],
+        ));
         setStatsView(data.ranking_basis);
         const first = [...data.players].sort(rankPlayers)[0];
         setSelectedId(playerKey(first));
@@ -72,6 +82,8 @@ export default function LeaguePlayerExplorer() {
     setStatus("all");
     setSelectedId("");
     setComparisonIds([]);
+    setWatchedIds(new Set());
+    setWatchError(null);
     setLeague(next);
   }
 
@@ -133,6 +145,29 @@ export default function LeaguePlayerExplorer() {
     });
   }
 
+  async function watchPlayer(player: FantasyPlayerPerformance) {
+    if (!player.nba_id || watchedIds.has(player.nba_id)) return;
+    setWatchPending(player.nba_id);
+    setWatchError(null);
+    try {
+      const response = await fetch(`/api/watchlist/${league}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nba_player_id: player.nba_id,
+          notes: "",
+          priority: 2,
+        }),
+      });
+      if (!response.ok) throw new Error();
+      setWatchedIds((current) => new Set(current).add(player.nba_id!));
+    } catch {
+      setWatchError("Could not add this player to the watchlist.");
+    } finally {
+      setWatchPending(null);
+    }
+  }
+
   const comparisonPlayers = comparisonIds
     .map((id) => payload?.players.find((player) => playerKey(player) === id))
     .filter((player): player is FantasyPlayerPerformance => Boolean(player));
@@ -170,6 +205,11 @@ export default function LeaguePlayerExplorer() {
       {error && (
         <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {error}
+        </div>
+      )}
+      {watchError && (
+        <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">
+          {watchError}
         </div>
       )}
 
@@ -246,11 +286,12 @@ export default function LeaguePlayerExplorer() {
               <p className="text-xs font-semibold text-slate-500">{ordered.length} results</p>
             </div>
             <div className="max-w-full overflow-x-auto">
-              <table className="min-w-[1320px] w-full text-sm">
+              <table className="min-w-[1390px] w-full text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
                     <SortableHeader label="#" sort="rank" active={sortKey} direction={direction} onSort={changeSort} className="w-14 text-center" />
                     <th className="w-20 px-3 py-3 text-center">Compare</th>
+                    <th className="w-20 px-3 py-3 text-center">Watch</th>
                     <SortableHeader label="Player" sort="name" active={sortKey} direction={direction} onSort={changeSort} className="sticky left-0 z-20 min-w-60 bg-slate-50 text-left dark:bg-slate-800" />
                     <SortableHeader label="Fantasy team" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-44 text-left" />
                     <th className="px-3 py-3 text-left">Pos</th>
@@ -299,6 +340,29 @@ export default function LeaguePlayerExplorer() {
                           >
                             {comparisonIds.includes(playerKey(player)) ? "Selected" : "Add"}
                           </button>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          {player.nba_id && watchedIds.has(player.nba_id) ? (
+                            <Link
+                              href="/watchlist"
+                              onClick={(event) => event.stopPropagation()}
+                              className="rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                            >
+                              Watching
+                            </Link>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                watchPlayer(player);
+                              }}
+                              disabled={!player.nba_id || watchPending === player.nba_id}
+                              className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
+                            >
+                              {watchPending === player.nba_id ? "Saving…" : "+ Watch"}
+                            </button>
+                          )}
                         </td>
                         <td className={`sticky left-0 z-10 px-3 py-2.5 ${active ? "bg-blue-50 dark:bg-slate-900" : "bg-white dark:bg-slate-900"}`}>
                           <PlayerIdentity player={player} />

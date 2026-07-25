@@ -77,7 +77,7 @@ export interface FantasyPlayer {
   nba_team: string;
   nba_team_short: string;
   position: string;
-  status: "Active" | "Reserve" | "IR" | "?";
+  status: "Active" | "Reserve" | "IR" | "Free Agent" | "?";
   photo: string | null;
   nba_id: number | null;
   salary_2026_27: string | null;
@@ -218,6 +218,63 @@ export interface LeaguePlayerExplorer {
   players: FantasyPlayerPerformance[];
 }
 
+export interface FantasyCategoryTrend {
+  recent: number | null;
+  season: number | null;
+  delta: number | null;
+  improved: boolean | null;
+}
+
+export interface FantasyRadarPlayer extends FantasyPlayerPerformance {
+  availability?: "rostered" | "free_agent";
+  recent_average: FantasyPlayerStats;
+  trend_score: number | null;
+  trend_rank: number | null;
+  trend_strengths: string[];
+  trend_confidence: "high" | "medium" | "insufficient_sample";
+  category_trends: Record<string, FantasyCategoryTrend>;
+}
+
+export interface FantasyFreeAgentRadar {
+  league: FantasyLeague;
+  generated_at: string;
+  source: "database_cache";
+  window: {
+    days: number;
+    from: string;
+    to: string;
+    season: string;
+  };
+  minimum_games: number;
+  categories: string[];
+  method: string;
+  players: FantasyRadarPlayer[];
+}
+
+export interface FantasyWatchlistEntry {
+  id: number;
+  owner_subject: string;
+  league_slug: string;
+  nba_player_id: number;
+  notes: string;
+  priority: 1 | 2 | 3;
+  created_at: string;
+  updated_at: string;
+  resolved: boolean;
+  player: (FantasyPlayerPerformance & {
+    availability: "rostered" | "free_agent";
+    category_trends: Record<string, FantasyCategoryTrend>;
+  }) | null;
+}
+
+export interface FantasyWatchlist {
+  league: FantasyLeague;
+  owner: string;
+  window_days: number;
+  categories: string[];
+  entries: FantasyWatchlistEntry[];
+}
+
 export interface FantasyLeague {
   slug: string;
   name: string;
@@ -300,6 +357,31 @@ export async function fetchLeaguePlayerExplorer(
     { next: { revalidate: 60 } },
   );
   if (!res.ok) throw new Error("Failed to fetch league player explorer");
+  return res.json();
+}
+
+export async function fetchFreeAgentRadar(
+  league: "ldl" | "bdb",
+  window = 7,
+  minimumGames = 2,
+): Promise<FantasyFreeAgentRadar> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/free-agent-radar?window=${window}&min_games=${minimumGames}`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch free-agent radar");
+  return res.json();
+}
+
+export async function fetchFantasyWatchlist(
+  league: "ldl" | "bdb",
+  window = 7,
+): Promise<FantasyWatchlist> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/watchlist?window=${window}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error("Failed to fetch fantasy watchlist");
   return res.json();
 }
 
