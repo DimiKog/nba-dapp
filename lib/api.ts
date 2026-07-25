@@ -261,6 +261,75 @@ export interface FantasyTeamCategoryProfile {
   };
 }
 
+export interface FantasyCategoryNeed {
+  key: string;
+  label: string;
+  of: number;
+  team_rank: number | null;
+  team_z: number | null;
+  weight: number;
+}
+
+export interface FantasyTargetCandidate {
+  player_id: number | null;
+  nba_id: number;
+  name: string;
+  short_name: string;
+  nba_team: string;
+  nba_team_short: string;
+  position: string;
+  photo: string | null;
+  availability: "free_agent" | "rostered";
+  fantasy_team: {
+    id?: string;
+    team_id?: string;
+    name: string;
+    logo?: string | null;
+  } | null;
+  fit_rank: number;
+  fit_score: number;
+  confidence: "high" | "medium" | "low";
+  helps: string[];
+  hurts_needs: string[];
+  tradeoffs: string[];
+  salary_2026_27: string | null;
+  salaries?: Record<string, string | null>;
+  injury: string | null;
+}
+
+export interface FantasyCategoryTargets {
+  league: FantasyLeague & { categories?: string[] };
+  team: {
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  };
+  basis_requested: "season" | "window";
+  basis_used: "season" | "window";
+  fallback_reason: string | null;
+  window: {
+    days: number;
+    from: string;
+    to: string;
+    season: string;
+  };
+  need_source: "profile_weaknesses" | "relative_lowest" | "user_selected_category";
+  needs: FantasyCategoryNeed[];
+  sample: {
+    candidate_universe: number;
+    eligible_candidates: number;
+    filtered_candidates: number;
+    returned: number;
+  };
+  filters: {
+    availability: "all" | "free_agent" | "rostered";
+    position: string | null;
+    limit: number;
+  };
+  candidates: FantasyTargetCandidate[];
+}
+
 export interface LeaguePlayerExplorer {
   league: FantasyLeague;
   snapshot: {
@@ -432,6 +501,34 @@ export async function fetchFantasyTeamCategoryProfile(
     { next: { revalidate: 300 } },
   );
   if (!res.ok) throw new Error("Failed to fetch team category profile");
+  return res.json();
+}
+
+export async function fetchFantasyCategoryTargets(
+  league: "ldl" | "bdb",
+  teamId: string,
+  options: {
+    basis?: "season" | "window";
+    window?: number;
+    availability?: "all" | "free_agent" | "rostered";
+    position?: string;
+    category?: string;
+    limit?: number;
+  } = {},
+): Promise<FantasyCategoryTargets> {
+  const params = new URLSearchParams({
+    basis: options.basis ?? "season",
+    window: String(options.window ?? 14),
+    availability: options.availability ?? "all",
+    limit: String(options.limit ?? 24),
+  });
+  if (options.position) params.set("position", options.position);
+  if (options.category) params.set("category", options.category);
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
+    { next: { revalidate: 300 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch category targets");
   return res.json();
 }
 
