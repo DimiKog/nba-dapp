@@ -294,7 +294,13 @@ export interface FantasyTargetCandidate {
   tradeoffs: string[];
   salary_2026_27: string | null;
   salaries?: Record<string, string | null>;
-  injury: string | null;
+  injury: string | {
+    body_part?: string | null;
+    detail?: string | null;
+    source?: string | null;
+    status?: string | null;
+    updated_at?: string | null;
+  } | null;
 }
 
 export interface FantasyCategoryTargets {

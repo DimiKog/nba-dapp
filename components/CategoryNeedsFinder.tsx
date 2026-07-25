@@ -144,6 +144,7 @@ export default function CategoryNeedsFinder({
 
 function CandidateCard({ player }: { player: FantasyTargetCandidate }) {
   const photo = photoUrl(player.photo, player.nba_id);
+  const injury = formatInjury(player.injury);
   return (
     <article className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-start gap-3">
@@ -165,10 +166,17 @@ function CandidateCard({ player }: { player: FantasyTargetCandidate }) {
       <DetailRow label="Trade-offs" values={player.tradeoffs} tone="negative" />
       <div className="mt-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
         <div className="flex justify-between gap-3"><span className="text-slate-400">2026–27 salary</span><span className="font-bold text-slate-700 dark:text-slate-200">{player.salary_2026_27 ?? "$0 · Free agent"}</span></div>
-        {player.injury && <p className="mt-2 text-rose-600 dark:text-rose-400">{player.injury}</p>}
+        {injury && <p className="mt-2 text-rose-600 dark:text-rose-400">{injury}</p>}
       </div>
     </article>
   );
+}
+
+function formatInjury(injury: FantasyTargetCandidate["injury"]) {
+  if (!injury) return null;
+  if (typeof injury === "string") return injury;
+  const summary = [injury.body_part, injury.status].filter(Boolean).join(" · ");
+  return summary || injury.detail || null;
 }
 
 function DetailRow({ label, values, tone }: { label: string; values: string[]; tone: "positive" | "negative" }) {
