@@ -11,12 +11,14 @@ import {
   type FantasyMatchupPeriod,
   type FantasyRosterPerformance,
 } from "@/lib/api";
+import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 
 export default async function Home() {
-  const [games, news, ldlTeams, personalTeams] = await Promise.all([
+  const [games, news, ldlTeams, bdbTeams, personalTeams] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
     fetchFantasyStandings("ldl").catch(() => []),
+    fetchFantasyStandings("bdb").catch(() => []),
     fetchFantasyLeagues()
       .then((leagues) => Promise.all(
         leagues
@@ -32,10 +34,8 @@ export default async function Home() {
       .catch(() => []),
   ]);
 
-  const top5ldl = ldlTeams.slice(0, 5);
-
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 space-y-8">
+    <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
 
       {/* Scoreboard */}
       <section>
@@ -62,43 +62,9 @@ export default async function Home() {
 
       <PersonalTeamsGrid teams={personalTeams} />
 
-      {/* LDL + News */}
+      {/* Fantasy standings + News */}
       <div className="grid gap-6 lg:grid-cols-2">
-
-        {/* LDL Snapshot */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">LDL Standings</h2>
-            <Link href="/fantasy/ldl" className="text-xs text-blue-500 hover:underline">View all →</Link>
-          </div>
-          <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-100 dark:bg-slate-800 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="px-4 py-2 text-left">#</th>
-                  <th className="px-4 py-2 text-left">Team</th>
-                  <th className="px-4 py-2 text-center">W</th>
-                  <th className="px-4 py-2 text-center">L</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {top5ldl.map((t) => (
-                  <tr key={t.team_id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <td className="px-4 py-2 text-slate-400 tabular-nums">{t.rank}</td>
-                    <td className="px-4 py-2">
-                      <Link href={`/fantasy/ldl/roster/${t.team_id}`} className="flex items-center gap-2 group">
-                        {t.logo && <Image src={t.logo} alt={t.name} width={24} height={24} className="rounded-full" unoptimized />}
-                        <span className="font-medium text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate max-w-[140px]">{t.name}</span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2 text-center tabular-nums text-slate-700 dark:text-slate-300">{t.wins ?? "—"}</td>
-                    <td className="px-4 py-2 text-center tabular-nums text-slate-700 dark:text-slate-300">{t.losses ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <HomeLeagueStandings ldlTeams={ldlTeams} bdbTeams={bdbTeams} />
 
         {/* News */}
         <section>
