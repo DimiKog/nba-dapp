@@ -391,11 +391,16 @@ function HomeProfileLine({
     tone === "strength"
       ? "text-emerald-700 dark:text-emerald-400"
       : "text-rose-700 dark:text-rose-400";
+  const visible = values.slice(0, 3);
+  const remaining = Math.max(values.length - visible.length, 0);
+  const summary = remaining
+    ? `${visible.join(" · ")} · +${remaining} more`
+    : visible.join(" · ");
   return (
     <div className="min-w-0">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
       <p className={`mt-0.5 truncate text-xs font-bold ${values.length ? color : "text-slate-400"}`}>
-        {values.slice(0, 3).join(" · ") || empty}
+        {summary || empty}
       </p>
     </div>
   );
