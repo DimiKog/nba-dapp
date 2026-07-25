@@ -120,6 +120,13 @@ export interface FantasyPlayerStats {
 }
 
 export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> {
+  identity_status: "resolved" | "unresolved";
+  fantasy_team?: {
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  };
   injury: {
     status: string;
     body_part: string | null;
@@ -182,6 +189,31 @@ export interface FantasyRosterPerformance {
       cap_provisional: boolean | null;
     }>;
   };
+  players: FantasyPlayerPerformance[];
+}
+
+export interface LeaguePlayerExplorer {
+  league: FantasyLeague;
+  snapshot: {
+    captured_at: string | null;
+    generated_at: string;
+    source: "database_cache";
+  };
+  window: {
+    days: number;
+    from: string;
+    to: string;
+    season: string;
+  };
+  categories: string[];
+  ranking_method: string;
+  ranking_basis: "window" | "season";
+  teams: Array<{
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  }>;
   players: FantasyPlayerPerformance[];
 }
 
@@ -255,6 +287,18 @@ export async function fetchFantasyRosterPerformance(
     { next: { revalidate: 60 } },
   );
   if (!res.ok) throw new Error("Failed to fetch roster performance");
+  return res.json();
+}
+
+export async function fetchLeaguePlayerExplorer(
+  league: string,
+  window = 7,
+): Promise<LeaguePlayerExplorer> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${encodeURIComponent(league)}/players?window=${window}`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch league player explorer");
   return res.json();
 }
 
