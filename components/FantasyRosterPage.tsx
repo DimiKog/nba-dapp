@@ -3,11 +3,13 @@ import Link from "next/link";
 import {
   fetchFantasyRoster,
   fetchFantasyRosterPerformance,
+  fetchFantasyCategoryTargets,
   fetchFantasyTeamCategoryProfile,
   photoUrl,
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
+import CategoryNeedsFinder from "@/components/CategoryNeedsFinder";
 import { notFound } from "next/navigation";
 
 type LeagueSlug = "ldl" | "bdb";
@@ -23,17 +25,20 @@ export default async function FantasyRosterPage({
   let performance = null;
   let seasonProfile = null;
   let windowProfile = null;
+  let initialTargets = null;
   try {
-    const [rosterResult, performanceResult, seasonResult, windowResult] = await Promise.all([
+    const [rosterResult, performanceResult, seasonResult, windowResult, targetsResult] = await Promise.all([
       fetchFantasyRoster(league, teamId),
       fetchFantasyRosterPerformance(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId, "window", 14).catch(() => null),
+      fetchFantasyCategoryTargets(league, teamId).catch(() => null),
     ]);
     roster = rosterResult;
     performance = performanceResult;
     seasonProfile = seasonResult;
     windowProfile = windowResult;
+    initialTargets = targetsResult;
   } catch {
     notFound();
   }
@@ -64,6 +69,14 @@ export default async function FantasyRosterPage({
         <TeamCategoryProfilePanel
           seasonProfile={seasonProfile}
           windowProfile={windowProfile}
+        />
+      )}
+
+      {initialTargets && (
+        <CategoryNeedsFinder
+          league={league}
+          teamId={teamId}
+          initialTargets={initialTargets}
         />
       )}
 
