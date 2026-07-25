@@ -10,6 +10,10 @@ import {
   type FantasyWatchlist,
   type FantasyWatchlistEntry,
 } from "@/lib/api";
+import {
+  formatFantasyStat,
+  resolveFantasyCategories,
+} from "@/lib/fantasyCategories";
 
 type LeagueSlug = "ldl" | "bdb";
 
@@ -28,6 +32,7 @@ export default function WatchlistRadar({
   const [loading, setLoading] = useState(false);
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(30);
 
   const watchedIds = useMemo(
     () => new Set(watchlist?.entries.map((entry) => entry.nba_player_id) ?? []),
@@ -54,6 +59,10 @@ export default function WatchlistRadar({
     });
   }, [position, query, radar]);
   const eligible = visibleRadar.filter((player) => player.trend_rank != null);
+  const categoryColumns = useMemo(
+    () => resolveFantasyCategories(radar?.categories ?? []),
+    [radar],
+  );
 
   async function loadLeague(next: LeagueSlug) {
     if (next === league) return;
@@ -62,6 +71,7 @@ export default function WatchlistRadar({
     setMessage(null);
     setQuery("");
     setPosition("all");
+    setVisibleLimit(30);
     const [nextRadar, nextWatchlist] = await Promise.all([
       fetchFreeAgentRadar(next).catch(() => null),
       fetchFantasyWatchlist(next).catch(() => null),
@@ -201,13 +211,19 @@ export default function WatchlistRadar({
             <input
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVisibleLimit(30);
+              }}
               placeholder="Search player or NBA team…"
               className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-900"
             />
             <select
               value={position}
-              onChange={(event) => setPosition(event.target.value)}
+              onChange={(event) => {
+                setPosition(event.target.value);
+                setVisibleLimit(30);
+              }}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-900"
             >
               <option value="all">All positions</option>
@@ -222,25 +238,45 @@ export default function WatchlistRadar({
           <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">
             Radar data is temporarily unavailable.
           </p>
-        ) : eligible.length === 0 ? (
-          <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-6 dark:border-blue-900 dark:bg-blue-950/30">
-            <p className="font-bold text-blue-950 dark:text-blue-100">No qualifying recent performances</p>
-            <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
-              No free agent played at least {radar.minimum_games} games in the last {radar.window.days} days. This is expected during the offseason.
-            </p>
-          </div>
         ) : (
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {eligible.slice(0, 30).map((player) => (
-              <RadarCard
-                key={player.nba_id}
-                player={player}
-                watched={player.nba_id != null && watchedIds.has(player.nba_id)}
-                pending={pendingId === player.nba_id}
-                onWatch={() => player.nba_id && savePlayer(player.nba_id)}
-              />
-            ))}
-          </div>
+          <>
+            {eligible.length === 0 && (
+              <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-blue-950/30">
+                <p className="font-bold text-blue-950 dark:text-blue-100">No qualifying recent performances</p>
+                <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
+                  No free agent played at least {radar.minimum_games} games in the last {radar.window.days} days. The complete pool remains available below using season context.
+                </p>
+              </div>
+            )}
+            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+              {visibleRadar.slice(0, visibleLimit).map((player) => (
+                <RadarCard
+                  key={player.nba_id}
+                  player={player}
+                  categoryColumns={categoryColumns}
+                  watched={player.nba_id != null && watchedIds.has(player.nba_id)}
+                  pending={pendingId === player.nba_id}
+                  onWatch={() => player.nba_id && savePlayer(player.nba_id)}
+                />
+              ))}
+            </div>
+            {visibleRadar.length === 0 && (
+              <p className="mt-4 rounded-xl bg-slate-50 p-6 text-center text-sm text-slate-500 dark:bg-slate-900">
+                No free agents match these filters.
+              </p>
+            )}
+            {visibleRadar.length > visibleLimit && (
+              <div className="mt-5 text-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((current) => current + 30)}
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  Show 30 more · {visibleRadar.length - visibleLimit} remaining
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </main>
@@ -332,11 +368,13 @@ function WatchlistCard({
 
 function RadarCard({
   player,
+  categoryColumns,
   watched,
   pending,
   onWatch,
 }: {
   player: FantasyRadarPlayer;
+  categoryColumns: ReturnType<typeof resolveFantasyCategories>;
   watched: boolean;
   pending: boolean;
   onWatch: () => void;
@@ -349,7 +387,9 @@ function RadarCard({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-                #{player.trend_rank} upward trend
+                {player.trend_rank != null
+                  ? `#${player.trend_rank} upward trend`
+                  : "Available free agent · season reference"}
               </p>
               <h3 className="font-black text-slate-950 dark:text-white">{player.name}</h3>
               <p className="text-xs text-slate-500">{player.nba_team || "NBA team unavailable"} · {player.position || "—"}</p>
@@ -367,12 +407,31 @@ function RadarCard({
               {watched ? "Watching" : pending ? "Saving…" : "+ Watch"}
             </button>
           </div>
-          <TrendChips trends={player.category_trends} />
+          {player.trend_rank != null ? (
+            <TrendChips trends={player.category_trends} />
+          ) : (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {categoryColumns.slice(0, 5).map((category) => (
+                <span
+                  key={category.key}
+                  className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                >
+                  {category.label} {formatFantasyStat(player.season_average, category)}
+                </span>
+              ))}
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span>{player.recent_average.games} games</span>
+            <span>
+              {player.trend_rank != null
+                ? `${player.recent_average.games} recent games`
+                : `${player.season_average?.games ?? 0} season games`}
+            </span>
             <span>{player.salary_2026_27 ?? "$0 · Free agent contract"}</span>
             <span className="font-semibold text-slate-700 dark:text-slate-300">
-              {player.trend_confidence} confidence
+              {player.trend_rank != null
+                ? `${player.trend_confidence} confidence`
+                : "No recent sample"}
             </span>
           </div>
         </div>
