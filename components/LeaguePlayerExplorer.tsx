@@ -10,37 +10,19 @@ import {
   type LeaguePlayerExplorer as ExplorerPayload,
 } from "@/lib/api";
 import TeamLogo from "@/components/TeamLogo";
+import {
+  fantasyStatValue,
+  formatFantasyStat,
+  resolveFantasyCategories,
+  type FantasyCategory,
+  type FantasyCategoryKey,
+} from "@/lib/fantasyCategories";
 
 type LeagueSlug = "ldl" | "bdb";
 type StatsView = "season" | "window";
 type Direction = "asc" | "desc";
-type CategoryKey =
-  | "fg_pct"
-  | "three_pm"
-  | "ft_pct"
-  | "points"
-  | "oreb"
-  | "dreb"
-  | "assists"
-  | "steals"
-  | "blocks"
-  | "turnovers"
-  | "assist_turnover";
-type SortKey = "rank" | "name" | "fantasy_team" | "salary" | CategoryKey;
+type SortKey = "rank" | "name" | "fantasy_team" | "salary" | FantasyCategoryKey;
 
-const CATEGORY_COLUMNS: Array<{ key: CategoryKey; label: string; percentage?: boolean }> = [
-  { key: "fg_pct", label: "FG%", percentage: true },
-  { key: "three_pm", label: "3PM" },
-  { key: "ft_pct", label: "FT%", percentage: true },
-  { key: "points", label: "PTS" },
-  { key: "oreb", label: "OREB" },
-  { key: "dreb", label: "DREB" },
-  { key: "assists", label: "AST" },
-  { key: "steals", label: "STL" },
-  { key: "blocks", label: "BLK" },
-  { key: "turnovers", label: "TO" },
-  { key: "assist_turnover", label: "A/TO" },
-];
 const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
 
 export default function LeaguePlayerExplorer() {
@@ -56,6 +38,7 @@ export default function LeaguePlayerExplorer() {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [direction, setDirection] = useState<Direction>("asc");
   const [selectedId, setSelectedId] = useState("");
+  const [comparisonIds, setComparisonIds] = useState<string[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -88,6 +71,7 @@ export default function LeaguePlayerExplorer() {
     setPosition("all");
     setStatus("all");
     setSelectedId("");
+    setComparisonIds([]);
     setLeague(next);
   }
 
@@ -119,6 +103,10 @@ export default function LeaguePlayerExplorer() {
   const ordered = useMemo(() => {
     return [...filtered].sort((a, b) => comparePlayers(a, b, sortKey, direction, statsView));
   }, [direction, filtered, sortKey, statsView]);
+  const categoryColumns = useMemo(
+    () => resolveFantasyCategories(payload?.categories ?? []),
+    [payload],
+  );
 
   const selected = ordered.find((player) => playerKey(player) === selectedId)
     ?? ordered[0]
@@ -135,6 +123,20 @@ export default function LeaguePlayerExplorer() {
     setSortKey(next);
     setDirection(next === "rank" || next === "name" || next === "fantasy_team" || next === "turnovers" ? "asc" : "desc");
   }
+
+  function toggleComparison(player: FantasyPlayerPerformance) {
+    const key = playerKey(player);
+    setComparisonIds((current) => {
+      if (current.includes(key)) return current.filter((item) => item !== key);
+      if (current.length >= 4) return current;
+      return [...current, key];
+    });
+  }
+
+  const comparisonPlayers = comparisonIds
+    .map((id) => payload?.players.find((player) => playerKey(player) === id))
+    .filter((player): player is FantasyPlayerPerformance => Boolean(player));
+  const comparisonHref = buildComparisonHref(league, comparisonIds);
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-[1500px] px-4 py-8">
@@ -230,6 +232,7 @@ export default function LeaguePlayerExplorer() {
               player={selected}
               league={league}
               statsView={statsView}
+              categories={categoryColumns}
               onClose={() => setSelectedId("")}
             />
           )}
@@ -247,11 +250,12 @@ export default function LeaguePlayerExplorer() {
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
                     <SortableHeader label="#" sort="rank" active={sortKey} direction={direction} onSort={changeSort} className="w-14 text-center" />
+                    <th className="w-20 px-3 py-3 text-center">Compare</th>
                     <SortableHeader label="Player" sort="name" active={sortKey} direction={direction} onSort={changeSort} className="sticky left-0 z-20 min-w-60 bg-slate-50 text-left dark:bg-slate-800" />
                     <SortableHeader label="Fantasy team" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-44 text-left" />
                     <th className="px-3 py-3 text-left">Pos</th>
                     <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-28 text-right" />
-                    {CATEGORY_COLUMNS.map((category) => (
+                    {categoryColumns.map((category) => (
                       <SortableHeader
                         key={category.key}
                         label={category.label}
@@ -279,6 +283,23 @@ export default function LeaguePlayerExplorer() {
                         }`}
                       >
                         <td className="px-3 py-3 text-center font-bold tabular-nums text-slate-400">{player.impact_rank ?? "—"}</td>
+                        <td className="px-3 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleComparison(player);
+                            }}
+                            disabled={!comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
+                            className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${
+                              comparisonIds.includes(playerKey(player))
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
+                            }`}
+                          >
+                            {comparisonIds.includes(playerKey(player)) ? "Selected" : "Add"}
+                          </button>
+                        </td>
                         <td className={`sticky left-0 z-10 px-3 py-2.5 ${active ? "bg-blue-50 dark:bg-slate-900" : "bg-white dark:bg-slate-900"}`}>
                           <PlayerIdentity player={player} />
                         </td>
@@ -292,9 +313,9 @@ export default function LeaguePlayerExplorer() {
                         <td className="px-3 py-3 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">
                           {player.salary_2026_27 ?? "$0"}
                         </td>
-                        {CATEGORY_COLUMNS.map((category) => (
+                        {categoryColumns.map((category) => (
                           <td key={category.key} className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                            {formatStat(stats?.[category.key], category.percentage)}
+                            {formatFantasyStat(stats, category)}
                           </td>
                         ))}
                       </tr>
@@ -307,6 +328,14 @@ export default function LeaguePlayerExplorer() {
               <div className="p-10 text-center text-sm text-slate-500">No players match these filters.</div>
             )}
           </section>
+
+          {comparisonPlayers.length > 0 && (
+            <ComparisonTray
+              players={comparisonPlayers}
+              href={comparisonHref}
+              onRemove={(player) => toggleComparison(player)}
+            />
+          )}
         </>
       )}
     </main>
@@ -317,11 +346,13 @@ function PlayerDecisionPanel({
   player,
   league,
   statsView,
+  categories,
   onClose,
 }: {
   player: FantasyPlayerPerformance;
   league: LeagueSlug;
   statsView: StatsView;
+  categories: FantasyCategory[];
   onClose: () => void;
 }) {
   const stats = statsFor(player, statsView);
@@ -391,20 +422,69 @@ function PlayerDecisionPanel({
             )}
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {(["points", "assists", "dreb", "steals", "blocks", "three_pm", "fg_pct", "ft_pct"] as CategoryKey[]).map((key) => {
-              const column = CATEGORY_COLUMNS.find((item) => item.key === key);
-              return (
-                <div key={key} className="rounded-lg border border-slate-200 bg-white/80 p-2 text-center dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[10px] font-bold text-slate-400">{column?.label}</p>
-                  <p className="mt-0.5 font-black tabular-nums text-slate-900 dark:text-white">{formatStat(stats?.[key], column?.percentage)}</p>
+            {categories.map((category) => (
+                <div key={category.key} className="rounded-lg border border-slate-200 bg-white/80 p-2 text-center dark:border-slate-700 dark:bg-slate-900/70">
+                  <p className="text-[10px] font-bold text-slate-400">{category.label}</p>
+                  <p className="mt-0.5 font-black tabular-nums text-slate-900 dark:text-white">{formatFantasyStat(stats, category)}</p>
                 </div>
-              );
-            })}
+            ))}
           </div>
         </div>
       </div>
       <button type="button" onClick={onClose} className="sr-only">Close player details</button>
     </section>
+  );
+}
+
+function ComparisonTray({
+  players,
+  href,
+  onRemove,
+}: {
+  players: FantasyPlayerPerformance[];
+  href: string;
+  onRemove: (player: FantasyPlayerPerformance) => void;
+}) {
+  return (
+    <aside className="sticky bottom-4 z-30 mt-5 rounded-2xl border border-blue-300 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-blue-800 dark:bg-slate-900/95">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+            Comparison · {players.length}/4
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {players.map((player) => (
+              <button
+                key={playerKey(player)}
+                type="button"
+                onClick={() => onRemove(player)}
+                className="flex items-center gap-2 rounded-full bg-slate-100 py-1 pl-1 pr-3 text-xs font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-red-950"
+              >
+                <PlayerPhoto player={player} />
+                <span>{player.name}</span>
+                <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {players.length < 2 && (
+            <p className="text-xs text-slate-500">Select at least two players.</p>
+          )}
+          <Link
+            href={href}
+            aria-disabled={players.length < 2}
+            className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
+              players.length >= 2
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "pointer-events-none bg-slate-200 text-slate-400 dark:bg-slate-800"
+            }`}
+          >
+            Compare players →
+          </Link>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -580,7 +660,10 @@ function comparePlayers(
   } else if (key === "salary") {
     result = salaryValue(a.salary_2026_27) - salaryValue(b.salary_2026_27);
   } else {
-    result = statValue(statsFor(a, view)?.[key]) - statValue(statsFor(b, view)?.[key]);
+    result = (
+      statValue(fantasyStatValue(statsFor(a, view), { key, label: key }))
+      - statValue(fantasyStatValue(statsFor(b, view), { key, label: key }))
+    );
   }
   return direction === "asc" ? result : -result;
 }
@@ -593,12 +676,6 @@ function statValue(value: number | null | undefined) {
   return typeof value === "number" ? value : Number.NEGATIVE_INFINITY;
 }
 
-function formatStat(value: number | null | undefined, percentage?: boolean) {
-  if (value == null) return "—";
-  const formatted = Number.isInteger(value) ? value.toString() : value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  return percentage ? `${formatted}%` : formatted;
-}
-
 function formatTimestamp(value: string | null) {
   if (!value) return "unknown";
   return new Intl.DateTimeFormat("en-GB", {
@@ -607,4 +684,10 @@ function formatTimestamp(value: string | null) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function buildComparisonHref(league: LeagueSlug, ids: string[]) {
+  const params = new URLSearchParams({ league });
+  ids.forEach((id) => params.append("player", id));
+  return `/players/compare?${params.toString()}`;
 }
