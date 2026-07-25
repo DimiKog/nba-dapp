@@ -106,6 +106,7 @@ export interface FantasyPlayerStats {
   three_pm: number;
   ft_pct: number | null;
   points: number;
+  rebounds?: number;
   oreb: number;
   dreb: number;
   assists: number;
