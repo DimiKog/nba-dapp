@@ -7,6 +7,9 @@ import {
   fetchFantasyLeagues,
   fetchPersonalFantasyMatchups,
   fetchPersonalFantasyPerformance,
+  fetchFreeAgentRadar,
+  photoUrl,
+  type FantasyFreeAgentRadar,
   type FantasyMatchup,
   type FantasyMatchupPeriod,
   type FantasyRosterPerformance,
@@ -14,7 +17,7 @@ import {
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 
 export default async function Home() {
-  const [games, news, ldlTeams, bdbTeams, personalTeams] = await Promise.all([
+  const [games, news, ldlTeams, bdbTeams, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
     fetchFantasyStandings("ldl").catch(() => []),
@@ -32,6 +35,10 @@ export default async function Home() {
           })),
       ))
       .catch(() => []),
+    Promise.all([
+      fetchFreeAgentRadar("ldl").catch(() => null),
+      fetchFreeAgentRadar("bdb").catch(() => null),
+    ]),
   ]);
 
   return (
@@ -61,6 +68,8 @@ export default async function Home() {
       </section>
 
       <PersonalTeamsGrid teams={personalTeams} />
+
+      <HomeRadarPanels radars={radarPanels} />
 
       {/* Fantasy standings + News */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -95,6 +104,100 @@ export default async function Home() {
         </section>
       </div>
     </main>
+  );
+}
+
+function HomeRadarPanels({
+  radars,
+}: {
+  radars: Array<FantasyFreeAgentRadar | null>;
+}) {
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
+            Free-agent trends
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">League-specific upward performance signals.</p>
+        </div>
+        <Link href="/watchlist" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          Open radar & watchlist →
+        </Link>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {radars.map((radar, index) => (
+          <HomeRadarCard
+            key={radar?.league.slug ?? index}
+            radar={radar}
+            fallbackLeague={index === 0 ? "LDL" : "BδB"}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HomeRadarCard({
+  radar,
+  fallbackLeague,
+}: {
+  radar: FantasyFreeAgentRadar | null;
+  fallbackLeague: string;
+}) {
+  const leaders = radar?.players.filter((player) => player.trend_rank != null).slice(0, 3) ?? [];
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
+        <div>
+          <h3 className="font-black text-slate-950 dark:text-white">
+            {radar?.league.name ?? fallbackLeague} radar
+          </h3>
+          <p className="text-xs text-slate-500">{radar?.categories.length ?? "—"} categories · last 7 days</p>
+        </div>
+        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+          Free agents
+        </span>
+      </div>
+      {leaders.length ? (
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+          {leaders.map((player) => {
+            const src = photoUrl(player.photo, player.nba_id);
+            return (
+              <div key={player.nba_id} className="flex items-center gap-3 px-4 py-3">
+                {src ? (
+                  <img src={src} alt="" className="h-9 w-9 rounded-full bg-slate-100 object-cover dark:bg-slate-800" />
+                ) : (
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-400 dark:bg-slate-800">
+                    {player.name.slice(0, 1)}
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
+                    #{player.trend_rank} {player.name}
+                  </p>
+                  <p className="truncate text-xs text-slate-500">
+                    {player.trend_strengths.join(" · ") || "Recent upward movement"}
+                  </p>
+                </div>
+                <p className="text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {player.trend_score != null && player.trend_score > 0 ? "+" : ""}{player.trend_score}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="px-4 py-5">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            No qualifying recent games
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Expected during the offseason. Radar will populate automatically when games resume.
+          </p>
+        </div>
+      )}
+    </article>
   );
 }
 

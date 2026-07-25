@@ -1,5 +1,25 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Watchlist configuration
+
+Watchlist reads and the free-agent radar use the public fantasy API. Mutations
+are proxied through server-only Next.js route handlers so the backend key is
+never sent to the browser.
+
+Configure these server-side variables in Vercel:
+
+```text
+FANTASY_WATCHLIST_API_KEY=<same value as the backend VM>
+CLOUDFLARE_ACCESS_AUD=<NBA Fantasy DApp Access application audience tag>
+CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://dimikog-apps.cloudflareaccess.com
+```
+
+Do not prefix any of them with `NEXT_PUBLIC_`.
+
+For local mutation testing only, a developer may set
+`WATCHLIST_ALLOW_LOCAL_MUTATIONS=true` in `.env.local`. This bypass is ignored
+in production. Reads work locally without it.
+
 ## Getting Started
 
 First, run the development server:
