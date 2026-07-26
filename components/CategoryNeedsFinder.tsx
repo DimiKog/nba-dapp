@@ -79,6 +79,7 @@ export default function CategoryNeedsFinder({
     try {
       const response = await fetch(
         `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
+        { cache: "no-store" },
       );
       if (!response.ok) throw new Error();
       const nextTargets = await response.json();

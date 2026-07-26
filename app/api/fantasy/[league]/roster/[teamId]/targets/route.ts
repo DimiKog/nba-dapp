@@ -30,13 +30,16 @@ export async function GET(
 
   const response = await fetch(
     `${BACKEND}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
-    { next: { revalidate: 60 } },
+    { cache: "no-store" },
   ).catch(() => null);
   if (!response) {
     return Response.json({ error: "Recommendation service unavailable" }, { status: 502 });
   }
   return new Response(response.body, {
     status: response.status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store, max-age=0",
+    },
   });
 }

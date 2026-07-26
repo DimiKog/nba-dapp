@@ -35,6 +35,7 @@ export default function CategoryNeedsSection({
       });
       const response = await fetch(
         `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
+        { cache: "no-store" },
       );
       if (!response.ok) throw new Error();
       setTargets(await response.json());
