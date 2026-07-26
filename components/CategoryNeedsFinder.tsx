@@ -161,6 +161,19 @@ export default function CategoryNeedsFinder({
             {targets.needs.map((need) => <span key={need.key} className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">{need.label}</span>)}
             <span>· {targets.sample.filtered_candidates} eligible players</span>
           </div>
+          <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/40">
+            <summary className="cursor-pointer font-bold text-blue-700 marker:text-slate-400 dark:text-blue-400">
+              How are recommendations scored?
+            </summary>
+            <div className="mt-3 grid gap-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
+              <p><strong className="text-slate-900 dark:text-white">Category impact:</strong> 0 z is average among eligible players. Positive values are better and negative values are worse.</p>
+              <p><strong className="text-slate-900 dark:text-white">Strong help:</strong> +0.50 z or higher is treated as a meaningful category improvement.</p>
+              <p><strong className="text-slate-900 dark:text-white">Market rank:</strong> free agents and rostered trade targets are ranked separately from their absolute z-score.</p>
+              <p><strong className="text-slate-900 dark:text-white">FG% and FT%:</strong> shooting impact accounts for attempt volume, not percentage alone.</p>
+              <p><strong className="text-slate-900 dark:text-white">Turnovers:</strong> lower is better, so fewer turnovers produce a more positive score.</p>
+              <p><strong className="text-slate-900 dark:text-white">Overall fit:</strong> combines category scores and gives more weight to your team&apos;s deeper weaknesses.</p>
+            </div>
+          </details>
           {targets.fallback_reason && (
             <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">No qualifying recent sample was available, so season performance is shown.</p>
           )}
