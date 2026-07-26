@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   photoUrl,
   type FantasyCategoryRecommendation,
@@ -36,6 +36,7 @@ export default function CategoryNeedsFinder({
   const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const requestSequence = useRef(0);
 
   const categories = targets.league.categories ?? [];
   const recommendationLanes = targets.category_recommendations ?? [];
@@ -45,6 +46,10 @@ export default function CategoryNeedsFinder({
     targets.candidates.flatMap((player) => player.position.split(","))
       .map((value) => value.trim()).filter(Boolean),
   )).sort(), [targets.candidates]);
+  const filtersAreDefault = basis === "season"
+    && availability === "all"
+    && category === ""
+    && position === "";
 
   async function applyFilters(next: {
     basis?: Basis;
@@ -62,6 +67,7 @@ export default function CategoryNeedsFinder({
     setPosition(selectedPosition);
     setLoading(true);
     setError(false);
+    const requestId = ++requestSequence.current;
     const params = new URLSearchParams({
       basis: selectedBasis,
       window: "14",
@@ -75,12 +81,25 @@ export default function CategoryNeedsFinder({
         `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
       );
       if (!response.ok) throw new Error();
-      setTargets(await response.json());
+      const nextTargets = await response.json();
+      if (requestId !== requestSequence.current) return;
+      setTargets(nextTargets);
+      setFocusedLane("");
     } catch {
-      setError(true);
+      if (requestId === requestSequence.current) setError(true);
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
+  }
+
+  function resetFilters() {
+    setFocusedLane("");
+    void applyFilters({
+      basis: "season",
+      availability: "all",
+      category: "",
+      position: "",
+    });
   }
 
   return (
@@ -124,6 +143,14 @@ export default function CategoryNeedsFinder({
               <option value="">All positions</option>
               {positions.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={loading}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:border-blue-600 dark:hover:text-blue-300"
+            >
+              {loading ? "Refreshing…" : filtersAreDefault ? "Refresh defaults" : "Reset filters"}
+            </button>
           </div>
         </div>
 
@@ -137,7 +164,9 @@ export default function CategoryNeedsFinder({
             <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">No qualifying recent sample was available, so season performance is shown.</p>
           )}
           {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Recommendations could not be refreshed. The previous results remain visible.</p>}
-          {activeLane ? (
+          {loading && !activeLane ? (
+            <p className="rounded-xl border border-blue-200 bg-blue-50 p-8 text-center text-sm font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">Refreshing recommendations…</p>
+          ) : activeLane ? (
             <div className={loading ? "opacity-50" : ""} aria-busy={loading}>
               <div className="mb-4 flex flex-wrap gap-2" aria-label="Recommendation categories">
                 {recommendationLanes.map((lane) => (
@@ -153,9 +182,9 @@ export default function CategoryNeedsFinder({
               </div>
               <RecommendationLane lane={activeLane} />
             </div>
-          ) : (
+          ) : !error ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No category recommendations are available for these filters.</p>
-          )}
+          ) : null}
 
           <details className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700">
             <summary className="cursor-pointer text-sm font-black text-blue-700 marker:text-slate-400 dark:text-blue-400">
