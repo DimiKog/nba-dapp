@@ -9,7 +9,7 @@ import {
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
-import CategoryNeedsFinder from "@/components/CategoryNeedsFinder";
+import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamPayrollPanel from "@/components/TeamPayrollPanel";
 import TeamSectionNav from "@/components/TeamSectionNav";
@@ -29,19 +29,22 @@ export default async function FantasyRosterPage({
   let seasonProfile = null;
   let windowProfile = null;
   let initialTargets = null;
+  let isPersonalTeam = false;
   try {
-    const [rosterResult, performanceResult, seasonResult, windowResult, targetsResult] = await Promise.all([
+    const [rosterResult, performanceResult, seasonResult, windowResult] = await Promise.all([
       fetchFantasyRoster(league, teamId),
       fetchFantasyRosterPerformance(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId, "window", 14).catch(() => null),
-      fetchFantasyCategoryTargets(league, teamId).catch(() => null),
     ]);
     roster = rosterResult;
     performance = performanceResult;
     seasonProfile = seasonResult;
     windowProfile = windowResult;
-    initialTargets = targetsResult;
+    isPersonalTeam = performanceResult?.league.personal_team_id === teamId;
+    if (isPersonalTeam) {
+      initialTargets = await fetchFantasyCategoryTargets(league, teamId).catch(() => null);
+    }
   } catch {
     notFound();
   }
@@ -147,13 +150,13 @@ export default async function FantasyRosterPage({
         />
       )}
 
-      {initialTargets && (
-        <CategoryNeedsFinder
-          league={league}
-          teamId={teamId}
-          initialTargets={initialTargets}
-        />
-      )}
+      <CategoryNeedsSection
+        league={league}
+        teamId={teamId}
+        teamName={roster.team_name}
+        initialTargets={initialTargets}
+        isPersonalTeam={isPersonalTeam}
+      />
     </main>
   );
 }
