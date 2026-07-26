@@ -1,12 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   photoUrl,
   type FantasyCategoryRecommendation,
   type FantasyCategoryTargets,
   type FantasyTargetCandidate,
+  type FantasyWatchlist,
 } from "@/lib/api";
 
 type LeagueSlug = "ldl" | "bdb";
@@ -36,7 +38,32 @@ export default function CategoryNeedsFinder({
   const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
+  const [watchlistReady, setWatchlistReady] = useState(false);
+  const [pendingWatchId, setPendingWatchId] = useState<number | null>(null);
+  const [watchlistMessage, setWatchlistMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    async function loadWatchlist() {
+      try {
+        const response = await fetch(`/api/watchlist/${league}?window=7`, {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error();
+        const payload = await response.json() as FantasyWatchlist;
+        if (active) {
+          setWatchedIds(new Set(payload.entries.map((entry) => entry.nba_player_id)));
+          setWatchlistReady(true);
+        }
+      } catch {
+        if (active) setWatchlistMessage("Watchlist actions are unavailable in this deployment.");
+      }
+    }
+    void loadWatchlist();
+    return () => { active = false; };
+  }, [league]);
 
   const categories = targets.league.categories ?? [];
   const recommendationLanes = targets.category_recommendations ?? [];
@@ -101,6 +128,30 @@ export default function CategoryNeedsFinder({
       category: "",
       position: "",
     });
+  }
+
+  async function watchPlayer(player: FantasyTargetCandidate, recommendation: string) {
+    if (!player.nba_id || watchedIds.has(player.nba_id)) return;
+    setPendingWatchId(player.nba_id);
+    setWatchlistMessage(null);
+    try {
+      const response = await fetch(`/api/watchlist/${league}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nba_player_id: player.nba_id,
+          notes: recommendation,
+          priority: 2,
+        }),
+      });
+      if (!response.ok) throw new Error();
+      setWatchedIds((current) => new Set(current).add(player.nba_id));
+      setWatchlistMessage(`${player.name} was added to the ${targets.league.name} watchlist.`);
+    } catch {
+      setWatchlistMessage("The player could not be added to the watchlist.");
+    } finally {
+      setPendingWatchId(null);
+    }
   }
 
   return (
@@ -178,6 +229,9 @@ export default function CategoryNeedsFinder({
             <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">No qualifying recent sample was available, so season performance is shown.</p>
           )}
           {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Recommendations could not be refreshed. The previous results remain visible.</p>}
+          {watchlistMessage && (
+            <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">{watchlistMessage}</p>
+          )}
           {loading && !activeLane ? (
             <p className="rounded-xl border border-blue-200 bg-blue-50 p-8 text-center text-sm font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300">Refreshing recommendations…</p>
           ) : activeLane ? (
@@ -194,7 +248,7 @@ export default function CategoryNeedsFinder({
                   </button>
                 ))}
               </div>
-              <RecommendationLane lane={activeLane} />
+              <RecommendationLane lane={activeLane} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={watchPlayer} />
             </div>
           ) : !error ? (
             <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No category recommendations are available for these filters.</p>
@@ -206,7 +260,7 @@ export default function CategoryNeedsFinder({
             </summary>
             <p className="mt-2 text-xs text-slate-500">The complete overall fit ranking is preserved for deeper research and comparison.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} player={player} />)}
+              {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} player={player} watched={watchedIds.has(player.nba_id)} watchlistReady={watchlistReady} pending={pendingWatchId === player.nba_id} onWatch={() => watchPlayer(player, "Recommendation candidate")} />)}
             </div>
             {!targets.candidates.length && !loading && <p className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No players match these filters.</p>}
           </details>
@@ -239,7 +293,19 @@ const MARKET_PRESENTATION = {
   },
 } as const;
 
-function RecommendationLane({ lane }: { lane: FantasyCategoryRecommendation }) {
+function RecommendationLane({
+  lane,
+  watchedIds,
+  watchlistReady,
+  pendingWatchId,
+  onWatch,
+}: {
+  lane: FantasyCategoryRecommendation;
+  watchedIds: Set<number>;
+  watchlistReady: boolean;
+  pendingWatchId: number | null;
+  onWatch: (player: FantasyTargetCandidate, recommendation: string) => Promise<void>;
+}) {
   const market = MARKET_PRESENTATION[lane.free_agent_market];
   return (
     <div>
@@ -249,11 +315,11 @@ function RecommendationLane({ lane }: { lane: FantasyCategoryRecommendation }) {
         <p className="mt-1 text-sm opacity-90">{lane.message ?? market.description}</p>
       </div>
 
-      <RecommendationGroup title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} categoryKey={lane.key} categoryLabel={lane.label} />
-      <RecommendationGroup title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} categoryKey={lane.key} categoryLabel={lane.label} />
-      <RecommendationGroup title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} categoryKey={lane.key} categoryLabel={lane.label} tone="trade" />
+      <RecommendationGroup title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} />
+      <RecommendationGroup title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} />
+      <RecommendationGroup title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} tone="trade" />
       {lane.last_resort.length > 0 && (
-        <RecommendationGroup title="Last resort" description="Use only if stronger options are unavailable; these players come with important drawbacks." players={lane.last_resort} categoryKey={lane.key} categoryLabel={lane.label} tone="muted" />
+        <RecommendationGroup title="Last resort" description="Use only if stronger options are unavailable; these players come with important drawbacks." players={lane.last_resort} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} tone="muted" />
       )}
     </div>
   );
@@ -265,6 +331,10 @@ function RecommendationGroup({
   players,
   categoryKey,
   categoryLabel,
+  watchedIds,
+  watchlistReady,
+  pendingWatchId,
+  onWatch,
   tone = "default",
 }: {
   title: string;
@@ -272,6 +342,10 @@ function RecommendationGroup({
   players: FantasyTargetCandidate[];
   categoryKey: string;
   categoryLabel: string;
+  watchedIds: Set<number>;
+  watchlistReady: boolean;
+  pendingWatchId: number | null;
+  onWatch: (player: FantasyTargetCandidate, recommendation: string) => Promise<void>;
   tone?: "default" | "trade" | "muted";
 }) {
   if (!players.length) return null;
@@ -285,7 +359,7 @@ function RecommendationGroup({
         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "trade" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`}>{players.length} option{players.length === 1 ? "" : "s"}</span>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {players.map((player) => <CandidateCard key={`${title}-${player.availability}-${player.nba_id}`} player={player} categoryKey={categoryKey} categoryLabel={categoryLabel} />)}
+        {players.map((player) => <CandidateCard key={`${title}-${player.availability}-${player.nba_id}`} player={player} categoryKey={categoryKey} categoryLabel={categoryLabel} watched={watchedIds.has(player.nba_id)} watchlistReady={watchlistReady} pending={pendingWatchId === player.nba_id} onWatch={() => onWatch(player, `${categoryLabel} ${player.availability === "free_agent" ? "free-agent recommendation" : "trade target"}`)} />)}
       </div>
     </section>
   );
@@ -295,10 +369,18 @@ function CandidateCard({
   player,
   categoryKey,
   categoryLabel,
+  watched = false,
+  watchlistReady = false,
+  pending = false,
+  onWatch,
 }: {
   player: FantasyTargetCandidate;
   categoryKey?: string;
   categoryLabel?: string;
+  watched?: boolean;
+  watchlistReady?: boolean;
+  pending?: boolean;
+  onWatch?: () => void;
 }) {
   const photo = photoUrl(player.photo, player.nba_id);
   const injury = formatInjury(player.injury);
@@ -339,6 +421,23 @@ function CandidateCard({
       <div className="mt-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
         <div className="flex justify-between gap-3"><span className="text-slate-400">2026–27 salary</span><span className="font-bold text-slate-700 dark:text-slate-200">{player.salary_2026_27 ?? "$0 · Free agent"}</span></div>
         {injury && <p className="mt-2 text-rose-600 dark:text-rose-400">{injury}</p>}
+      </div>
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        {player.player_id && (
+          <Link href={`/players/${player.player_id}`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-blue-300">
+            View player
+          </Link>
+        )}
+        {onWatch && (
+          <button
+            type="button"
+            disabled={!watchlistReady || watched || pending}
+            onClick={onWatch}
+            className={`rounded-lg px-3 py-1.5 text-xs font-bold ${watched ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"}`}
+          >
+            {watched ? "Watching" : pending ? "Saving…" : watchlistReady ? "+ Watch" : "Checking…"}
+          </button>
+        )}
       </div>
     </article>
   );
