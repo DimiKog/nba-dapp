@@ -6,6 +6,16 @@ export function validLeague(value: string): value is "ldl" | "bdb" {
   return value === "ldl" || value === "bdb";
 }
 
+export async function readWatchlist(
+  league: "ldl" | "bdb",
+  windowDays = 7,
+): Promise<Response> {
+  return fetch(
+    `${BACKEND}/api/fantasy/${league}/watchlist?window=${windowDays}`,
+    { cache: "no-store" },
+  );
+}
+
 export async function mutateWatchlist(
   league: "ldl" | "bdb",
   method: "POST" | "DELETE",

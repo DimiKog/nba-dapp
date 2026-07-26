@@ -1,5 +1,31 @@
 import { verifyCloudflareAccess } from "@/lib/cloudflareAccess";
-import { mutateWatchlist, validLeague } from "@/lib/watchlistServer";
+import { mutateWatchlist, readWatchlist, validLeague } from "@/lib/watchlistServer";
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ league: string }> },
+) {
+  if (!await verifyCloudflareAccess(request)) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const { league } = await context.params;
+  if (!validLeague(league)) {
+    return Response.json({ error: "Unknown league" }, { status: 404 });
+  }
+  const rawWindow = new URL(request.url).searchParams.get("window") ?? "7";
+  const windowDays = Number(rawWindow);
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 30) {
+    return Response.json({ error: "Invalid window" }, { status: 400 });
+  }
+  const response = await readWatchlist(league, windowDays);
+  return new Response(response.body, {
+    status: response.status,
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
+}
 
 export async function POST(
   request: Request,
