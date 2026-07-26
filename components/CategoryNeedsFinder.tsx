@@ -79,7 +79,7 @@ export default function CategoryNeedsFinder({
   }
 
   return (
-    <section className="mt-8 scroll-mt-20">
+    <section id="player-targets" className="mt-10 scroll-mt-32">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-5 py-5 dark:border-slate-700">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Roster improvement</p>

@@ -46,7 +46,7 @@ export default function TeamCategoryProfilePanel({
     selected.basis_used === "season";
 
   return (
-    <section id="team-analysis" className="mt-8 scroll-mt-20">
+    <section id="team-analysis" className="mt-10 scroll-mt-32">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:flex-row sm:items-start sm:justify-between">
           <div>
