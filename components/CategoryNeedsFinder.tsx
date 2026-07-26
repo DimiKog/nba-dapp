@@ -39,7 +39,7 @@ export default function CategoryNeedsFinder({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
-  const [watchlistReady, setWatchlistReady] = useState(false);
+  const [watchlistReady, setWatchlistReady] = useState<boolean | null>(false);
   const [pendingWatchId, setPendingWatchId] = useState<number | null>(null);
   const [watchlistMessage, setWatchlistMessage] = useState<string | null>(null);
   const requestSequence = useRef(0);
@@ -58,7 +58,10 @@ export default function CategoryNeedsFinder({
           setWatchlistReady(true);
         }
       } catch {
-        if (active) setWatchlistMessage("Watchlist actions are unavailable in this deployment.");
+        if (active) {
+          setWatchlistReady(null);
+          setWatchlistMessage("Watchlist actions are unavailable in this deployment.");
+        }
       }
     }
     void loadWatchlist();
@@ -302,7 +305,7 @@ function RecommendationLane({
 }: {
   lane: FantasyCategoryRecommendation;
   watchedIds: Set<number>;
-  watchlistReady: boolean;
+  watchlistReady: boolean | null;
   pendingWatchId: number | null;
   onWatch: (player: FantasyTargetCandidate, recommendation: string) => Promise<void>;
 }) {
@@ -343,7 +346,7 @@ function RecommendationGroup({
   categoryKey: string;
   categoryLabel: string;
   watchedIds: Set<number>;
-  watchlistReady: boolean;
+  watchlistReady: boolean | null;
   pendingWatchId: number | null;
   onWatch: (player: FantasyTargetCandidate, recommendation: string) => Promise<void>;
   tone?: "default" | "trade" | "muted";
@@ -378,7 +381,7 @@ function CandidateCard({
   categoryKey?: string;
   categoryLabel?: string;
   watched?: boolean;
-  watchlistReady?: boolean;
+  watchlistReady?: boolean | null;
   pending?: boolean;
   onWatch?: () => void;
 }) {
@@ -431,11 +434,11 @@ function CandidateCard({
         {onWatch && (
           <button
             type="button"
-            disabled={!watchlistReady || watched || pending}
+            disabled={watchlistReady !== true || watched || pending}
             onClick={onWatch}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold ${watched ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-600 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"}`}
           >
-            {watched ? "Watching" : pending ? "Saving…" : watchlistReady ? "+ Watch" : "Checking…"}
+            {watched ? "Watching" : pending ? "Saving…" : watchlistReady === true ? "+ Watch" : watchlistReady === null ? "Unavailable" : "Checking…"}
           </button>
         )}
       </div>
