@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useMemo, useState } from "react";
 import {
   photoUrl,
+  type FantasyCategoryRecommendation,
   type FantasyCategoryTargets,
   type FantasyTargetCandidate,
 } from "@/lib/api";
@@ -32,10 +33,14 @@ export default function CategoryNeedsFinder({
   const [availability, setAvailability] = useState<Availability>("all");
   const [category, setCategory] = useState("");
   const [position, setPosition] = useState("");
+  const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   const categories = targets.league.categories ?? [];
+  const recommendationLanes = targets.category_recommendations ?? [];
+  const activeLane = recommendationLanes.find((lane) => lane.key === focusedLane)
+    ?? recommendationLanes[0];
   const positions = useMemo(() => Array.from(new Set(
     targets.candidates.flatMap((player) => player.position.split(","))
       .map((value) => value.trim()).filter(Boolean),
@@ -132,11 +137,108 @@ export default function CategoryNeedsFinder({
             <p className="mb-4 rounded-xl bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">No qualifying recent sample was available, so season performance is shown.</p>
           )}
           {error && <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">Recommendations could not be refreshed. The previous results remain visible.</p>}
-          <div className={`grid gap-3 md:grid-cols-2 xl:grid-cols-3 ${loading ? "opacity-50" : ""}`} aria-busy={loading}>
-            {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} player={player} />)}
-          </div>
-          {!targets.candidates.length && !loading && <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No players match these filters.</p>}
+          {activeLane ? (
+            <div className={loading ? "opacity-50" : ""} aria-busy={loading}>
+              <div className="mb-4 flex flex-wrap gap-2" aria-label="Recommendation categories">
+                {recommendationLanes.map((lane) => (
+                  <button
+                    key={lane.key}
+                    type="button"
+                    onClick={() => setFocusedLane(lane.key)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${activeLane.key === lane.key ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"}`}
+                  >
+                    {lane.label}
+                  </button>
+                ))}
+              </div>
+              <RecommendationLane lane={activeLane} />
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No category recommendations are available for these filters.</p>
+          )}
+
+          <details className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700">
+            <summary className="cursor-pointer text-sm font-black text-blue-700 marker:text-slate-400 dark:text-blue-400">
+              Explore all {targets.candidates.length} eligible candidates
+            </summary>
+            <p className="mt-2 text-xs text-slate-500">The complete overall fit ranking is preserved for deeper research and comparison.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} player={player} />)}
+            </div>
+            {!targets.candidates.length && !loading && <p className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No players match these filters.</p>}
+          </details>
         </div>
+      </div>
+    </section>
+  );
+}
+
+const MARKET_PRESENTATION = {
+  strong: {
+    label: "Strong FA options",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+    description: "At least one available player provides a meaningful improvement without damaging another selected need.",
+  },
+  limited: {
+    label: "Limited FA market",
+    className: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+    description: "The best available players rank well in this market, but are not strong improvements in absolute terms.",
+  },
+  weak: {
+    label: "Weak FA market",
+    className: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+    description: "Available options carry meaningful drawbacks. Trade targets deserve more attention.",
+  },
+  no_qualifying_options: {
+    label: "No qualifying FA options",
+    className: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300",
+    description: "No available player clears the minimum recommendation threshold. Consider the trade market.",
+  },
+} as const;
+
+function RecommendationLane({ lane }: { lane: FantasyCategoryRecommendation }) {
+  const market = MARKET_PRESENTATION[lane.free_agent_market];
+  return (
+    <div>
+      <div className={`rounded-xl border p-4 ${market.className}`}>
+        <p className="text-xs font-black uppercase tracking-[0.14em]">{lane.label} market verdict</p>
+        <h3 className="mt-1 text-lg font-black">{market.label}</h3>
+        <p className="mt-1 text-sm opacity-90">{lane.message ?? market.description}</p>
+      </div>
+
+      <RecommendationGroup title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} />
+      <RecommendationGroup title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} />
+      <RecommendationGroup title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} tone="trade" />
+      {lane.last_resort.length > 0 && (
+        <RecommendationGroup title="Last resort" description="Use only if stronger options are unavailable; these players come with important drawbacks." players={lane.last_resort} tone="muted" />
+      )}
+    </div>
+  );
+}
+
+function RecommendationGroup({
+  title,
+  description,
+  players,
+  tone = "default",
+}: {
+  title: string;
+  description: string;
+  players: FantasyTargetCandidate[];
+  tone?: "default" | "trade" | "muted";
+}) {
+  if (!players.length) return null;
+  return (
+    <section className={`mt-5 ${tone === "muted" ? "opacity-75" : ""}`}>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-black text-slate-950 dark:text-white">{title}</h3>
+          <p className="text-xs text-slate-500">{description}</p>
+        </div>
+        <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "trade" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`}>{players.length} option{players.length === 1 ? "" : "s"}</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {players.map((player) => <CandidateCard key={`${title}-${player.availability}-${player.nba_id}`} player={player} />)}
       </div>
     </section>
   );
@@ -161,6 +263,9 @@ function CandidateCard({ player }: { player: FantasyTargetCandidate }) {
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{player.availability === "free_agent" ? "Free agent" : player.fantasy_team?.name ?? "Rostered"}</span>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{player.confidence} confidence</span>
+        {player.availability_rank && player.availability_of && (
+          <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">Market #{player.availability_rank} of {player.availability_of}</span>
+        )}
       </div>
       <DetailRow label="Helps" values={player.helps} tone="positive" />
       <DetailRow label="Trade-offs" values={player.tradeoffs} tone="negative" />

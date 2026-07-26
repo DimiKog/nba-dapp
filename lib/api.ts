@@ -289,9 +289,26 @@ export interface FantasyTargetCandidate {
   fit_rank: number;
   fit_score: number;
   confidence: "high" | "medium" | "low";
+  availability_rank?: number;
+  availability_of?: number;
+  availability_percentile?: number;
+  recommendation_tier?: "strong" | "best_available" | "last_resort" | "not_recommended";
+  recommendation_labels?: string[];
   helps: string[];
   hurts_needs: string[];
   tradeoffs: string[];
+  need_contributions?: Array<{
+    key: string;
+    label: string;
+    player_z: number;
+    absolute_z?: number;
+    weight: number;
+    weighted_contribution: number;
+    verdict: string;
+    availability_rank?: number;
+    availability_of?: number;
+    availability_percentile?: number;
+  }>;
   salary_2026_27: string | null;
   salaries?: Record<string, string | null>;
   injury: string | {
@@ -301,6 +318,17 @@ export interface FantasyTargetCandidate {
     status?: string | null;
     updated_at?: string | null;
   } | null;
+}
+
+export interface FantasyCategoryRecommendation {
+  key: string;
+  label: string;
+  free_agent_market: "strong" | "limited" | "weak" | "no_qualifying_options";
+  message: string | null;
+  strong_free_agents: FantasyTargetCandidate[];
+  best_available: FantasyTargetCandidate[];
+  trade_targets: FantasyTargetCandidate[];
+  last_resort: FantasyTargetCandidate[];
 }
 
 export interface FantasyCategoryTargets {
@@ -334,6 +362,7 @@ export interface FantasyCategoryTargets {
     limit: number;
   };
   candidates: FantasyTargetCandidate[];
+  category_recommendations?: FantasyCategoryRecommendation[];
 }
 
 export interface LeaguePlayerExplorer {
