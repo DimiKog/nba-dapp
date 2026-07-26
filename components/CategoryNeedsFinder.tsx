@@ -235,11 +235,11 @@ function RecommendationLane({ lane }: { lane: FantasyCategoryRecommendation }) {
         <p className="mt-1 text-sm opacity-90">{lane.message ?? market.description}</p>
       </div>
 
-      <RecommendationGroup title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} />
-      <RecommendationGroup title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} />
-      <RecommendationGroup title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} tone="trade" />
+      <RecommendationGroup title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} categoryKey={lane.key} categoryLabel={lane.label} />
+      <RecommendationGroup title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} categoryKey={lane.key} categoryLabel={lane.label} />
+      <RecommendationGroup title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} categoryKey={lane.key} categoryLabel={lane.label} tone="trade" />
       {lane.last_resort.length > 0 && (
-        <RecommendationGroup title="Last resort" description="Use only if stronger options are unavailable; these players come with important drawbacks." players={lane.last_resort} tone="muted" />
+        <RecommendationGroup title="Last resort" description="Use only if stronger options are unavailable; these players come with important drawbacks." players={lane.last_resort} categoryKey={lane.key} categoryLabel={lane.label} tone="muted" />
       )}
     </div>
   );
@@ -249,11 +249,15 @@ function RecommendationGroup({
   title,
   description,
   players,
+  categoryKey,
+  categoryLabel,
   tone = "default",
 }: {
   title: string;
   description: string;
   players: FantasyTargetCandidate[];
+  categoryKey: string;
+  categoryLabel: string;
   tone?: "default" | "trade" | "muted";
 }) {
   if (!players.length) return null;
@@ -267,15 +271,27 @@ function RecommendationGroup({
         <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone === "trade" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"}`}>{players.length} option{players.length === 1 ? "" : "s"}</span>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {players.map((player) => <CandidateCard key={`${title}-${player.availability}-${player.nba_id}`} player={player} />)}
+        {players.map((player) => <CandidateCard key={`${title}-${player.availability}-${player.nba_id}`} player={player} categoryKey={categoryKey} categoryLabel={categoryLabel} />)}
       </div>
     </section>
   );
 }
 
-function CandidateCard({ player }: { player: FantasyTargetCandidate }) {
+function CandidateCard({
+  player,
+  categoryKey,
+  categoryLabel,
+}: {
+  player: FantasyTargetCandidate;
+  categoryKey?: string;
+  categoryLabel?: string;
+}) {
   const photo = photoUrl(player.photo, player.nba_id);
   const injury = formatInjury(player.injury);
+  const categoryContribution = categoryKey
+    ? player.need_contributions?.find((item) => item.key === categoryKey)
+    : undefined;
+  const categoryZ = categoryContribution?.absolute_z ?? categoryContribution?.player_z;
   return (
     <article className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-start gap-3">
@@ -296,6 +312,14 @@ function CandidateCard({ player }: { player: FantasyTargetCandidate }) {
           <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">Market #{player.availability_rank} of {player.availability_of}</span>
         )}
       </div>
+      {categoryLabel && typeof categoryZ === "number" && (
+        <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+          <span className="font-black">{categoryLabel} impact: {categoryZ > 0 ? "+" : ""}{categoryZ.toFixed(2)} z</span>
+          {player.availability_rank && player.availability_of && (
+            <span className="ml-1 text-blue-600 dark:text-blue-400">· market #{player.availability_rank} of {player.availability_of}</span>
+          )}
+        </div>
+      )}
       <DetailRow label="Helps" values={player.helps} tone="positive" />
       <DetailRow label="Trade-offs" values={player.tradeoffs} tone="negative" />
       <div className="mt-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
