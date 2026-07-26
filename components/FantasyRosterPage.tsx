@@ -10,6 +10,9 @@ import {
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
 import CategoryNeedsFinder from "@/components/CategoryNeedsFinder";
+import TeamPageOverview from "@/components/TeamPageOverview";
+import TeamPayrollPanel from "@/components/TeamPayrollPanel";
+import TeamSectionNav from "@/components/TeamSectionNav";
 import { notFound } from "next/navigation";
 
 type LeagueSlug = "ldl" | "bdb";
@@ -65,23 +68,12 @@ export default async function FantasyRosterPage({
         </div>
       </div>
 
-      {seasonProfile && (
-        <TeamCategoryProfilePanel
-          seasonProfile={seasonProfile}
-          windowProfile={windowProfile}
-        />
-      )}
+      {performance && <TeamPageOverview performance={performance} profile={seasonProfile} />}
+      <TeamSectionNav hasPayroll={Boolean(performance?.payroll)} />
 
-      {initialTargets && (
-        <CategoryNeedsFinder
-          league={league}
-          teamId={teamId}
-          initialTargets={initialTargets}
-        />
-      )}
-
-      {performance ? (
-        <RosterPerformanceTable performance={performance} />
+      <section id="roster" className="scroll-mt-32">
+        {performance ? (
+          <RosterPerformanceTable performance={performance} />
       ) : (
       <div className="mt-8 space-y-6">
         {[
@@ -143,6 +135,24 @@ export default async function FantasyRosterPage({
           )
         )}
       </div>
+      )}
+      </section>
+
+      {performance?.payroll && <TeamPayrollPanel payroll={performance.payroll} />}
+
+      {seasonProfile && (
+        <TeamCategoryProfilePanel
+          seasonProfile={seasonProfile}
+          windowProfile={windowProfile}
+        />
+      )}
+
+      {initialTargets && (
+        <CategoryNeedsFinder
+          league={league}
+          teamId={teamId}
+          initialTargets={initialTargets}
+        />
       )}
     </main>
   );

@@ -33,29 +33,6 @@ const SECTIONS = [
 
 const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
 
-function formatMoney(value: number | null) {
-  if (value == null) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-type PayrollSeason = NonNullable<FantasyRosterPerformance["payroll"]>["seasons"][number];
-
-function capStatusLabel(status: PayrollSeason["status"]) {
-  if (status === "under") return "Under cap";
-  if (status === "over") return "Over cap";
-  return "Cap not set";
-}
-
-function capStatusClasses(status: PayrollSeason["status"]) {
-  if (status === "under") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300";
-  if (status === "over") return "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300";
-  return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
-}
-
 function playerKey(player: FantasyPlayerPerformance) {
   return String(player.player_id ?? player.fantrax_scorer_id ?? player.name);
 }
@@ -124,12 +101,6 @@ export default function RosterPerformanceTable({
     performance.players.find((player) => playerKey(player) === selectedKey)
     ?? performance.players[0]
   );
-  const injured = performance.players.filter((player) => player.injury);
-  const freshest = performance.players
-    .map((player) => player.freshness.stats)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1) ?? null;
 
   if (!selected) return null;
 
@@ -149,81 +120,6 @@ export default function RosterPerformanceTable({
 
   return (
     <>
-      <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Roster</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">{performance.players.length}</p>
-          <p className="text-xs text-slate-500">players</p>
-        </div>
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900/60 dark:bg-red-950/30">
-          <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400">Injury alerts</p>
-          <p className="mt-1 text-2xl font-bold text-red-700 dark:text-red-300">{injured.length}</p>
-          <p className="truncate text-xs text-red-600/80 dark:text-red-400/80">
-            {injured.map((player) => player.short_name).join(", ") || "No active alerts"}
-          </p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data freshness</p>
-          <p className="mt-2 text-sm font-semibold text-slate-800 dark:text-slate-200">{freshnessLabel(freshest)}</p>
-          <p className="text-xs text-slate-500">{performance.window.from} – {performance.window.to}</p>
-        </div>
-      </div>
-
-      {performance.payroll && (
-      <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">Team payroll</h2>
-            <p className="text-xs text-slate-500">Active, Reserve and Injured Reserve players</p>
-          </div>
-          <p className="text-xs text-slate-500">Players without a contract count as $0</p>
-        </div>
-        <div className="grid gap-px bg-slate-200 dark:bg-slate-700 sm:grid-cols-2 xl:grid-cols-6">
-          {performance.payroll.seasons.map((season, index) => {
-            const current = index === 0;
-            return (
-            <div
-              key={season.season}
-              className={`${
-                current
-                  ? "bg-blue-50 p-5 sm:col-span-2 dark:bg-blue-950/40"
-                  : "bg-white p-4 dark:bg-slate-900"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className={`font-bold ${current ? "text-sm text-blue-700 dark:text-blue-300" : "text-xs text-slate-500"}`}>
-                  {season.season}{current ? " · Current season" : ""}
-                </p>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${capStatusClasses(season.status)}`}>
-                  {capStatusLabel(season.status)}
-                </span>
-              </div>
-              <p className={`mt-2 font-bold tabular-nums text-slate-900 dark:text-slate-100 ${current ? "text-3xl" : "text-lg"}`}>
-                {formatMoney(season.total)}
-              </p>
-              {season.cap != null ? (
-                <p className="mt-1 text-xs text-slate-500">
-                  Cap {formatMoney(season.cap)}{season.cap_provisional ? " · provisional" : ""}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-slate-500">No cap configured</p>
-              )}
-              {season.remaining != null && (
-                <p className={`mt-1 text-xs font-medium ${season.remaining >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {season.remaining >= 0 ? `${formatMoney(season.remaining)} available` : `${formatMoney(Math.abs(season.remaining))} over`}
-                </p>
-              )}
-              {season.free_agents > 0 && (
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {season.free_agents} free {season.free_agents === 1 ? "agent" : "agents"} · $0
-                </p>
-              )}
-            </div>
-          )})}
-        </div>
-      </section>
-      )}
-
       {!hasWindowGames && (
         <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
           No NBA games were played in the last {performance.window.days} days. Season averages are shown by default.
