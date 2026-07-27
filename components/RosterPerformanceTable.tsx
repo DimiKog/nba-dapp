@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import {
   FantasyPlayerPerformance,
@@ -89,8 +90,10 @@ function statusClasses(status: FantasyPlayerPerformance["status"]) {
 
 export default function RosterPerformanceTable({
   performance,
+  league,
 }: {
   performance: FantasyRosterPerformance;
+  league: "ldl" | "bdb";
 }) {
   const hasWindowGames = performance.players.some((player) => player.window_stats.games > 0);
   const [view, setView] = useState<View>(hasWindowGames ? "window" : "season");
@@ -206,6 +209,11 @@ export default function RosterPerformanceTable({
                 <p className="mt-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
                   {selected.salary_2026_27 ?? "Salary unavailable"}
                 </p>
+                {selected.player_id && (
+                  <Link href={`/players/${selected.player_id}?league=${league}&from=roster`} className="mt-2 inline-block text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                    Full intelligence →
+                  </Link>
+                )}
               </div>
             </div>
 

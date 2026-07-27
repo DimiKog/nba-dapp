@@ -480,7 +480,7 @@ function PlayerDecisionPanel({
               {statsView === "season" ? "Season averages" : "Recent totals"}
             </p>
             {player.player_id && (
-              <Link href={`/players/${player.player_id}`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+              <Link href={`/players/${player.player_id}?league=${league}&from=explorer`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
                 Full profile →
               </Link>
             )}
