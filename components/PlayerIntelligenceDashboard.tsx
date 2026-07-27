@@ -92,7 +92,7 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
         <DecisionCard label="Current salary" value={player.salary_2026_27 ?? "$0"} detail={player.salary_2026_27 ? "2026–27 contract" : "No contract · free agent"} />
         <DecisionCard label="NBA rank" value={overallRank(sample, "nba")} detail={overallDetail(sample, "nba")} />
         <DecisionCard label={league ? `${intelligence.league?.name} market` : "Sample"} value={league ? overallRank(sample, "market") : `${sample.games} games`} detail={league ? overallDetail(sample, "market") : `Minimum ${sample.minimum_games} to qualify`} />
-        <DecisionCard label="Category profile" value={`${sample.strengths.length} strong`} detail={`${sample.weaknesses.length} weaknesses · ${sample.games} games`} />
+        <DecisionCard label="Category profile" value={`${sample.strengths.length} strong`} detail={`${sample.weaknesses.length} ${sample.weaknesses.length === 1 ? "weakness" : "weaknesses"} · ${sample.games} games`} />
       </section>
 
       <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">

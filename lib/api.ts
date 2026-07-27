@@ -1,5 +1,12 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
+export class ApiResponseError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = "ApiResponseError";
+  }
+}
+
 export interface Player {
   id: number;
   name: string;
@@ -109,7 +116,7 @@ export async function fetchPlayer(id: number): Promise<PlayerDetail> {
   const res = await fetch(`${BASE}/api/nba/players/${id}`, {
     next: { revalidate: 3600 },
   });
-  if (!res.ok) throw new Error("Player not found");
+  if (!res.ok) throw new ApiResponseError("Player unavailable", res.status);
   return res.json();
 }
 
