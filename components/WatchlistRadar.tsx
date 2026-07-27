@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   fetchFantasyWatchlist,
   fetchFreeAgentRadar,
@@ -184,6 +185,7 @@ export default function WatchlistRadar({
             {watchlist.entries.map((entry) => (
               <WatchlistCard
                 key={entry.id}
+                league={league}
                 entry={entry}
                 pending={pendingId === entry.nba_player_id}
                 onSave={savePlayer}
@@ -252,6 +254,7 @@ export default function WatchlistRadar({
               {visibleRadar.slice(0, visibleLimit).map((player) => (
                 <RadarCard
                   key={player.nba_id}
+                  league={league}
                   player={player}
                   categoryColumns={categoryColumns}
                   watched={player.nba_id != null && watchedIds.has(player.nba_id)}
@@ -284,11 +287,13 @@ export default function WatchlistRadar({
 }
 
 function WatchlistCard({
+  league,
   entry,
   pending,
   onSave,
   onRemove,
 }: {
+  league: LeagueSlug;
   entry: FantasyWatchlistEntry;
   pending: boolean;
   onSave: (id: number, notes: string, priority: 1 | 2 | 3) => Promise<void>;
@@ -345,6 +350,11 @@ function WatchlistCard({
         </select>
       </div>
       <div className="mt-3 flex justify-end gap-2">
+        {player?.player_id && (
+          <Link href={`/players/${player.player_id}?league=${league}&from=watchlist`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300">
+            View intelligence
+          </Link>
+        )}
         <button
           type="button"
           disabled={pending}
@@ -367,12 +377,14 @@ function WatchlistCard({
 }
 
 function RadarCard({
+  league,
   player,
   categoryColumns,
   watched,
   pending,
   onWatch,
 }: {
+  league: LeagueSlug;
   player: FantasyRadarPlayer;
   categoryColumns: ReturnType<typeof resolveFantasyCategories>;
   watched: boolean;
@@ -394,18 +406,17 @@ function RadarCard({
               <h3 className="font-black text-slate-950 dark:text-white">{player.name}</h3>
               <p className="text-xs text-slate-500">{player.nba_team || "NBA team unavailable"} · {player.position || "—"}</p>
             </div>
-            <button
-              type="button"
-              disabled={watched || pending || !player.nba_id}
-              onClick={onWatch}
-              className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
-                watched
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                  : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              }`}
-            >
-              {watched ? "Watching" : pending ? "Saving…" : "+ Watch"}
-            </button>
+            <div className="flex shrink-0 gap-2">
+              {player.player_id && <Link href={`/players/${player.player_id}?league=${league}&from=watchlist`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300">View</Link>}
+              <button
+                type="button"
+                disabled={watched || pending || !player.nba_id}
+                onClick={onWatch}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold ${watched ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"}`}
+              >
+                {watched ? "Watching" : pending ? "Saving…" : "+ Watch"}
+              </button>
+            </div>
           </div>
           {player.trend_rank != null ? (
             <TrendChips trends={player.category_trends} />
@@ -461,6 +472,7 @@ function TrendChips({
     </div>
   );
 }
+
 
 function PlayerPhoto({
   player,

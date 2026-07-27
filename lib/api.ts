@@ -27,6 +27,68 @@ export interface PlayerDetail extends Player {
   contract: Contract;
 }
 
+export interface PlayerIntelligenceCategory {
+  key: string;
+  label: string;
+  value: number | null;
+  z: number | null;
+  nba_rank: number | null;
+  nba_of: number | null;
+  fantasy_market_rank: number | null;
+  fantasy_market_of: number | null;
+}
+
+export interface PlayerIntelligenceSample {
+  categories: PlayerIntelligenceCategory[];
+  games: number;
+  minimum_games: number;
+  qualified: boolean;
+  sample: string;
+  strengths: string[];
+  weaknesses: string[];
+  overall?: {
+    z_score: number;
+    nba_rank: number | null;
+    nba_of: number | null;
+    fantasy_market_rank: number | null;
+    fantasy_market_of: number | null;
+  } | null;
+}
+
+export interface PlayerIntelligence {
+  categories: { key: string; label: string }[];
+  generated_at: string;
+  source: string;
+  window: { days: number; season: string };
+  freshness: { injury: string | null; roster: string | null; stats: string | null };
+  league?: FantasyLeague & { categories: string[] };
+  player: {
+    player_id: number;
+    nba_id: number | null;
+    name: string;
+    short_name: string;
+    position: string | null;
+    nba_team: string | null;
+    nba_team_short: string | null;
+    photo: string | null;
+    identity_status: "resolved" | "unresolved";
+    status: string | null;
+    availability?: "free_agent" | "rostered";
+    fantasy_team: { id: string; name: string; logo: string | null; owner: string | null } | null;
+    injury: { status: string; body_part: string | null; detail: string | null; source: string; updated_at: string | null } | null;
+    latest_game: {
+      date: string; game_id: string; is_home: boolean; minutes: number | null; opponent: string; team: string;
+      stats: { points: number; oreb: number; dreb: number; assists: number; steals: number; blocks: number; turnovers: number; three_pm: number; fgm: number; fga: number; ftm: number; fta: number };
+    } | null;
+    salaries: Record<string, string | null>;
+    salary_2026_27: string | null;
+    season_average: FantasyPlayerStats;
+    window_stats: FantasyPlayerStats;
+    season_average_intelligence: PlayerIntelligenceSample;
+    window_stats_intelligence: PlayerIntelligenceSample;
+  };
+}
+
 export function photoUrl(filename: string | null, nbaId?: number | null): string | null {
   if (filename && /^https?:\/\//i.test(filename)) return filename;
   if (filename) return `${BASE}/photos/${filename}`;
@@ -48,6 +110,19 @@ export async function fetchPlayer(id: number): Promise<PlayerDetail> {
     next: { revalidate: 3600 },
   });
   if (!res.ok) throw new Error("Player not found");
+  return res.json();
+}
+
+export async function fetchPlayerIntelligence(
+  playerId: number,
+  options: { league?: "ldl" | "bdb"; nbaId?: number | null; window?: number } = {},
+): Promise<PlayerIntelligence> {
+  const window = options.window ?? 14;
+  const path = options.league && options.nbaId
+    ? `/api/fantasy/${options.league}/players/${options.nbaId}/intelligence`
+    : `/api/nba/players/${playerId}/intelligence`;
+  const res = await fetch(`${BASE}${path}?window=${window}`, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error("Player intelligence unavailable");
   return res.json();
 }
 
