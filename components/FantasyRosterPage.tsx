@@ -59,16 +59,23 @@ export default async function FantasyRosterPage({
         ← {league === "ldl" ? "LDL" : "BδB"} Standings
       </Link>
 
-      <div className="mt-6 flex items-center gap-4">
-        {roster.logo && (
-          <Image src={roster.logo} alt={roster.team_name ?? ""} width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />
-        )}
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{roster.team_name}</h1>
-          {roster.owner && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Owner: {roster.owner}</p>
+      <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          {roster.logo && (
+            <Image src={roster.logo} alt={roster.team_name ?? ""} width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />
           )}
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{roster.team_name}</h1>
+            {roster.owner && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Owner: {roster.owner}</p>
+            )}
+          </div>
         </div>
+        {isPersonalTeam && (
+          <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+            Analyze a trade →
+          </Link>
+        )}
       </div>
 
       {performance && <TeamPageOverview performance={performance} profile={seasonProfile} />}

@@ -275,6 +275,149 @@ export interface FantasyRosterPerformance {
   players: FantasyPlayerPerformance[];
 }
 
+export type FantasySeasonPhase = "in_season" | "off_season";
+export type TradeBasis = "season" | "window";
+
+export interface TradePlayerSummary {
+  nba_id: number;
+  name: string;
+  position: string | null;
+  nba_team: string | null;
+  fantasy_team: {
+    id: string;
+    name: string;
+    logo: string | null;
+    owner: string | null;
+  } | null;
+  injury: FantasyPlayerPerformance["injury"];
+  salaries: Record<string, number | null>;
+}
+
+export interface TradePayrollSeasonState {
+  season: string;
+  total: number;
+  known_players: number;
+  free_agents: number;
+  cap: number | null;
+  remaining: number | null;
+  status: "under" | "over" | "cap_unavailable";
+  cap_provisional: boolean | null;
+}
+
+export interface TradePayrollSeason {
+  season: string;
+  before: TradePayrollSeasonState;
+  after: TradePayrollSeasonState;
+  delta: number;
+}
+
+export type TradeCapResult =
+  | "unknown"
+  | "compliant"
+  | "not_cap_compliant"
+  | "requires_additional_move"
+  | "clears_cap"
+  | "moves_toward_cap"
+  | "moves_away_from_cap"
+  | "crosses_over"
+  | "remains_under";
+
+export interface TradePayrollComparison {
+  seasons: TradePayrollSeason[];
+  current_cap_result: TradeCapResult;
+}
+
+export interface TradeCategoryChange {
+  key: string;
+  label: string;
+  before: FantasyTeamCategory;
+  after: FantasyTeamCategory;
+  value_delta: number | null;
+  rank_delta: number | null;
+  z_delta: number | null;
+  transition: "unchanged" | "weakness_resolved" | "new_weakness" | "improved" | "declined";
+}
+
+export interface TradeTeamResult {
+  team: { id: string; name: string; logo: string | null; owner: string | null };
+  before: {
+    categories: FantasyTeamCategory[];
+    weaknesses: string[];
+    strengths: string[];
+    severe_weaknesses: string[];
+  };
+  after: {
+    categories: FantasyTeamCategory[];
+    weaknesses: string[];
+    strengths: string[];
+    severe_weaknesses: string[];
+  };
+  category_changes: TradeCategoryChange[];
+  payroll: TradePayrollComparison;
+}
+
+export interface TradeWarning {
+  key: string;
+  name?: string;
+  player?: string;
+  team?: string;
+  result?: TradeCapResult;
+  remaining_overage?: number | null;
+  return_salary_not_included?: boolean;
+}
+
+export interface FantasyTradeAnalysis {
+  league: FantasyLeague;
+  basis_requested: TradeBasis;
+  basis_used: TradeBasis;
+  fallback_reason: string | null;
+  season_phase: FantasySeasonPhase;
+  trade: {
+    outgoing: TradePlayerSummary;
+    incoming: TradePlayerSummary;
+    selected_team_id: string;
+    counterparty_team_id: string;
+  };
+  selected_team: TradeTeamResult;
+  counterparty_team: TradeTeamResult;
+  verdict: {
+    key: "likely_improvement" | "mixed" | "likely_decline" | "not_cap_compliant" | "insufficient_data";
+    headline: string;
+    confidence: "high" | "low";
+    reasons: Array<{ category: string; transition: string; z_delta: number | null; rank_delta: number | null }>;
+    warnings: TradeWarning[];
+  };
+}
+
+export interface TradePartner {
+  rank: number;
+  team: { id: string; name: string; logo: string | null; owner: string | null };
+  fit_score: number;
+  approach_score: number;
+  reason: string;
+  confidence: "high" | "medium" | "low";
+  helps: string[];
+  harms: string[];
+  category_changes: TradeCategoryChange[];
+  payroll: TradePayrollComparison;
+  cap_screen: { result: TradeCapResult; return_salary_not_included: true };
+  warnings: TradeWarning[];
+}
+
+export interface FantasyTradePartners {
+  league: FantasyLeague;
+  basis_requested: TradeBasis;
+  basis_used: TradeBasis;
+  fallback_reason: string | null;
+  season_phase: FantasySeasonPhase;
+  selected_team_id: string;
+  outgoing: TradePlayerSummary;
+  selected_team_payroll_after_removal: TradePayrollComparison;
+  partners: TradePartner[];
+  total_partners: number;
+  warnings: TradeWarning[];
+}
+
 export type FantasyCategoryVerdict =
   | "strength"
   | "neutral"
@@ -536,6 +679,7 @@ export interface FantasyLeague {
   personal_team_id: string;
   personal_team_name: string;
   enabled: boolean;
+  season_phase?: FantasySeasonPhase;
 }
 
 export interface MatchupTeam {
@@ -646,6 +790,56 @@ export async function fetchFantasyCategoryTargets(
     { next: { revalidate: 300 } },
   );
   if (!res.ok) throw new Error("Failed to fetch category targets");
+  return res.json();
+}
+
+export async function fetchFantasyTradeAnalysis(
+  league: "ldl" | "bdb",
+  teamId: string,
+  outgoingNbaId: number,
+  incomingNbaId: number,
+  basis: TradeBasis = "season",
+  window = 14,
+): Promise<FantasyTradeAnalysis> {
+  const params = new URLSearchParams({
+    outgoing_nba_id: String(outgoingNbaId),
+    incoming_nba_id: String(incomingNbaId),
+    basis,
+    window: String(window),
+  });
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-analysis?${params}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Trade analysis failed", res.status);
+  }
+  return res.json();
+}
+
+export async function fetchFantasyTradePartners(
+  league: "ldl" | "bdb",
+  teamId: string,
+  outgoingNbaId: number,
+  basis: TradeBasis = "season",
+  window = 14,
+  limit = 20,
+): Promise<FantasyTradePartners> {
+  const params = new URLSearchParams({
+    outgoing_nba_id: String(outgoingNbaId),
+    basis,
+    window: String(window),
+    limit: String(limit),
+  });
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-partners?${params}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Trade partner ranking failed", res.status);
+  }
   return res.json();
 }
 
