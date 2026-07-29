@@ -12,6 +12,9 @@ export default function TeamPageOverview({
 }) {
   const injured = performance.players.filter((player) => player.injury);
   const current = performance.payroll?.seasons[0] ?? null;
+  const claimBudget = performance.league.slug === "bdb"
+    ? performance.team.claim_budget
+    : null;
   const freshest = performance.players
     .map((player) => player.freshness.stats)
     .filter((value): value is string => Boolean(value))
@@ -20,7 +23,7 @@ export default function TeamPageOverview({
 
   return (
     <section id="overview" className="mt-6 scroll-mt-32">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid gap-3 sm:grid-cols-2 ${claimBudget ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <SummaryCard label="Roster" value={`${performance.players.length}`} detail="Active, Reserve and IR" />
         <SummaryCard
           label="Injury alerts"
@@ -34,6 +37,14 @@ export default function TeamPageOverview({
           detail={current ? `${current.season}${current.cap_provisional ? " · provisional" : ""}` : "Payroll unavailable"}
           tone={current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger"}
         />
+        {claimBudget && (
+          <SummaryCard
+            label="Claim tokens"
+            value={formatTokenBalance(claimBudget.remaining)}
+            detail="Current BδB balance"
+            tone="accent"
+          />
+        )}
         <SummaryCard label="Data freshness" value={freshnessLabel(freshest)} detail={`${performance.window.from} – ${performance.window.to}`} />
       </div>
 
@@ -56,17 +67,21 @@ function SummaryCard({
   label: string;
   value: string;
   detail: string;
-  tone?: "default" | "positive" | "danger";
+  tone?: "default" | "positive" | "danger" | "accent";
 }) {
   const styles = tone === "danger"
     ? "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
     : tone === "positive"
       ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30"
+      : tone === "accent"
+        ? "border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/30"
       : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900";
   const valueStyle = tone === "danger"
     ? "text-red-700 dark:text-red-300"
     : tone === "positive"
       ? "text-emerald-700 dark:text-emerald-300"
+      : tone === "accent"
+        ? "text-blue-700 dark:text-blue-300"
       : "text-slate-900 dark:text-slate-100";
   return (
     <div className={`min-w-0 rounded-xl border p-4 ${styles}`}>
@@ -111,6 +126,10 @@ function formatCapPosition(remaining: number) {
     maximumFractionDigits: 1,
   }).format(Math.abs(remaining));
   return remaining >= 0 ? `${amount} under` : `${amount} over`;
+}
+
+function formatTokenBalance(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
 }
 
 function freshnessLabel(value: string | null) {

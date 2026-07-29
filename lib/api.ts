@@ -250,6 +250,10 @@ export interface FantasyRosterPerformance {
     name: string;
     logo: string | null;
     owner: string | null;
+    claim_budget?: {
+      remaining: number;
+      source: string;
+    };
   };
   window: {
     days: number;
