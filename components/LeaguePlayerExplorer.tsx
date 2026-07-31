@@ -272,6 +272,7 @@ export default function LeaguePlayerExplorer() {
               player={selected}
               league={league}
               statsView={statsView}
+              windowDays={payload.window.days}
               categories={categoryColumns}
               onClose={() => setSelectedId("")}
             />
@@ -296,6 +297,7 @@ export default function LeaguePlayerExplorer() {
                     <SortableHeader label="Fantasy team" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-44 text-left" />
                     <th className="px-3 py-3 text-left">Pos</th>
                     <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-28 text-right" />
+                    <th className="min-w-16 px-3 py-3 text-right">GP</th>
                     {categoryColumns.map((category) => (
                       <SortableHeader
                         key={category.key}
@@ -377,6 +379,9 @@ export default function LeaguePlayerExplorer() {
                         <td className="px-3 py-3 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">
                           {player.salary_2026_27 ?? "$0"}
                         </td>
+                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-600 dark:text-slate-300">
+                          {stats?.games ?? 0}
+                        </td>
                         {categoryColumns.map((category) => (
                           <td key={category.key} className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
                             {formatFantasyStat(stats, category)}
@@ -410,12 +415,14 @@ function PlayerDecisionPanel({
   player,
   league,
   statsView,
+  windowDays,
   categories,
   onClose,
 }: {
   player: FantasyPlayerPerformance;
   league: LeagueSlug;
   statsView: StatsView;
+  windowDays: number;
   categories: FantasyCategory[];
   onClose: () => void;
 }) {
@@ -477,7 +484,7 @@ function PlayerDecisionPanel({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              {statsView === "season" ? "Season averages" : "Recent totals"}
+              {statsView === "season" ? "Season averages" : `Last ${windowDays} days`} · {stats?.games ?? 0} GP
             </p>
             {player.player_id && (
               <Link href={`/players/${player.player_id}?league=${league}&from=explorer`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
