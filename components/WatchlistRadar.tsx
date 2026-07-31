@@ -187,6 +187,7 @@ export default function WatchlistRadar({
                 key={entry.id}
                 league={league}
                 entry={entry}
+                windowDays={watchlist.window_days}
                 pending={pendingId === entry.nba_player_id}
                 onSave={savePlayer}
                 onRemove={removePlayer}
@@ -289,12 +290,14 @@ export default function WatchlistRadar({
 function WatchlistCard({
   league,
   entry,
+  windowDays,
   pending,
   onSave,
   onRemove,
 }: {
   league: LeagueSlug;
   entry: FantasyWatchlistEntry;
+  windowDays: number;
   pending: boolean;
   onSave: (id: number, notes: string, priority: 1 | 2 | 3) => Promise<void>;
   onRemove: (id: number) => Promise<void>;
@@ -320,6 +323,11 @@ function WatchlistCard({
                   : "Player details unavailable"}
                 {player?.nba_team ? ` · ${player.nba_team}` : ""}
               </p>
+              {player && (
+                <p className="mt-1 text-[11px] font-semibold tabular-nums text-slate-400">
+                  Season {player.season_average?.games ?? 0} GP · Last {windowDays}d {player.window_stats.games} GP
+                </p>
+              )}
             </div>
             <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
               player?.availability === "free_agent"

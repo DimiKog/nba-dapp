@@ -297,6 +297,7 @@ export default function LeaguePlayerExplorer() {
                     <SortableHeader label="Fantasy team" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-44 text-left" />
                     <th className="px-3 py-3 text-left">Pos</th>
                     <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-28 text-right" />
+                    <th className="min-w-16 px-3 py-3 text-right">GP</th>
                     {categoryColumns.map((category) => (
                       <SortableHeader
                         key={category.key}
@@ -377,6 +378,9 @@ export default function LeaguePlayerExplorer() {
                         <td className="px-3 py-3 text-slate-500">{player.position || "—"}</td>
                         <td className="px-3 py-3 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">
                           {player.salary_2026_27 ?? "$0"}
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-600 dark:text-slate-300">
+                          {stats?.games ?? 0}
                         </td>
                         {categoryColumns.map((category) => (
                           <td key={category.key} className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
