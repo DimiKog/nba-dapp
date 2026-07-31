@@ -80,8 +80,8 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
             <ContextLink label="BδB" active={league === "bdb"} href={contextHref(player.player_id, "bdb", source)} />
           </div>
           <div className="flex w-fit gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800">
-            <ViewButton active={view === "season"} onClick={() => setView("season")}>Season</ViewButton>
-            <ViewButton active={view === "recent"} disabled={!hasRecent} onClick={() => setView("recent")}>Recent {intelligence.window.days}d</ViewButton>
+            <ViewButton active={view === "season"} onClick={() => setView("season")}>Season · {player.season_average_intelligence.games} GP</ViewButton>
+            <ViewButton active={view === "recent"} disabled={!hasRecent} onClick={() => setView("recent")}>Last {intelligence.window.days}d · {player.window_stats_intelligence.games} GP</ViewButton>
           </div>
         </div>
       </header>

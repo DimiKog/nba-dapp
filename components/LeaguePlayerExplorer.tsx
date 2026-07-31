@@ -272,6 +272,7 @@ export default function LeaguePlayerExplorer() {
               player={selected}
               league={league}
               statsView={statsView}
+              windowDays={payload.window.days}
               categories={categoryColumns}
               onClose={() => setSelectedId("")}
             />
@@ -410,12 +411,14 @@ function PlayerDecisionPanel({
   player,
   league,
   statsView,
+  windowDays,
   categories,
   onClose,
 }: {
   player: FantasyPlayerPerformance;
   league: LeagueSlug;
   statsView: StatsView;
+  windowDays: number;
   categories: FantasyCategory[];
   onClose: () => void;
 }) {
@@ -477,7 +480,7 @@ function PlayerDecisionPanel({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              {statsView === "season" ? "Season averages" : "Recent totals"}
+              {statsView === "season" ? "Season averages" : `Last ${windowDays} days`} · {stats?.games ?? 0} GP
             </p>
             {player.player_id && (
               <Link href={`/players/${player.player_id}?league=${league}&from=explorer`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">

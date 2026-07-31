@@ -29,11 +29,11 @@ export default async function PlayerPage({ params, searchParams }: {
   const intelligence = await fetchPlayerIntelligence(playerId, {
     league: league ?? undefined,
     nbaId: player.nba_id,
-    window: 14,
+    window: 7,
   }).catch(() => null);
   if (!intelligence) return <PlayerUnavailable title={`${player.name}'s intelligence is temporarily unavailable`} retryHref={currentHref(playerId, query)} />;
 
-  const watchlist = league ? await fetchFantasyWatchlist(league, 14).catch(() => null) : null;
+  const watchlist = league ? await fetchFantasyWatchlist(league, 7).catch(() => null) : null;
   const initiallyWatched = Boolean(player.nba_id && watchlist?.entries.some((entry) => entry.nba_player_id === player.nba_id));
 
   return <PlayerIntelligenceDashboard intelligence={intelligence} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} />;
