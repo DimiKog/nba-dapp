@@ -431,6 +431,70 @@ export interface FantasyTradePartners {
   warnings: TradeWarning[];
 }
 
+export interface BalancedTradeSuggestion {
+  rank_within_team: number;
+  suggestion_tier: "proposable" | "exploratory";
+  trade: {
+    outgoing: TradePlayerSummary;
+    incoming: TradePlayerSummary;
+    selected_team_id: string;
+    counterparty_team_id: string;
+  };
+  selected_category_score: number;
+  selected_team: {
+    team: { id: string; name: string; logo: string | null; owner: string | null };
+    category_changes: TradeCategoryChange[];
+    payroll: TradePayrollComparison;
+  };
+  counterparty_team: {
+    team: { id: string; name: string; logo: string | null; owner: string | null };
+    category_changes: TradeCategoryChange[];
+    payroll: TradePayrollComparison;
+  };
+  acceptance: {
+    status: "positive" | "neutral" | "negative" | "blocked";
+    score: number;
+    reason: string;
+  };
+  cap_legality: {
+    selected_team: { eligible: boolean; reason: string; movement: number | null };
+    counterparty_team: { eligible: boolean; reason: string; movement: number | null };
+  };
+  salary_movement: { delta: number; salary_added: number; salary_saved: number };
+  outcomes: {
+    selected_team: { helps: string[]; harms: string[]; cap_movement: number | null };
+    counterparty_team: { helps: string[]; harms: string[]; acceptance_reason: string };
+  };
+  confidence: "high" | "medium" | "low";
+  warnings: TradeWarning[];
+  strategy_applied: false;
+}
+
+export interface FantasyBalancedTradeSuggestions {
+  league: FantasyLeague;
+  basis_requested: TradeBasis;
+  basis_used: TradeBasis;
+  fallback_reason: string | null;
+  season_phase: FantasySeasonPhase;
+  selected_team_id: string;
+  outgoing: TradePlayerSummary;
+  intent: "balanced";
+  strategy_applied: false;
+  counts: { proposable: number; exploratory: number; returned: number };
+  teams: Array<{
+    team: { id: string; name: string; logo: string | null; owner: string | null };
+    counts: { proposable: number; exploratory: number; returned: number };
+    suggestions: BalancedTradeSuggestion[];
+  }>;
+  diagnostics: {
+    candidate_pairs: number;
+    eligible_pairs: number;
+    excluded: Record<string, number>;
+    messages: string[];
+    safe_next_steps: Array<{ key: string; message: string }>;
+  };
+}
+
 export type FantasyCategoryVerdict =
   | "strength"
   | "neutral"
@@ -852,6 +916,35 @@ export async function fetchFantasyTradePartners(
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as { error?: string } | null;
     throw new ApiResponseError(payload?.error ?? "Trade partner ranking failed", res.status);
+  }
+  return res.json();
+}
+
+export async function fetchBalancedTradeSuggestions(
+  league: "ldl" | "bdb",
+  teamId: string,
+  outgoingNbaId: number,
+  basis: TradeBasis = "season",
+  windowDays = 14,
+  limitPerTeam = 3,
+): Promise<FantasyBalancedTradeSuggestions> {
+  const res = await fetch(`${BASE}/api/fantasy/${league}/trade-suggestions`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      selected_team_id: teamId,
+      outgoing_player_id: outgoingNbaId,
+      intent: "balanced",
+      basis,
+      window_days: windowDays,
+      limit_per_team: limitPerTeam,
+      constraints: {},
+    }),
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Trade suggestions failed", res.status);
   }
   return res.json();
 }

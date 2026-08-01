@@ -10,7 +10,7 @@ import {
 type LeagueSlug = "ldl" | "bdb";
 
 export interface TradeAnalyzerInitialState {
-  mode: "analyze" | "partners";
+  mode: "suggestions" | "analyze" | "partners";
   outgoing: string;
   incoming: string;
   partner: string;
@@ -51,7 +51,7 @@ export default async function FantasyTradeAnalyzerPage({
         </p>
         <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Trade Analyzer</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
-          Test a one-for-one move or discover which teams benefit most from a player you have decided to trade.
+          Discover balanced returns, test an exact one-for-one move, or find which teams need your player most.
         </p>
       </div>
       <TradeAnalyzerWorkspace
