@@ -204,6 +204,15 @@ export interface FantasyPlayerStats {
 
 export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> {
   identity_status: "resolved" | "unresolved";
+  tenure?: {
+    fantasy_season: string;
+    year: number;
+    exact: boolean;
+    minimum: number | null;
+    franchise_player: boolean;
+    status: "normal" | "final_legal_year" | "franchise_exempt" | "tenure_expired_free_agent";
+    canonical_roster: boolean;
+  } | null;
   fantasy_team?: {
     id: string;
     name: string;
