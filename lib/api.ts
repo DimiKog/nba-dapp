@@ -928,7 +928,7 @@ export async function fetchBalancedTradeSuggestions(
   windowDays = 14,
   limitPerTeam = 3,
 ): Promise<FantasyBalancedTradeSuggestions> {
-  const res = await fetch(`${BASE}/api/fantasy/${league}/trade-suggestions`, {
+  const res = await fetch(`/api/fantasy/${league}/trade-suggestions`, {
     method: "POST",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
