@@ -7,9 +7,12 @@ import { useMemo, useState } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
+  fetchBalancedTradeSuggestions,
   fetchFantasyTradeAnalysis,
   fetchFantasyTradePartners,
   photoUrl,
+  type BalancedTradeSuggestion,
+  type FantasyBalancedTradeSuggestions,
   type FantasyPlayerPerformance,
   type FantasyTradeAnalysis,
   type FantasyTradePartners,
@@ -23,7 +26,7 @@ import {
 } from "@/lib/api";
 
 type LeagueSlug = "ldl" | "bdb";
-type Mode = "analyze" | "partners";
+type Mode = "suggestions" | "analyze" | "partners";
 
 export default function TradeAnalyzerWorkspace({
   league,
@@ -50,6 +53,7 @@ export default function TradeAnalyzerWorkspace({
   const [partnerTeam, setPartnerTeam] = useState(initialState.partner);
   const [analysis, setAnalysis] = useState<FantasyTradeAnalysis | null>(null);
   const [partners, setPartners] = useState<FantasyTradePartners | null>(null);
+  const [suggestions, setSuggestions] = useState<FantasyBalancedTradeSuggestions | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,11 +106,15 @@ export default function TradeAnalyzerWorkspace({
     setMode(next);
     setAnalysis(null);
     setPartners(null);
+    setSuggestions(null);
     setError(null);
-    if (next === "partners") {
+    if (next !== "analyze") {
       setIncoming("");
       setPartnerTeam("");
       syncUrl({ mode: next, incoming: "", partner: "" });
+      if (next === "suggestions" && outgoing) {
+        void loadSuggestions(outgoing, basis);
+      }
     } else {
       syncUrl({ mode: next });
     }
@@ -116,8 +124,12 @@ export default function TradeAnalyzerWorkspace({
     setOutgoing(value);
     setAnalysis(null);
     setPartners(null);
+    setSuggestions(null);
     setError(null);
     syncUrl({ outgoing: value });
+    if (mode === "suggestions" && value) {
+      void loadSuggestions(value, basis);
+    }
   }
 
   function changeIncoming(value: string) {
@@ -134,8 +146,27 @@ export default function TradeAnalyzerWorkspace({
     setBasis(value);
     setAnalysis(null);
     setPartners(null);
+    setSuggestions(null);
     setError(null);
     syncUrl({ basis: value });
+    if (mode === "suggestions" && outgoing) {
+      void loadSuggestions(outgoing, value);
+    }
+  }
+
+  async function loadSuggestions(outgoingId: string, selectedBasis: TradeBasis) {
+    setLoading(true);
+    setError(null);
+    setSuggestions(null);
+    try {
+      setSuggestions(await fetchBalancedTradeSuggestions(
+        league, teamId, Number(outgoingId), selectedBasis,
+      ));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The suggestions could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function runAnalysis() {
@@ -147,9 +178,36 @@ export default function TradeAnalyzerWorkspace({
     try {
       if (mode === "partners") {
         setPartners(await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis));
+      } else if (mode === "suggestions") {
+        setSuggestions(await fetchBalancedTradeSuggestions(league, teamId, Number(outgoing), basis));
       } else {
         setAnalysis(await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis));
       }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function analyzeSuggestion(suggestion: BalancedTradeSuggestion) {
+    const incomingId = suggestion.trade.incoming.nba_id;
+    if (incomingId == null) return;
+    setMode("analyze");
+    setIncoming(String(incomingId));
+    setPartnerTeam(suggestion.trade.counterparty_team_id);
+    setSuggestions(null);
+    setLoading(true);
+    setError(null);
+    syncUrl({
+      mode: "analyze",
+      incoming: String(incomingId),
+      partner: suggestion.trade.counterparty_team_id,
+    });
+    try {
+      setAnalysis(await fetchFantasyTradeAnalysis(
+        league, teamId, Number(outgoing), incomingId, basis,
+      ));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
     } finally {
@@ -168,13 +226,14 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function reset() {
-    setMode("analyze");
+    setMode("suggestions");
     setBasis("season");
     setOutgoing("");
     setIncoming("");
     setPartnerTeam("");
     setAnalysis(null);
     setPartners(null);
+    setSuggestions(null);
     setError(null);
     router.replace(`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`, { scroll: false });
   }
@@ -189,9 +248,10 @@ export default function TradeAnalyzerWorkspace({
 
       <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-4 border-b border-slate-200 p-4 dark:border-slate-700 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+          <div className="flex w-full flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:w-fit">
+            <ModeButton active={mode === "suggestions"} onClick={() => changeMode("suggestions")}>Suggested trades</ModeButton>
             <ModeButton active={mode === "analyze"} onClick={() => changeMode("analyze")}>Analyze trade</ModeButton>
-            <ModeButton active={mode === "partners"} onClick={() => changeMode("partners")}>Find trade partners</ModeButton>
+            <ModeButton active={mode === "partners"} onClick={() => changeMode("partners")}>Find destinations</ModeButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
@@ -223,12 +283,20 @@ export default function TradeAnalyzerWorkspace({
               selected={incomingPlayer}
               grouped
             />
-          ) : (
+          ) : mode === "partners" ? (
             <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/60 p-5 dark:border-blue-800 dark:bg-blue-950/20">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Market discovery</p>
               <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Who needs this player most?</h2>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                 Teams are ranked by category fit and a conservative cap screen. No return player or return salary is assumed yet.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/60 p-5 dark:border-blue-800 dark:bg-blue-950/20">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Balanced market search</p>
+              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Find realistic one-for-one returns</h2>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Every rostered return is screened for category value, both teams&apos; cap legality, and counterparty benefit.
               </p>
             </div>
           )}
@@ -238,7 +306,9 @@ export default function TradeAnalyzerWorkspace({
           <p className="text-xs text-slate-500">
             {mode === "analyze"
               ? "The final result simulates both teams and applies the configured season cap policy."
-              : "Destination fit is directional. Select a team afterward to evaluate an exact return."}
+              : mode === "partners"
+                ? "Destination fit is directional. Select a team afterward to evaluate an exact return."
+                : "Balanced suggestions never relax cap rules or hide category losses."}
           </p>
           <button
             type="button"
@@ -246,7 +316,10 @@ export default function TradeAnalyzerWorkspace({
             disabled={loading || !outgoing || (mode === "analyze" && !incoming)}
             className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
           >
-            {loading ? "Analyzing…" : mode === "analyze" ? "Analyze trade" : "Rank destination teams"}
+            {loading
+              ? "Analyzing…"
+              : mode === "analyze" ? "Analyze trade"
+                : mode === "partners" ? "Rank destination teams" : "Find suggested trades"}
           </button>
         </div>
       </section>
@@ -255,6 +328,7 @@ export default function TradeAnalyzerWorkspace({
       {loading && <LoadingResult />}
       {analysis && <TradeAnalysisResult analysis={analysis} outgoing={outgoingPlayer} incoming={incomingPlayer} league={league} />}
       {partners && <PartnerRankingResult payload={partners} onExplore={exploreReturns} />}
+      {suggestions && <BalancedSuggestionsResult payload={suggestions} onAnalyze={analyzeSuggestion} />}
     </>
   );
 }
@@ -313,6 +387,123 @@ function SelectedPlayer({ player }: { player: FantasyPlayerPerformance }) {
         {player.injury && <p className="mt-1 truncate text-xs font-medium text-red-600 dark:text-red-400">{injuryText(player)}</p>}
       </div>
       <p className="text-sm font-bold tabular-nums text-blue-700 dark:text-blue-300">{player.salary_2026_27 ?? "$0"}</p>
+    </div>
+  );
+}
+
+function BalancedSuggestionsResult({ payload, onAnalyze }: {
+  payload: FantasyBalancedTradeSuggestions;
+  onAnalyze: (suggestion: BalancedTradeSuggestion) => void;
+}) {
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-slate-200 p-5 dark:border-slate-700">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Balanced trade market</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Returns for {payload.outgoing.name}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {payload.counts.returned} suggestions · {payload.teams.length} teams · {basisLabel(payload.basis_used)}
+            </p>
+          </div>
+          <div className="flex gap-2 text-xs font-bold">
+            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} proposable</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.counts.exploratory} exploratory</span>
+          </div>
+        </div>
+      </div>
+      {payload.fallback_reason && <FallbackBanner />}
+      {payload.teams.length ? (
+        <div className="space-y-5 p-4">
+          {payload.teams.map((group) => (
+            <div key={group.team.id}>
+              <div className="mb-3 flex items-center gap-3">
+                <TeamLogo league={payload.league.slug} logo={group.team.logo} name={group.team.name} size={38} />
+                <div>
+                  <h3 className="font-black text-slate-950 dark:text-white">{group.team.name}</h3>
+                  <p className="text-xs text-slate-500">{group.counts.returned} suggested returns</p>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {group.suggestions.map((suggestion) => (
+                  <SuggestionCard
+                    key={`${group.team.id}-${suggestion.trade.incoming.nba_id}`}
+                    suggestion={suggestion}
+                    onAnalyze={() => onAnalyze(suggestion)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <SuggestionEmptyState payload={payload} />}
+      <MethodNote>Balanced v1 · one-for-one trades · phase-aware cap rules · no category-strategy or draft-pick value applied yet.</MethodNote>
+    </section>
+  );
+}
+
+function SuggestionCard({ suggestion, onAnalyze }: {
+  suggestion: BalancedTradeSuggestion;
+  onAnalyze: () => void;
+}) {
+  const incoming = suggestion.trade.incoming;
+  const photo = photoUrl(null, incoming.nba_id);
+  const currentSalary = incoming.salaries["2026-27"];
+  const proposable = suggestion.suggestion_tier === "proposable";
+  return (
+    <article className={`flex min-w-0 flex-col rounded-xl border p-4 ${proposable ? "border-emerald-200 dark:border-emerald-900" : "border-amber-200 dark:border-amber-900"}`}>
+      <div className="flex items-start gap-3">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          {photo ? <Image src={photo} alt={incoming.name} fill className="object-cover" unoptimized /> : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4 className="truncate font-black text-slate-950 dark:text-white">{incoming.name}</h4>
+          <p className="truncate text-xs text-slate-500">{[incoming.nba_team, incoming.position].filter(Boolean).join(" · ")}</p>
+        </div>
+        <ConfidenceBadge confidence={suggestion.confidence} />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${proposable ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
+          {proposable ? "Proposable" : "Exploratory"}
+        </span>
+        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Fit {formatSigned(suggestion.selected_category_score)}</span>
+      </div>
+      <ChipList label="Helps your team" values={suggestion.outcomes.selected_team.helps} tone="positive" />
+      <ChipList label="Trade-offs" values={suggestion.outcomes.selected_team.harms} tone="danger" />
+      <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/70">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-slate-500">2026–27 salary</span>
+          <strong className="tabular-nums text-slate-800 dark:text-slate-100">{currentSalary == null ? "$0" : formatMoney(currentSalary)}</strong>
+        </div>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <span className="text-slate-500">Your payroll change</span>
+          <strong className={`tabular-nums ${suggestion.salary_movement.delta <= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatSignedMoney(suggestion.salary_movement.delta)}</strong>
+        </div>
+        <p className="mt-2 border-t border-slate-200 pt-2 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">{suggestion.acceptance.reason}</p>
+      </div>
+      {suggestion.warnings.length > 0 && (
+        <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">{suggestion.warnings.length} warning{suggestion.warnings.length === 1 ? "" : "s"} to review</p>
+      )}
+      <button type="button" onClick={onAnalyze} className="mt-auto pt-4">
+        <span className="block rounded-xl bg-blue-600 px-4 py-2.5 text-center text-sm font-black text-white hover:bg-blue-700">Analyze this trade</span>
+      </button>
+    </article>
+  );
+}
+
+function SuggestionEmptyState({ payload }: { payload: FantasyBalancedTradeSuggestions }) {
+  return (
+    <div className="m-4 rounded-xl border border-dashed border-slate-300 p-6 dark:border-slate-700">
+      <h3 className="font-black text-slate-950 dark:text-white">No balanced one-for-one suggestions</h3>
+      <div className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
+        {payload.diagnostics.messages.map((message) => <p key={message}>{message}</p>)}
+      </div>
+      {payload.diagnostics.safe_next_steps.length > 0 && (
+        <ul className="mt-3 space-y-1 text-sm text-blue-700 dark:text-blue-300">
+          {payload.diagnostics.safe_next_steps.map((step) => <li key={step.key}>• {step.message}</li>)}
+        </ul>
+      )}
+      <p className="mt-4 text-xs text-slate-500">{payload.diagnostics.candidate_pairs} candidate pairs screened; constraints were not relaxed automatically.</p>
     </div>
   );
 }

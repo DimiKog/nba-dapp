@@ -21,7 +21,9 @@ export default async function LDLTradeAnalyzerPage({
 function initialState(query: Record<string, string | string[] | undefined>) {
   const value = (key: string) => typeof query[key] === "string" ? query[key] : "";
   return {
-    mode: value("mode") === "partners" ? "partners" as const : "analyze" as const,
+    mode: value("mode") === "analyze"
+      ? "analyze" as const
+      : value("mode") === "partners" ? "partners" as const : "suggestions" as const,
     outgoing: value("outgoing"),
     incoming: value("incoming"),
     partner: value("partner"),
