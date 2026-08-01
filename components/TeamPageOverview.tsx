@@ -15,6 +15,13 @@ export default function TeamPageOverview({
   const claimBudget = performance.league.slug === "bdb"
     ? performance.team.claim_budget
     : null;
+  const tenure = performance.league.slug === "ldl"
+    ? performance.players.map((player) => player.tenure).filter(Boolean)
+    : [];
+  const finalYear = tenure.filter((entry) => entry?.status === "final_legal_year").length;
+  const expired = tenure.filter((entry) => entry?.status === "tenure_expired_free_agent").length;
+  const franchise = tenure.filter((entry) => entry?.franchise_player).length;
+  const showTenure = performance.league.slug === "ldl";
   const freshest = performance.players
     .map((player) => player.freshness.stats)
     .filter((value): value is string => Boolean(value))
@@ -23,7 +30,7 @@ export default function TeamPageOverview({
 
   return (
     <section id="overview" className="mt-6 scroll-mt-32">
-      <div className={`grid gap-3 sm:grid-cols-2 ${claimBudget ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+      <div className={`grid gap-3 sm:grid-cols-2 ${claimBudget || showTenure ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <SummaryCard label="Roster" value={`${performance.players.length}`} detail="Active, Reserve and IR" />
         <SummaryCard
           label="Injury alerts"
@@ -34,9 +41,19 @@ export default function TeamPageOverview({
         <SummaryCard
           label="Current cap"
           value={current?.remaining == null ? "Not configured" : formatCapPosition(current.remaining)}
-          detail={current ? `${current.season}${current.cap_provisional ? " · provisional" : ""}` : "Payroll unavailable"}
+          detail={current?.cap == null
+            ? "Payroll unavailable"
+            : `Cap ${formatCompactMoney(current.cap)} · Payroll ${formatCompactMoney(current.total)}${current.cap_provisional ? " · provisional" : ""}`}
           tone={current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger"}
         />
+        {showTenure && (
+          <SummaryCard
+            label="Tenure alerts"
+            value={expired ? `${expired} must drop` : finalYear ? `${finalYear} final-year` : "No urgent cases"}
+            detail={`${expired} expired · ${franchise} Franchise`}
+            tone={expired ? "danger" : finalYear ? "accent" : "positive"}
+          />
+        )}
         {claimBudget && (
           <SummaryCard
             label="Claim tokens"
@@ -126,6 +143,15 @@ function formatCapPosition(remaining: number) {
     maximumFractionDigits: 1,
   }).format(Math.abs(remaining));
   return remaining >= 0 ? `${amount} under` : `${amount} over`;
+}
+
+function formatCompactMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function formatTokenBalance(value: number) {

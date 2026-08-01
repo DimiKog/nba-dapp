@@ -88,6 +88,28 @@ function statusClasses(status: FantasyPlayerPerformance["status"]) {
   return "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300";
 }
 
+function tenureYear(player: FantasyPlayerPerformance) {
+  const tenure = player.tenure;
+  if (!tenure) return null;
+  const year = tenure.exact ? String(tenure.year) : `${tenure.minimum ?? tenure.year}+`;
+  return `Y${year}`;
+}
+
+function tenureBadge(player: FantasyPlayerPerformance) {
+  const tenure = player.tenure;
+  if (!tenure) return null;
+  if (tenure.status === "tenure_expired_free_agent") {
+    return { label: `${tenureYear(player)} · Must drop`, classes: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300" };
+  }
+  if (tenure.status === "final_legal_year") {
+    return { label: `${tenureYear(player)} · Final year`, classes: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" };
+  }
+  if (tenure.franchise_player) {
+    return { label: `Franchise · ${tenureYear(player)}`, classes: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" };
+  }
+  return { label: tenureYear(player) ?? "Tenure unavailable", classes: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+}
+
 export default function RosterPerformanceTable({
   performance,
   league,
@@ -142,6 +164,7 @@ export default function RosterPerformanceTable({
                     const key = playerKey(player);
                     const isSelected = key === playerKey(selected);
                     const photo = photoUrl(player.photo, player.nba_id);
+                    const tenure = league === "ldl" ? tenureBadge(player) : null;
                     return (
                       <button
                         key={key}
@@ -169,6 +192,11 @@ export default function RosterPerformanceTable({
                           <span className="block truncate text-xs text-slate-500">
                             {player.nba_team_short || "N/A"} · {player.position}
                           </span>
+                          {tenure && (
+                            <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tenure.classes}`}>
+                              {tenure.label}
+                            </span>
+                          )}
                           <span className="mt-0.5 block truncate text-xs font-medium text-slate-600 dark:text-slate-400">
                             {summary(player, view)}
                           </span>
@@ -225,6 +253,8 @@ export default function RosterPerformanceTable({
                 </p>
               </div>
             )}
+
+            {league === "ldl" && <TenureDetail player={selected} />}
 
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {SALARY_SEASONS.map((season) => (
@@ -319,5 +349,34 @@ export default function RosterPerformanceTable({
         </aside>
       </div>
     </>
+  );
+}
+
+function TenureDetail({ player }: { player: FantasyPlayerPerformance }) {
+  const tenure = player.tenure;
+  if (!tenure) {
+    return (
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white/70 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">LDL tenure</p>
+        <p className="mt-0.5 text-sm font-medium text-slate-600 dark:text-slate-300">Tenure unavailable—no value was inferred.</p>
+      </div>
+    );
+  }
+
+  const year = tenure.exact ? `Year ${tenure.year}` : `At least year ${tenure.minimum ?? tenure.year}`;
+  const content = tenure.status === "tenure_expired_free_agent"
+    ? { title: `${year} · Must drop`, detail: "Not roster-legal under the five-year rule; treated as a free agent.", classes: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300" }
+    : tenure.status === "final_legal_year"
+      ? { title: `${year} of 5 · Final legal season`, detail: "The player must leave before year 6. Only an already-valid Franchise designation permits longer tenure.", classes: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300" }
+      : tenure.franchise_player
+        ? { title: `Franchise player · ${year}`, detail: "Exempt from the LDL five-year tenure limit while the designation remains valid.", classes: "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300" }
+        : { title: `${year} of 5`, detail: "Standard LDL tenure; a trade or free-agent reset starts a new tenure run.", classes: "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300" };
+
+  return (
+    <div className={`mt-4 rounded-xl border px-3 py-2.5 ${content.classes}`}>
+      <p className="text-xs font-bold uppercase tracking-wide">LDL tenure</p>
+      <p className="mt-0.5 text-sm font-black">{content.title}</p>
+      <p className="mt-0.5 text-xs font-medium opacity-90">{content.detail}</p>
+    </div>
   );
 }
