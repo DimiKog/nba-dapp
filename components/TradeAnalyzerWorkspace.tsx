@@ -3,15 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
+  fetchAutomaticOneForTwoSuggestions,
   fetchBalancedTradeSuggestions,
   fetchFantasyTradeAnalysis,
   fetchFantasyTradePartners,
   photoUrl,
+  type AutomaticTradePackageSuggestion,
   type BalancedTradeSuggestion,
+  type FantasyAutomaticTradePackageSuggestions,
   type FantasyBalancedTradeSuggestions,
   type FantasyPlayerPerformance,
   type FantasyTradeAnalysis,
@@ -20,6 +23,8 @@ import {
   type TradeCapResult,
   type TradeCategoryChange,
   type TradePartner,
+  type TradePackageCompletionOption,
+  type TradePlayerSummary,
   type TradePayrollComparison,
   type TradeTeamResult,
   type TradeWarning,
@@ -27,6 +32,7 @@ import {
 
 type LeagueSlug = "ldl" | "bdb";
 type Mode = "suggestions" | "analyze" | "partners";
+type SuggestionShape = "one_for_one" | "one_for_two";
 
 export default function TradeAnalyzerWorkspace({
   league,
@@ -46,6 +52,7 @@ export default function TradeAnalyzerWorkspace({
   initialState: TradeAnalyzerInitialState;
 }) {
   const router = useRouter();
+  const requestSequence = useRef(0);
   const [mode, setMode] = useState<Mode>(initialState.mode);
   const [basis, setBasis] = useState<TradeBasis>(initialState.basis);
   const [outgoing, setOutgoing] = useState(initialState.outgoing);
@@ -54,6 +61,8 @@ export default function TradeAnalyzerWorkspace({
   const [analysis, setAnalysis] = useState<FantasyTradeAnalysis | null>(null);
   const [partners, setPartners] = useState<FantasyTradePartners | null>(null);
   const [suggestions, setSuggestions] = useState<FantasyBalancedTradeSuggestions | null>(null);
+  const [packageSuggestions, setPackageSuggestions] = useState<FantasyAutomaticTradePackageSuggestions | null>(null);
+  const [suggestionShape, setSuggestionShape] = useState<SuggestionShape>("one_for_one");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,10 +112,12 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeMode(next: Mode) {
+    requestSequence.current += 1;
     setMode(next);
     setAnalysis(null);
     setPartners(null);
     setSuggestions(null);
+    setPackageSuggestions(null);
     setError(null);
     if (next !== "analyze") {
       setIncoming("");
@@ -121,10 +132,12 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeOutgoing(value: string) {
+    requestSequence.current += 1;
     setOutgoing(value);
     setAnalysis(null);
     setPartners(null);
     setSuggestions(null);
+    setPackageSuggestions(null);
     setError(null);
     syncUrl({ outgoing: value });
     if (mode === "suggestions" && value) {
@@ -133,6 +146,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeIncoming(value: string) {
+    requestSequence.current += 1;
     setIncoming(value);
     setAnalysis(null);
     setError(null);
@@ -143,60 +157,102 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeBasis(value: TradeBasis) {
+    requestSequence.current += 1;
     setBasis(value);
     setAnalysis(null);
     setPartners(null);
     setSuggestions(null);
+    setPackageSuggestions(null);
     setError(null);
     syncUrl({ basis: value });
     if (mode === "suggestions" && outgoing) {
-      void loadSuggestions(outgoing, value);
+      void loadSuggestions(outgoing, value, suggestionShape);
     }
   }
 
-  async function loadSuggestions(outgoingId: string, selectedBasis: TradeBasis) {
+  function changeSuggestionShape(next: SuggestionShape) {
+    requestSequence.current += 1;
+    setSuggestionShape(next);
+    setSuggestions(null);
+    setPackageSuggestions(null);
+    setError(null);
+    if (outgoing) void loadSuggestions(outgoing, basis, next);
+  }
+
+  async function loadSuggestions(
+    outgoingId: string,
+    selectedBasis: TradeBasis,
+    shape: SuggestionShape = suggestionShape,
+  ) {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     setSuggestions(null);
+    setPackageSuggestions(null);
     try {
-      setSuggestions(await fetchBalancedTradeSuggestions(
-        league, teamId, Number(outgoingId), selectedBasis,
-      ));
+      if (shape === "one_for_two") {
+        const payload = await fetchAutomaticOneForTwoSuggestions(
+          league, teamId, Number(outgoingId), selectedBasis,
+        );
+        if (requestSequence.current === requestId) setPackageSuggestions(payload);
+      } else {
+        const payload = await fetchBalancedTradeSuggestions(
+          league, teamId, Number(outgoingId), selectedBasis,
+        );
+        if (requestSequence.current === requestId) setSuggestions(payload);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The suggestions could not be loaded.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The suggestions could not be loaded.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
   async function runAnalysis() {
     if (!outgoing || (mode === "analyze" && !incoming)) return;
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     setAnalysis(null);
     setPartners(null);
     try {
       if (mode === "partners") {
-        setPartners(await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis));
+        const payload = await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis);
+        if (requestSequence.current === requestId) setPartners(payload);
       } else if (mode === "suggestions") {
-        setSuggestions(await fetchBalancedTradeSuggestions(league, teamId, Number(outgoing), basis));
+        if (suggestionShape === "one_for_two") {
+          const payload = await fetchAutomaticOneForTwoSuggestions(
+            league, teamId, Number(outgoing), basis,
+          );
+          if (requestSequence.current === requestId) setPackageSuggestions(payload);
+        } else {
+          const payload = await fetchBalancedTradeSuggestions(league, teamId, Number(outgoing), basis);
+          if (requestSequence.current === requestId) setSuggestions(payload);
+        }
       } else {
-        setAnalysis(await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis));
+        const payload = await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis);
+        if (requestSequence.current === requestId) setAnalysis(payload);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
   async function analyzeSuggestion(suggestion: BalancedTradeSuggestion) {
     const incomingId = suggestion.trade.incoming.nba_id;
     if (incomingId == null) return;
+    const requestId = ++requestSequence.current;
     setMode("analyze");
     setIncoming(String(incomingId));
     setPartnerTeam(suggestion.trade.counterparty_team_id);
     setSuggestions(null);
+    setPackageSuggestions(null);
     setLoading(true);
     setError(null);
     syncUrl({
@@ -205,13 +261,16 @@ export default function TradeAnalyzerWorkspace({
       partner: suggestion.trade.counterparty_team_id,
     });
     try {
-      setAnalysis(await fetchFantasyTradeAnalysis(
+      const payload = await fetchFantasyTradeAnalysis(
         league, teamId, Number(outgoing), incomingId, basis,
-      ));
+      );
+      if (requestSequence.current === requestId) setAnalysis(payload);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
@@ -226,6 +285,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function reset() {
+    requestSequence.current += 1;
     setMode("suggestions");
     setBasis("season");
     setOutgoing("");
@@ -234,6 +294,8 @@ export default function TradeAnalyzerWorkspace({
     setAnalysis(null);
     setPartners(null);
     setSuggestions(null);
+    setPackageSuggestions(null);
+    setSuggestionShape("one_for_one");
     setError(null);
     router.replace(`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`, { scroll: false });
   }
@@ -294,13 +356,30 @@ export default function TradeAnalyzerWorkspace({
           ) : (
             <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/60 p-5 dark:border-blue-800 dark:bg-blue-950/20">
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Balanced market search</p>
-              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">Find realistic one-for-one returns</h2>
+              <h2 className="mt-1 text-lg font-black text-slate-950 dark:text-white">
+                {suggestionShape === "one_for_two" ? "Find realistic two-player returns" : "Find realistic one-for-one returns"}
+              </h2>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Every rostered return is screened for category value, both teams&apos; cap legality, and counterparty benefit.
+                {suggestionShape === "one_for_two"
+                  ? "Two-player return packages are screened exactly. If roster limits require a drop or a second outgoing player, you choose the completion."
+                  : "Every rostered return is screened for category value, both teams&apos; cap legality, and counterparty benefit."}
               </p>
             </div>
           )}
         </div>
+
+        {mode === "suggestions" && (
+          <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Search shape</p>
+              <p className="mt-0.5 text-xs text-slate-400">Start simple or explore a larger return package.</p>
+            </div>
+            <div className="flex w-full gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:w-fit">
+              <ModeButton active={suggestionShape === "one_for_one"} disabled={loading} onClick={() => changeSuggestionShape("one_for_one")}>1-for-1</ModeButton>
+              <ModeButton active={suggestionShape === "one_for_two"} disabled={loading} onClick={() => changeSuggestionShape("one_for_two")}>1-for-2</ModeButton>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-500">
@@ -308,7 +387,9 @@ export default function TradeAnalyzerWorkspace({
               ? "The final result simulates both teams and applies the configured season cap policy."
               : mode === "partners"
                 ? "Destination fit is directional. Select a team afterward to evaluate an exact return."
-                : "Balanced suggestions never relax cap rules or hide category losses."}
+                : suggestionShape === "one_for_two"
+                  ? "One-for-two suggestions never choose a required drop or package expansion for you."
+                  : "Balanced suggestions never relax cap rules or hide category losses."}
           </p>
           <button
             type="button"
@@ -329,6 +410,7 @@ export default function TradeAnalyzerWorkspace({
       {analysis && <TradeAnalysisResult analysis={analysis} outgoing={outgoingPlayer} incoming={incomingPlayer} league={league} />}
       {partners && <PartnerRankingResult payload={partners} onExplore={exploreReturns} />}
       {suggestions && <BalancedSuggestionsResult payload={suggestions} onAnalyze={analyzeSuggestion} />}
+      {packageSuggestions && <OneForTwoSuggestionsResult payload={packageSuggestions} />}
     </>
   );
 }
@@ -387,6 +469,211 @@ function SelectedPlayer({ player }: { player: FantasyPlayerPerformance }) {
         {player.injury && <p className="mt-1 truncate text-xs font-medium text-red-600 dark:text-red-400">{injuryText(player)}</p>}
       </div>
       <p className="text-sm font-bold tabular-nums text-blue-700 dark:text-blue-300">{player.salary_2026_27 ?? "$0"}</p>
+    </div>
+  );
+}
+
+function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTradePackageSuggestions }) {
+  const effectiveCounts = payload.suggestions.reduce(
+    (counts, suggestion) => {
+      counts[effectivePackageTier(suggestion)] += 1;
+      return counts;
+    },
+    { proposable: 0, exploratory: 0, not_recommended: 0 },
+  );
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="border-b border-slate-200 p-5 dark:border-slate-700">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Expanded trade market</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Two-player returns for {payload.outgoing_player.name}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {payload.summary.returned} packages · {payload.summary.screened_pairs} pairs screened · {basisLabel(payload.basis_used)}
+            </p>
+          </div>
+          <div className="flex gap-2 text-xs font-bold">
+            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{effectiveCounts.proposable} executable</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{effectiveCounts.exploratory} exploratory</span>
+            {effectiveCounts.not_recommended > 0 && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-500 dark:bg-slate-800">{effectiveCounts.not_recommended} weak completion</span>}
+          </div>
+        </div>
+      </div>
+      {payload.fallback_reason && <FallbackBanner />}
+      {payload.suggestions.length ? (
+        <div className="space-y-5 p-4">
+          {payload.suggestions.map((suggestion, index) => (
+            <OneForTwoSuggestionCard
+              key={`${suggestion.counterparty_team.team.id}-${suggestion.package.counterparty_team_sends.map((player) => player.nba_id).join("-")}`}
+              suggestion={suggestion}
+              rank={index + 1}
+              league={payload.league.slug as LeagueSlug}
+            />
+          ))}
+        </div>
+      ) : <OneForTwoEmptyState payload={payload} />}
+      <MethodNote>
+        Automatic 1-for-2 search · exact category and payroll analysis · phase-aware cap rules · roster completion is always your explicit choice · no draft-pick value applied yet.
+      </MethodNote>
+    </section>
+  );
+}
+
+function OneForTwoSuggestionCard({ suggestion, rank, league }: {
+  suggestion: AutomaticTradePackageSuggestion;
+  rank: number;
+  league: LeagueSlug;
+}) {
+  const legalAsProposed = suggestion.completion_status === "legal_as_proposed";
+  const drops = suggestion.completion_options.drop_candidates;
+  const expansions = suggestion.completion_options.expanded_packages;
+  const hasCompletion = drops.length > 0 || expansions.length > 0;
+  const effectiveTier = effectivePackageTier(suggestion);
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+      <div className="flex flex-col gap-4 bg-slate-50 p-4 dark:bg-slate-800/50 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">#{rank}</span>
+          <TeamLogo league={league} logo={suggestion.counterparty_team.team.logo} name={suggestion.counterparty_team.team.name} size={44} />
+          <div className="min-w-0">
+            <h3 className="truncate font-black text-slate-950 dark:text-white">{suggestion.counterparty_team.team.name}</h3>
+            <p className="text-xs text-slate-500">Fit {formatSigned(suggestion.selected_team.category_score.score)} · partner {suggestion.counterparty_team.acceptance.status}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <TierBadge tier={effectiveTier} />
+          <span className={`rounded-full px-3 py-1.5 text-xs font-black ${legalAsProposed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : hasCompletion ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"}`}>
+            {legalAsProposed ? "Legal as proposed" : hasCompletion ? "Completion required" : "No legal completion"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.4fr)] lg:items-stretch">
+        <PackageSide title="You send" players={suggestion.package.selected_team_sends} />
+        <div className="flex items-center justify-center text-xl font-black text-slate-300">⇄</div>
+        <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} />
+      </div>
+
+      <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
+        <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
+        <PackageMetric label="Your cap result" value={capResultLabel(suggestion.selected_team.payroll.current_cap_result)} tone={suggestion.selected_team.cap_legality.eligible ? "positive" : "danger"} />
+        <PackageMetric label="Partner response" value={suggestion.counterparty_team.acceptance.reason} tone={suggestion.counterparty_team.acceptance.status === "positive" ? "positive" : "neutral"} />
+      </div>
+
+      {!legalAsProposed && (
+        <div className="border-t border-slate-200 bg-blue-50/50 p-4 dark:border-slate-700 dark:bg-blue-950/10">
+          <div className="mb-3">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Choose how to complete the trade</p>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">These are alternatives, not automatic actions. Review one before proposing the trade.</p>
+          </div>
+          {hasCompletion ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              <CompletionGroup title="Drop after trade" helper="The overflowing team releases one player." options={drops} />
+              <CompletionGroup title="Expand to 2-for-2" helper="Add one more player to the outgoing package." options={expansions} />
+            </div>
+          ) : (
+            <p className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">No legal drop or expanded-package completion was found.</p>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function effectivePackageTier(suggestion: AutomaticTradePackageSuggestion): AutomaticTradePackageSuggestion["recommendation_tier"] {
+  if (suggestion.completion_status === "legal_as_proposed") return suggestion.recommendation_tier;
+  const completionTiers = [
+    ...suggestion.completion_options.drop_candidates,
+    ...suggestion.completion_options.expanded_packages,
+  ].map((option) => option.recommendation_tier);
+  if (completionTiers.includes("proposable")) return "proposable";
+  if (completionTiers.includes("exploratory")) return "exploratory";
+  return "not_recommended";
+}
+
+function PackageSide({ title, players }: { title: string; players: TradePlayerSummary[] }) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">{title}</p>
+      <div className="mt-2 space-y-2">
+        {players.map((player) => <PackagePlayer key={player.nba_id} player={player} />)}
+      </div>
+    </div>
+  );
+}
+
+function PackagePlayer({ player }: { player: TradePlayerSummary }) {
+  const photo = photoUrl(null, player.nba_id);
+  const salary = player.salaries["2026-27"] ?? player.salaries["2026_27"] ?? null;
+  return (
+    <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-2.5 dark:bg-slate-800/70">
+      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        {photo ? <Image src={photo} alt={player.name} fill className="object-cover" unoptimized /> : <span className="flex h-full items-center justify-center font-bold text-slate-400">{player.name[0]}</span>}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-black text-slate-950 dark:text-white">{player.name}</p>
+        <p className="truncate text-xs text-slate-500">{[player.nba_team, player.position].filter(Boolean).join(" · ")}</p>
+      </div>
+      <p className="text-xs font-bold tabular-nums text-blue-700 dark:text-blue-300">{salary == null ? "$0" : formatMoney(salary)}</p>
+    </div>
+  );
+}
+
+function CompletionGroup({ title, helper, options }: { title: string; helper: string; options: TradePackageCompletionOption[] }) {
+  return (
+    <div className="rounded-xl border border-blue-200 bg-white p-3 dark:border-blue-900 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-black text-slate-950 dark:text-white">{title}</h4>
+          <p className="text-xs text-slate-500">{helper}</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-800">{options.length} option{options.length === 1 ? "" : "s"}</span>
+      </div>
+      {options.length ? (
+        <div className="mt-3 space-y-2">
+          {options.map((option) => (
+            <div key={`${option.type}-${option.player.nba_id}`} className="rounded-lg border border-slate-200 p-2.5 dark:border-slate-700">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{option.player.name}</p>
+                  <p className="text-xs text-slate-500">{option.team === "selected_team" ? "Your team" : "Partner team"} · fit {formatSigned(option.selected_category_score.score)}</p>
+                </div>
+                <TierBadge tier={option.recommendation_tier} compact />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : <p className="mt-3 text-xs text-slate-400">No legal options found.</p>}
+    </div>
+  );
+}
+
+function PackageMetric({ label, value, tone }: { label: string; value: string; tone: "positive" | "danger" | "neutral" }) {
+  return (
+    <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className={`mt-1 text-sm font-black ${tone === "positive" ? "text-emerald-600" : tone === "danger" ? "text-red-600" : "text-slate-700 dark:text-slate-200"}`}>{value}</p>
+    </div>
+  );
+}
+
+function TierBadge({ tier, compact = false }: { tier: AutomaticTradePackageSuggestion["recommendation_tier"] | TradePackageCompletionOption["recommendation_tier"]; compact?: boolean }) {
+  const positive = tier === "proposable";
+  return <span className={`rounded-full font-bold uppercase ${compact ? "px-2 py-1 text-[9px]" : "px-3 py-1.5 text-xs"} ${positive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : tier === "exploratory" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{tier.replace("_", " ")}</span>;
+}
+
+function OneForTwoEmptyState({ payload }: { payload: FantasyAutomaticTradePackageSuggestions }) {
+  const diagnostics = Object.entries(payload.summary.diagnostics).filter(([, count]) => count > 0);
+  return (
+    <div className="m-4 rounded-xl border border-dashed border-slate-300 p-6 dark:border-slate-700">
+      <h3 className="font-black text-slate-950 dark:text-white">No balanced one-for-two suggestions</h3>
+      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">No exact package survived the current category, cap, and roster rules. Constraints were not relaxed automatically.</p>
+      {diagnostics.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {diagnostics.map(([key, count]) => <span key={key} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">{key.replaceAll("_", " ")}: {count}</span>)}
+        </div>
+      )}
+      <p className="mt-4 text-xs text-slate-500">{payload.summary.screened_pairs} candidate pairs screened; try manual package analysis when you have a specific structure in mind.</p>
     </div>
   );
 }

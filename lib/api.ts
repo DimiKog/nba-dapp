@@ -495,6 +495,129 @@ export interface FantasyBalancedTradeSuggestions {
   };
 }
 
+export type TradePackageCompletionStatus =
+  | "legal_as_proposed"
+  | "legal_with_drop"
+  | "legal_as_expanded_package"
+  | "roster_rules_unknown"
+  | "illegal";
+
+export interface TradePackageCategoryScore {
+  score: number;
+  helps?: string[];
+  harms?: string[];
+}
+
+export interface TradePackageRosterLegality {
+  status: "legal" | "illegal" | "unknown";
+  reason: string;
+  before: number;
+  after: number;
+  minimum: number | null;
+  standard_maximum: number | null;
+  applicable_maximum: number | null;
+}
+
+export interface TradePackageCapLegality {
+  eligible: boolean;
+  reason: string;
+  movement?: number | null;
+}
+
+export interface TradePackageCompletionOption {
+  type: "drop" | "expanded_package";
+  completion_status: TradePackageCompletionStatus;
+  player: TradePlayerSummary;
+  team: "selected_team" | "counterparty_team";
+  recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  selected_category_score: TradePackageCategoryScore;
+  counterparty_acceptance: {
+    status: "positive" | "neutral" | "negative" | "blocked";
+    score: number;
+    reason: string;
+  };
+  cap_legality: {
+    selected_team: TradePackageCapLegality;
+    counterparty_team: TradePackageCapLegality;
+  };
+  roster_legality: {
+    selected_team: TradePackageRosterLegality;
+    counterparty_team: TradePackageRosterLegality;
+  };
+}
+
+export interface AutomaticTradePackageSuggestion {
+  league: FantasyLeague;
+  basis_requested: TradeBasis;
+  basis_used: TradeBasis;
+  fallback_reason: string | null;
+  season_phase: FantasySeasonPhase;
+  completion_status: TradePackageCompletionStatus;
+  requires_roster_action: boolean;
+  recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  package: {
+    selected_team_sends: TradePlayerSummary[];
+    counterparty_team_sends: TradePlayerSummary[];
+    drops: { selected_team: TradePlayerSummary | null; counterparty_team: TradePlayerSummary | null };
+    assets: unknown[];
+  };
+  selected_team: TradeTeamResult & {
+    roster_slots: TradePackageRosterLegality;
+    cap_legality: TradePackageCapLegality;
+    category_score: TradePackageCategoryScore;
+  };
+  counterparty_team: TradeTeamResult & {
+    roster_slots: TradePackageRosterLegality;
+    cap_legality: TradePackageCapLegality;
+    acceptance: {
+      status: "positive" | "neutral" | "negative" | "blocked";
+      score: number;
+      reason: string;
+    };
+  };
+  completion_options: {
+    generated: boolean;
+    eligible_drop_candidates: number;
+    eligible_expansion_candidates: number;
+    drop_candidates: TradePackageCompletionOption[];
+    expanded_packages: TradePackageCompletionOption[];
+    excluded: Record<string, number>;
+  };
+  verdict: FantasyTradeAnalysis["verdict"];
+  warnings: TradeWarning[];
+}
+
+export interface FantasyAutomaticTradePackageSuggestions {
+  league: FantasyLeague;
+  selected_team_id: string;
+  outgoing_player: TradePlayerSummary;
+  intent: "balanced";
+  basis_requested: TradeBasis;
+  basis_used: TradeBasis;
+  fallback_reason: string | null;
+  suggestions: AutomaticTradePackageSuggestion[];
+  summary: {
+    screened_pairs: number;
+    balanced_candidates: number;
+    exact_candidates_checked: number;
+    returned: number;
+    proposable: number;
+    exploratory: number;
+    diagnostics: Record<string, number>;
+  };
+  performance: {
+    exhaustive_compute_seconds: number;
+    load_and_exact_hydration_seconds: number;
+  };
+  method: {
+    scope: string;
+    category_aggregation: string;
+    unequal_package_scoring: string;
+    completion_hydration: string;
+    strategy_applied: false;
+  };
+}
+
 export type FantasyCategoryVerdict =
   | "strength"
   | "neutral"
@@ -945,6 +1068,34 @@ export async function fetchBalancedTradeSuggestions(
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as { error?: string } | null;
     throw new ApiResponseError(payload?.error ?? "Trade suggestions failed", res.status);
+  }
+  return res.json();
+}
+
+export async function fetchAutomaticOneForTwoSuggestions(
+  league: "ldl" | "bdb",
+  teamId: string,
+  outgoingNbaId: number,
+  basis: TradeBasis = "season",
+  windowDays = 14,
+  limit = 6,
+): Promise<FantasyAutomaticTradePackageSuggestions> {
+  const res = await fetch(`/api/fantasy/${league}/trade-package-suggestions`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      selected_team_id: teamId,
+      outgoing_player_id: outgoingNbaId,
+      intent: "balanced",
+      basis,
+      window_days: windowDays,
+      limit,
+    }),
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Automatic one-for-two suggestions failed", res.status);
   }
   return res.json();
 }
