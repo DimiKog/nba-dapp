@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
@@ -52,6 +52,7 @@ export default function TradeAnalyzerWorkspace({
   initialState: TradeAnalyzerInitialState;
 }) {
   const router = useRouter();
+  const requestSequence = useRef(0);
   const [mode, setMode] = useState<Mode>(initialState.mode);
   const [basis, setBasis] = useState<TradeBasis>(initialState.basis);
   const [outgoing, setOutgoing] = useState(initialState.outgoing);
@@ -111,6 +112,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeMode(next: Mode) {
+    requestSequence.current += 1;
     setMode(next);
     setAnalysis(null);
     setPartners(null);
@@ -130,6 +132,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeOutgoing(value: string) {
+    requestSequence.current += 1;
     setOutgoing(value);
     setAnalysis(null);
     setPartners(null);
@@ -143,6 +146,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeIncoming(value: string) {
+    requestSequence.current += 1;
     setIncoming(value);
     setAnalysis(null);
     setError(null);
@@ -153,6 +157,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeBasis(value: TradeBasis) {
+    requestSequence.current += 1;
     setBasis(value);
     setAnalysis(null);
     setPartners(null);
@@ -166,6 +171,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeSuggestionShape(next: SuggestionShape) {
+    requestSequence.current += 1;
     setSuggestionShape(next);
     setSuggestions(null);
     setPackageSuggestions(null);
@@ -178,57 +184,70 @@ export default function TradeAnalyzerWorkspace({
     selectedBasis: TradeBasis,
     shape: SuggestionShape = suggestionShape,
   ) {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     setSuggestions(null);
     setPackageSuggestions(null);
     try {
       if (shape === "one_for_two") {
-        setPackageSuggestions(await fetchAutomaticOneForTwoSuggestions(
+        const payload = await fetchAutomaticOneForTwoSuggestions(
           league, teamId, Number(outgoingId), selectedBasis,
-        ));
+        );
+        if (requestSequence.current === requestId) setPackageSuggestions(payload);
       } else {
-        setSuggestions(await fetchBalancedTradeSuggestions(
+        const payload = await fetchBalancedTradeSuggestions(
           league, teamId, Number(outgoingId), selectedBasis,
-        ));
+        );
+        if (requestSequence.current === requestId) setSuggestions(payload);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The suggestions could not be loaded.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The suggestions could not be loaded.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
   async function runAnalysis() {
     if (!outgoing || (mode === "analyze" && !incoming)) return;
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     setAnalysis(null);
     setPartners(null);
     try {
       if (mode === "partners") {
-        setPartners(await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis));
+        const payload = await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis);
+        if (requestSequence.current === requestId) setPartners(payload);
       } else if (mode === "suggestions") {
         if (suggestionShape === "one_for_two") {
-          setPackageSuggestions(await fetchAutomaticOneForTwoSuggestions(
+          const payload = await fetchAutomaticOneForTwoSuggestions(
             league, teamId, Number(outgoing), basis,
-          ));
+          );
+          if (requestSequence.current === requestId) setPackageSuggestions(payload);
         } else {
-          setSuggestions(await fetchBalancedTradeSuggestions(league, teamId, Number(outgoing), basis));
+          const payload = await fetchBalancedTradeSuggestions(league, teamId, Number(outgoing), basis);
+          if (requestSequence.current === requestId) setSuggestions(payload);
         }
       } else {
-        setAnalysis(await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis));
+        const payload = await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis);
+        if (requestSequence.current === requestId) setAnalysis(payload);
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
   async function analyzeSuggestion(suggestion: BalancedTradeSuggestion) {
     const incomingId = suggestion.trade.incoming.nba_id;
     if (incomingId == null) return;
+    const requestId = ++requestSequence.current;
     setMode("analyze");
     setIncoming(String(incomingId));
     setPartnerTeam(suggestion.trade.counterparty_team_id);
@@ -242,13 +261,16 @@ export default function TradeAnalyzerWorkspace({
       partner: suggestion.trade.counterparty_team_id,
     });
     try {
-      setAnalysis(await fetchFantasyTradeAnalysis(
+      const payload = await fetchFantasyTradeAnalysis(
         league, teamId, Number(outgoing), incomingId, basis,
-      ));
+      );
+      if (requestSequence.current === requestId) setAnalysis(payload);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The analysis could not be completed.");
+      }
     } finally {
-      setLoading(false);
+      if (requestSequence.current === requestId) setLoading(false);
     }
   }
 
@@ -263,6 +285,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function reset() {
+    requestSequence.current += 1;
     setMode("suggestions");
     setBasis("season");
     setOutgoing("");
@@ -352,8 +375,8 @@ export default function TradeAnalyzerWorkspace({
               <p className="mt-0.5 text-xs text-slate-400">Start simple or explore a larger return package.</p>
             </div>
             <div className="flex w-full gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800 sm:w-fit">
-              <ModeButton active={suggestionShape === "one_for_one"} onClick={() => changeSuggestionShape("one_for_one")}>1-for-1</ModeButton>
-              <ModeButton active={suggestionShape === "one_for_two"} onClick={() => changeSuggestionShape("one_for_two")}>1-for-2</ModeButton>
+              <ModeButton active={suggestionShape === "one_for_one"} disabled={loading} onClick={() => changeSuggestionShape("one_for_one")}>1-for-1</ModeButton>
+              <ModeButton active={suggestionShape === "one_for_two"} disabled={loading} onClick={() => changeSuggestionShape("one_for_two")}>1-for-2</ModeButton>
             </div>
           </div>
         )}
@@ -451,6 +474,13 @@ function SelectedPlayer({ player }: { player: FantasyPlayerPerformance }) {
 }
 
 function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTradePackageSuggestions }) {
+  const effectiveCounts = payload.suggestions.reduce(
+    (counts, suggestion) => {
+      counts[effectivePackageTier(suggestion)] += 1;
+      return counts;
+    },
+    { proposable: 0, exploratory: 0, not_recommended: 0 },
+  );
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 p-5 dark:border-slate-700">
@@ -463,8 +493,9 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
             </p>
           </div>
           <div className="flex gap-2 text-xs font-bold">
-            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.summary.proposable} proposable</span>
-            <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.summary.exploratory} exploratory</span>
+            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{effectiveCounts.proposable} executable</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{effectiveCounts.exploratory} exploratory</span>
+            {effectiveCounts.not_recommended > 0 && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-500 dark:bg-slate-800">{effectiveCounts.not_recommended} weak completion</span>}
           </div>
         </div>
       </div>
@@ -497,6 +528,7 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
   const drops = suggestion.completion_options.drop_candidates;
   const expansions = suggestion.completion_options.expanded_packages;
   const hasCompletion = drops.length > 0 || expansions.length > 0;
+  const effectiveTier = effectivePackageTier(suggestion);
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
       <div className="flex flex-col gap-4 bg-slate-50 p-4 dark:bg-slate-800/50 lg:flex-row lg:items-start lg:justify-between">
@@ -509,7 +541,7 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <TierBadge tier={suggestion.recommendation_tier} />
+          <TierBadge tier={effectiveTier} />
           <span className={`rounded-full px-3 py-1.5 text-xs font-black ${legalAsProposed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : hasCompletion ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"}`}>
             {legalAsProposed ? "Legal as proposed" : hasCompletion ? "Completion required" : "No legal completion"}
           </span>
@@ -546,6 +578,17 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
       )}
     </article>
   );
+}
+
+function effectivePackageTier(suggestion: AutomaticTradePackageSuggestion): AutomaticTradePackageSuggestion["recommendation_tier"] {
+  if (suggestion.completion_status === "legal_as_proposed") return suggestion.recommendation_tier;
+  const completionTiers = [
+    ...suggestion.completion_options.drop_candidates,
+    ...suggestion.completion_options.expanded_packages,
+  ].map((option) => option.recommendation_tier);
+  if (completionTiers.includes("proposable")) return "proposable";
+  if (completionTiers.includes("exploratory")) return "exploratory";
+  return "not_recommended";
 }
 
 function PackageSide({ title, players }: { title: string; players: TradePlayerSummary[] }) {
