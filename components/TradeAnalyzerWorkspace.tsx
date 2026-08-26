@@ -24,6 +24,7 @@ import {
   type TradeCategoryChange,
   type TradePartner,
   type TradePackageCompletionOption,
+  type TradePackageProductionValue,
   type TradePlayerSummary,
   type TradePayrollComparison,
   type TradeTeamResult,
@@ -481,6 +482,9 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
     },
     { proposable: 0, exploratory: 0, not_recommended: 0 },
   );
+  const majorValueGaps = payload.suggestions.filter((suggestion) => (
+    effectiveProductionValue(suggestion).classification === "severely_uneven"
+  )).length;
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 p-5 dark:border-slate-700">
@@ -495,7 +499,8 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
           <div className="flex gap-2 text-xs font-bold">
             <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{effectiveCounts.proposable} executable</span>
             <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{effectiveCounts.exploratory} exploratory</span>
-            {effectiveCounts.not_recommended > 0 && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-500 dark:bg-slate-800">{effectiveCounts.not_recommended} weak completion</span>}
+            {effectiveCounts.not_recommended > 0 && <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{effectiveCounts.not_recommended} not recommended</span>}
+            {majorValueGaps > 0 && <span className="rounded-full bg-red-100 px-3 py-1.5 text-red-700 dark:bg-red-950 dark:text-red-300">{majorValueGaps} major value gap{majorValueGaps === 1 ? "" : "s"}</span>}
           </div>
         </div>
       </div>
@@ -529,6 +534,8 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
   const expansions = suggestion.completion_options.expanded_packages;
   const hasCompletion = drops.length > 0 || expansions.length > 0;
   const effectiveTier = effectivePackageTier(suggestion);
+  const productionValue = effectiveProductionValue(suggestion);
+  const valueUsesCompletion = Boolean(suggestion.best_completion);
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
       <div className="flex flex-col gap-4 bg-slate-50 p-4 dark:bg-slate-800/50 lg:flex-row lg:items-start lg:justify-between">
@@ -553,6 +560,8 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
         <div className="flex items-center justify-center text-xl font-black text-slate-300">⇄</div>
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} />
       </div>
+
+      <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} />
 
       <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
         <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
@@ -589,6 +598,75 @@ function effectivePackageTier(suggestion: AutomaticTradePackageSuggestion): Auto
   if (completionTiers.includes("proposable")) return "proposable";
   if (completionTiers.includes("exploratory")) return "exploratory";
   return "not_recommended";
+}
+
+function effectiveProductionValue(suggestion: AutomaticTradePackageSuggestion): TradePackageProductionValue {
+  return suggestion.best_completion?.production_value ?? suggestion.production_value;
+}
+
+function ProductionValuePanel({ value, usesCompletion }: { value: TradePackageProductionValue; usesCompletion: boolean }) {
+  const ratio = value.worst_side_ratio == null ? null : Math.round(value.worst_side_ratio * 100);
+  const gap = Math.max(
+    value.selected_team.value_gap_to_balanced ?? 0,
+    value.counterparty_team.value_gap_to_balanced ?? 0,
+  );
+  const presentation = value.classification === "balanced"
+    ? {
+      title: "Balanced player value",
+      detail: "Both teams retain at least 85% of the production value they send.",
+      classes: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/25 dark:text-emerald-200",
+    }
+    : value.classification === "uneven"
+      ? {
+        title: "Additional asset compensation required",
+        detail: "The player return is somewhat uneven. A useful pick or another asset may bridge the gap, especially in an offseason cap-relief deal.",
+        classes: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200",
+      }
+      : value.classification === "severely_uneven"
+        ? {
+          title: "Major player-value gap",
+          detail: "Do not treat this player-only package as balanced. It needs substantial additional compensation.",
+          classes: "border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/25 dark:text-red-200",
+        }
+        : {
+          title: "Player value unavailable",
+          detail: "The analyzer could not establish a trusted replacement-value comparison, so this package cannot be called proposable.",
+          classes: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200",
+        };
+  return (
+    <div className={`mx-4 mb-4 rounded-xl border p-4 ${presentation.classes}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em]">Production-value check{usesCompletion ? " · best legal completion" : ""}</p>
+          <h4 className="mt-1 font-black">{presentation.title}</h4>
+          <p className="mt-1 max-w-3xl text-sm opacity-90">{presentation.detail}</p>
+        </div>
+        {ratio != null && <span className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-black tabular-nums dark:bg-slate-950/40">Worst side retains {ratio}%</span>}
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <ValueExchange label="Your team" value={value.selected_team} />
+        <ValueExchange label="Partner team" value={value.counterparty_team} />
+      </div>
+      {value.compensation_required && (
+        <p className="mt-3 text-xs font-bold">
+          Unpriced picks are not counted yet{gap > 0 ? ` · estimated production gap to the balanced threshold: ${formatValueScore(gap)}` : ""}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ValueExchange({ label, value }: { label: string; value: TradePackageProductionValue["selected_team"] }) {
+  return (
+    <div className="rounded-lg bg-white/65 px-3 py-2 text-xs dark:bg-slate-950/30">
+      <p className="font-bold uppercase tracking-wide opacity-70">{label}</p>
+      <p className="mt-1 font-black tabular-nums">Sends {formatValueScore(value.sent)} · receives {formatValueScore(value.received)}</p>
+    </div>
+  );
+}
+
+function formatValueScore(value: number | null): string {
+  return value == null ? "—" : value.toFixed(2);
 }
 
 function PackageSide({ title, players }: { title: string; players: TradePlayerSummary[] }) {
@@ -637,6 +715,10 @@ function CompletionGroup({ title, helper, options }: { title: string; helper: st
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold text-slate-900 dark:text-white">{option.player.name}</p>
                   <p className="text-xs text-slate-500">{option.team === "selected_team" ? "Your team" : "Partner team"} · fit {formatSigned(option.selected_category_score.score)}</p>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    {option.type === "drop" ? `Production value lost ${formatValueScore(option.marginal_value_lost)}` : "Added to the trade package"}
+                    {option.production_value.worst_side_ratio != null ? ` · worst side retains ${Math.round(option.production_value.worst_side_ratio * 100)}%` : ""}
+                  </p>
                 </div>
                 <TierBadge tier={option.recommendation_tier} compact />
               </div>

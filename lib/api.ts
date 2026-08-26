@@ -524,12 +524,51 @@ export interface TradePackageCapLegality {
   movement?: number | null;
 }
 
+export interface TradeProductionValueContribution {
+  nba_id: number;
+  name: string | null;
+  impact: number | null;
+  surplus: number | null;
+}
+
+export interface TradeTeamProductionValue {
+  sent: number | null;
+  received: number | null;
+  delta: number | null;
+  retained_ratio: number | null;
+  classification: "balanced" | "uneven" | "severely_uneven" | "unknown";
+  reason: string;
+  value_gap_to_balanced: number | null;
+  contributions: {
+    sent: TradeProductionValueContribution[];
+    received: TradeProductionValueContribution[];
+  };
+}
+
+export interface TradePackageProductionValue {
+  basis: string | null;
+  basis_used?: TradeBasis;
+  replacement_impact: number | null;
+  selected_team: TradeTeamProductionValue;
+  counterparty_team: TradeTeamProductionValue;
+  classification: "balanced" | "uneven" | "severely_uneven" | "unknown";
+  worst_side_ratio: number | null;
+  compensation_required: boolean;
+  compensation_reason?: string | null;
+  thresholds: {
+    balanced: number;
+    severely_uneven: number;
+  };
+}
+
 export interface TradePackageCompletionOption {
   type: "drop" | "expanded_package";
   completion_status: TradePackageCompletionStatus;
   player: TradePlayerSummary;
   team: "selected_team" | "counterparty_team";
   recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  production_value: TradePackageProductionValue;
+  marginal_value_lost: number | null;
   selected_category_score: TradePackageCategoryScore;
   counterparty_acceptance: {
     status: "positive" | "neutral" | "negative" | "blocked";
@@ -555,6 +594,8 @@ export interface AutomaticTradePackageSuggestion {
   completion_status: TradePackageCompletionStatus;
   requires_roster_action: boolean;
   recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  production_value: TradePackageProductionValue;
+  best_completion?: TradePackageCompletionOption;
   package: {
     selected_team_sends: TradePlayerSummary[];
     counterparty_team_sends: TradePlayerSummary[];
