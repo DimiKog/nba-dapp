@@ -636,7 +636,8 @@ function oneForOneValueVerdict(value: TradePackageProductionValue) {
 }
 
 function ProductionValuePanel({ value, usesCompletion }: { value: TradePackageProductionValue; usesCompletion: boolean }) {
-  const ratio = value.worst_side_ratio == null ? null : Math.round(value.worst_side_ratio * 100);
+  const yourRatio = retainedValuePercent(value.selected_team.retained_ratio);
+  const partnerRatio = retainedValuePercent(value.counterparty_team.retained_ratio);
   const gap = Math.max(
     value.selected_team.value_gap_to_balanced ?? 0,
     value.counterparty_team.value_gap_to_balanced ?? 0,
@@ -672,8 +673,11 @@ function ProductionValuePanel({ value, usesCompletion }: { value: TradePackagePr
           <h4 className="mt-1 font-black">{presentation.title}</h4>
           <p className="mt-1 max-w-3xl text-sm opacity-90">{presentation.detail}</p>
         </div>
-        {ratio != null && <span className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-black tabular-nums dark:bg-slate-950/40">Worst side retains {ratio}%</span>}
+        {yourRatio != null && <span className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-black tabular-nums dark:bg-slate-950/40">You receive {yourRatio}% of sent value</span>}
       </div>
+      {partnerRatio != null && (
+        <p className="mt-3 text-xs font-semibold opacity-80">Partner receives {partnerRatio}% of the value they send.</p>
+      )}
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <ValueExchange label="Your team" value={value.selected_team} />
         <ValueExchange label="Partner team" value={value.counterparty_team} />
@@ -698,6 +702,10 @@ function ValueExchange({ label, value }: { label: string; value: TradePackagePro
 
 function formatValueScore(value: number | null): string {
   return value == null ? "—" : value.toFixed(2);
+}
+
+function retainedValuePercent(value: number | null): number | null {
+  return value == null ? null : Math.round(value * 100);
 }
 
 function PackageSide({ title, players }: { title: string; players: TradePlayerSummary[] }) {
@@ -748,7 +756,8 @@ function CompletionGroup({ title, helper, options }: { title: string; helper: st
                   <p className="text-xs text-slate-500">{option.team === "selected_team" ? "Your team" : "Partner team"} · fit {formatSigned(option.selected_category_score.score)}</p>
                   <p className="mt-1 text-[11px] font-semibold text-slate-500">
                     {option.type === "drop" ? `Production value lost ${formatValueScore(option.marginal_value_lost)}` : "Added to the trade package"}
-                    {option.production_value.worst_side_ratio != null ? ` · worst side retains ${Math.round(option.production_value.worst_side_ratio * 100)}%` : ""}
+                    {option.production_value.selected_team.retained_ratio != null ? ` · you receive ${retainedValuePercent(option.production_value.selected_team.retained_ratio)}% of sent value` : ""}
+                    {option.production_value.counterparty_team.retained_ratio != null ? ` · partner receives ${retainedValuePercent(option.production_value.counterparty_team.retained_ratio)}%` : ""}
                   </p>
                 </div>
                 <TierBadge tier={option.recommendation_tier} compact />
@@ -853,9 +862,8 @@ function SuggestionCard({ suggestion, onAnalyze }: {
   const value = suggestion.production_value;
   const valueVerdict = oneForOneValueVerdict(value);
   const selectedValue = value.selected_team;
-  const retainedPercent = value.worst_side_ratio == null
-    ? null
-    : Math.round(value.worst_side_ratio * 100);
+  const yourRetainedPercent = retainedValuePercent(selectedValue.retained_ratio);
+  const partnerRetainedPercent = retainedValuePercent(value.counterparty_team.retained_ratio);
   const valueGap = selectedValue.value_gap_to_balanced;
   const selectedCap = suggestion.cap_legality.selected_team;
   const amountToClear = selectedCap.amount_to_clear ?? 0;
@@ -883,13 +891,16 @@ function SuggestionCard({ suggestion, onAnalyze }: {
             <p className={`text-[10px] font-black uppercase tracking-wide ${valueVerdict.text}`}>Player-value check</p>
             <p className={`mt-0.5 text-sm font-black ${valueVerdict.text}`}>{valueVerdict.label}</p>
           </div>
-          {retainedPercent != null && (
+          {yourRetainedPercent != null && (
             <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${valueVerdict.badge}`}>
-              Worst side retains {retainedPercent}%
+              You receive {yourRetainedPercent}%
             </span>
           )}
         </div>
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{valueVerdict.description}</p>
+        {partnerRetainedPercent != null && (
+          <p className="mt-2 text-[11px] font-semibold text-slate-500">Partner receives {partnerRetainedPercent}% of the value they send.</p>
+        )}
         {valueGap != null && valueGap > 0 && (
           <p className="mt-2 text-[11px] font-semibold text-slate-500">
             Estimated gap to balanced: {valueGap.toFixed(2)} · picks are not priced yet
