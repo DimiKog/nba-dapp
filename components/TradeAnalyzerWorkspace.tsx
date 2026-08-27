@@ -812,12 +812,15 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Balanced trade market</p>
             <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Returns for {payload.outgoing.name}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {payload.counts.returned} suggestions · {payload.teams.length} teams · {basisLabel(payload.basis_used)}
+              {payload.counts.returned} suggestions shown · {payload.teams.length} teams · {basisLabel(payload.basis_used)}
             </p>
           </div>
-          <div className="flex gap-2 text-xs font-bold">
-            <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} proposable</span>
-            <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.counts.exploratory} exploratory</span>
+          <div className="text-right">
+            <div className="flex flex-wrap justify-end gap-2 text-xs font-bold">
+              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} proposable candidates</span>
+              <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.counts.exploratory} exploratory candidates</span>
+            </div>
+            <p className="mt-1 text-[10px] text-slate-400">Candidate counts cover the full market scan; cards show the top returned results.</p>
           </div>
         </div>
       </div>
