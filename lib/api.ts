@@ -456,9 +456,16 @@ export interface BalancedTradeSuggestion {
     score: number;
     reason: string;
   };
+  production_value: TradePackageProductionValue & {
+    recommendation?:
+      | "player_only_balanced"
+      | "additional_assets_required"
+      | "not_recommended_player_only"
+      | "value_unavailable";
+  };
   cap_legality: {
-    selected_team: { eligible: boolean; reason: string; movement: number | null };
-    counterparty_team: { eligible: boolean; reason: string; movement: number | null };
+    selected_team: TradeSuggestionCapStatus;
+    counterparty_team: TradeSuggestionCapStatus;
   };
   salary_movement: { delta: number; salary_added: number; salary_saved: number };
   outcomes: {
@@ -490,9 +497,26 @@ export interface FantasyBalancedTradeSuggestions {
     candidate_pairs: number;
     eligible_pairs: number;
     excluded: Record<string, number>;
+    warnings?: Record<string, number>;
     messages: string[];
     safe_next_steps: Array<{ key: string; message: string }>;
   };
+  production_value_warning?: string | null;
+}
+
+export interface TradeSuggestionCapStatus {
+  eligible: boolean;
+  reason: string;
+  movement: number | null;
+  before_total?: number;
+  after_total?: number;
+  cap?: number;
+  remaining_before?: number;
+  remaining_after?: number;
+  amount_to_clear?: number;
+  compliance_required?: boolean;
+  compliance_deadline?: "cap_activation_in_october" | string | null;
+  hard_gate_applied?: boolean;
 }
 
 export type TradePackageCompletionStatus =

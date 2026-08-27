@@ -604,6 +604,37 @@ function effectiveProductionValue(suggestion: AutomaticTradePackageSuggestion): 
   return suggestion.best_completion?.production_value ?? suggestion.production_value;
 }
 
+function oneForOneValueVerdict(value: TradePackageProductionValue) {
+  if (value.classification === "balanced") return {
+    label: "Player value balanced",
+    description: "The player-only return clears the current production-value threshold.",
+    box: "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/25",
+    text: "text-emerald-800 dark:text-emerald-200",
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200",
+  };
+  if (value.classification === "uneven") return {
+    label: "Additional assets required",
+    description: "The player return is close, but a useful pick or another asset should bridge the value gap.",
+    box: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/25",
+    text: "text-amber-900 dark:text-amber-200",
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200",
+  };
+  if (value.classification === "severely_uneven") return {
+    label: "Not recommended player-only",
+    description: "The production gap is too large to call this balanced without substantial additional compensation.",
+    box: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/25",
+    text: "text-red-800 dark:text-red-200",
+    badge: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200",
+  };
+  return {
+    label: "Player value unavailable",
+    description: "The analyzer could not establish a trusted replacement-value comparison.",
+    box: "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60",
+    text: "text-slate-700 dark:text-slate-200",
+    badge: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200",
+  };
+}
+
 function ProductionValuePanel({ value, usesCompletion }: { value: TradePackageProductionValue; usesCompletion: boolean }) {
   const ratio = value.worst_side_ratio == null ? null : Math.round(value.worst_side_ratio * 100);
   const gap = Math.max(
@@ -806,7 +837,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
           ))}
         </div>
       ) : <SuggestionEmptyState payload={payload} />}
-      <MethodNote>Balanced v1 · one-for-one trades · phase-aware cap rules · no category-strategy or draft-pick value applied yet.</MethodNote>
+      <MethodNote>Value-aware one-for-one search · offseason cap obligations remain warnings until October · in-season cap rules stay hard · draft-pick value is not included yet.</MethodNote>
     </section>
   );
 }
@@ -819,6 +850,15 @@ function SuggestionCard({ suggestion, onAnalyze }: {
   const photo = photoUrl(null, incoming.nba_id);
   const currentSalary = incoming.salaries["2026-27"];
   const proposable = suggestion.suggestion_tier === "proposable";
+  const value = suggestion.production_value;
+  const valueVerdict = oneForOneValueVerdict(value);
+  const selectedValue = value.selected_team;
+  const retainedPercent = value.worst_side_ratio == null
+    ? null
+    : Math.round(value.worst_side_ratio * 100);
+  const valueGap = selectedValue.value_gap_to_balanced;
+  const selectedCap = suggestion.cap_legality.selected_team;
+  const amountToClear = selectedCap.amount_to_clear ?? 0;
   return (
     <article className={`flex min-w-0 flex-col rounded-xl border p-4 ${proposable ? "border-emerald-200 dark:border-emerald-900" : "border-amber-200 dark:border-amber-900"}`}>
       <div className="flex items-start gap-3">
@@ -837,6 +877,25 @@ function SuggestionCard({ suggestion, onAnalyze }: {
         </span>
         <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Fit {formatSigned(suggestion.selected_category_score)}</span>
       </div>
+      <div className={`mt-3 rounded-lg border p-3 ${valueVerdict.box}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className={`text-[10px] font-black uppercase tracking-wide ${valueVerdict.text}`}>Player-value check</p>
+            <p className={`mt-0.5 text-sm font-black ${valueVerdict.text}`}>{valueVerdict.label}</p>
+          </div>
+          {retainedPercent != null && (
+            <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${valueVerdict.badge}`}>
+              Worst side retains {retainedPercent}%
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{valueVerdict.description}</p>
+        {valueGap != null && valueGap > 0 && (
+          <p className="mt-2 text-[11px] font-semibold text-slate-500">
+            Estimated gap to balanced: {valueGap.toFixed(2)} · picks are not priced yet
+          </p>
+        )}
+      </div>
       <ChipList label="Helps your team" values={suggestion.outcomes.selected_team.helps} tone="positive" />
       <ChipList label="Trade-offs" values={suggestion.outcomes.selected_team.harms} tone="danger" />
       <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/70">
@@ -850,6 +909,14 @@ function SuggestionCard({ suggestion, onAnalyze }: {
         </div>
         <p className="mt-2 border-t border-slate-200 pt-2 font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">{suggestion.acceptance.reason}</p>
       </div>
+      {selectedCap.compliance_required && amountToClear > 0 ? (
+        <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+          <p className="font-black">Offseason cap plan required</p>
+          <p className="mt-1">Projected {formatMoney(amountToClear)} over the cap after this trade. Clear it before cap activation in October.</p>
+        </div>
+      ) : selectedCap.cap != null ? (
+        <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">Projected cap compliant after this trade.</p>
+      ) : null}
       {suggestion.warnings.length > 0 && (
         <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-300">{suggestion.warnings.length} warning{suggestion.warnings.length === 1 ? "" : "s"} to review</p>
       )}
