@@ -853,9 +853,9 @@ function SuggestionCard({ suggestion, onAnalyze }: {
   const value = suggestion.production_value;
   const valueVerdict = oneForOneValueVerdict(value);
   const selectedValue = value.selected_team;
-  const retainedPercent = selectedValue.retained_ratio == null
+  const retainedPercent = value.worst_side_ratio == null
     ? null
-    : Math.round(selectedValue.retained_ratio * 100);
+    : Math.round(value.worst_side_ratio * 100);
   const valueGap = selectedValue.value_gap_to_balanced;
   const selectedCap = suggestion.cap_legality.selected_team;
   const amountToClear = selectedCap.amount_to_clear ?? 0;
@@ -885,7 +885,7 @@ function SuggestionCard({ suggestion, onAnalyze }: {
           </div>
           {retainedPercent != null && (
             <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${valueVerdict.badge}`}>
-              {retainedPercent}% retained
+              Worst side retains {retainedPercent}%
             </span>
           )}
         </div>
