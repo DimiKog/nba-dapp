@@ -10,11 +10,15 @@ Configure these server-side variables in Vercel:
 
 ```text
 FANTASY_WATCHLIST_API_KEY=<same value as the backend VM>
+FANTASY_DRAFT_PICK_API_KEY=<same value as the backend VM>
 CLOUDFLARE_ACCESS_AUD=<NBA Fantasy DApp Access application audience tag>
 CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://dimikog-apps.cloudflareaccess.com
 ```
 
 Do not prefix any of them with `NEXT_PUBLIC_`.
+
+The draft-pick key is used only by server components and protected Next.js
+route handlers. It must never be returned to browser code or committed.
 
 For local mutation testing only, a developer may set
 `WATCHLIST_ALLOW_LOCAL_MUTATIONS=true` in `.env.local`. This bypass is ignored
