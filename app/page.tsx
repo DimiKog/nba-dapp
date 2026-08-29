@@ -56,24 +56,33 @@ export default async function Home() {
     <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
 
       {/* Scoreboard */}
+      {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
           NBA Scoreboard
         </h2>
         {games.length === 0 ? (
-          <p className="text-sm text-slate-400">No games today.</p>
+          <p className="text-sm text-slate-400">No games scheduled.</p>
         ) : (
           <div className="flex flex-wrap gap-3">
-            {games.map((g) => (
-              <div key={g.id} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 shadow-sm min-w-[220px]">
-                <TeamScore team={g.away} />
-                <span className="text-xs text-slate-400 font-medium">@</span>
-                <TeamScore team={g.home} />
-                <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${g.completed ? "bg-slate-100 dark:bg-slate-800 text-slate-500" : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"}`}>
-                  {g.status}
-                </span>
-              </div>
-            ))}
+            {games.map((g) => {
+              const isLive = !g.completed && g.status !== "Scheduled";
+              const showScore = g.completed || isLive;
+              const displayStatus = g.completed || isLive
+                ? g.status
+                : formatGameDate(g.date) ?? g.status;
+
+              return (
+                <div key={g.id} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 shadow-sm min-w-[220px]">
+                  <TeamScore team={g.away} showScore={showScore} />
+                  <span className="text-xs text-slate-400 font-medium">@</span>
+                  <TeamScore team={g.home} showScore={showScore} />
+                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${g.completed ? "bg-slate-100 dark:bg-slate-800 text-slate-500" : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"}`}>
+                    {displayStatus}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -496,7 +505,7 @@ function TeamIdentity({
   );
 }
 
-function TeamScore({ team }: { team: { name: string; short: string; logo: string | null; score: string | null; winner: boolean } }) {
+function TeamScore({ team, showScore }: { team: { name: string; short: string; logo: string | null; score: string | null; winner: boolean }; showScore: boolean }) {
   return (
     <div className="flex items-center gap-2">
       {team.logo && <img src={team.logo} alt={team.short} className="h-7 w-7 object-contain" />}
@@ -504,10 +513,32 @@ function TeamScore({ team }: { team: { name: string; short: string; logo: string
         <p className={`text-sm font-bold ${team.winner ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}>
           {team.short}
         </p>
-        <p className={`text-sm tabular-nums ${team.winner ? "font-bold text-slate-900 dark:text-slate-100" : "text-slate-500"}`}>
-          {team.score ?? "—"}
-        </p>
+        {showScore && (
+          <p className={`text-sm tabular-nums ${team.winner ? "font-bold text-slate-900 dark:text-slate-100" : "text-slate-500"}`}>
+            {team.score ?? "—"}
+          </p>
+        )}
       </div>
     </div>
   );
+}
+
+function formatGameDate(value: string): string | null {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Athens",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => (
+    parts.find((item) => item.type === type)?.value ?? ""
+  );
+
+  return `${part("weekday")} ${part("day")} ${part("month")} · ${part("hour")}:${part("minute")}`;
 }
