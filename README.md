@@ -11,6 +11,8 @@ Configure these server-side variables in Vercel:
 ```text
 FANTASY_WATCHLIST_API_KEY=<same value as the backend VM>
 FANTASY_DRAFT_PICK_API_KEY=<same value as the backend VM>
+FANTASY_TRADE_LEDGER_API_KEY=<same dedicated value as the backend VM>
+FANTASY_TRADE_LEDGER_ACTOR_SUBJECT=<stable commissioner identifier, not a secret>
 CLOUDFLARE_ACCESS_AUD=<NBA Fantasy DApp Access application audience tag>
 CLOUDFLARE_ACCESS_TEAM_DOMAIN=https://dimikog-apps.cloudflareaccess.com
 ```

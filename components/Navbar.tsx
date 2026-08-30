@@ -7,6 +7,7 @@ const links = [
   { href: "/players", label: "Player Explorer" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/draft-assets", label: "Draft Assets" },
+  { href: "/commissioner/trades", label: "Commissioner" },
   { href: "/fantasy/ldl", label: "LDL" },
   { href: "/fantasy/bdb", label: "BδB" },
 ];
