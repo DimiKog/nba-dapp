@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
+import InjuryFlag from "@/components/InjuryFlag";
 import {
   FantasyPlayerPerformance,
   FantasyPlayerStats,
@@ -187,7 +188,7 @@ export default function RosterPerformanceTable({
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
                             <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{player.name}</span>
-                            {player.injury && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" aria-label="Injury alert" />}
+                            {player.injury && <InjuryFlag />}
                           </span>
                           <span className="block truncate text-xs text-slate-500">
                             {player.nba_team_short || "N/A"} · {player.position}

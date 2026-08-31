@@ -11,6 +11,7 @@ import {
   type LeaguePlayerExplorer as ExplorerPayload,
 } from "@/lib/api";
 import TeamLogo from "@/components/TeamLogo";
+import InjuryFlag from "@/components/InjuryFlag";
 import {
   fantasyStatValue,
   formatFantasyStat,
@@ -567,7 +568,7 @@ function PlayerIdentity({ player }: { player: FantasyPlayerPerformance }) {
         <p className="truncate font-bold text-slate-950 dark:text-white">{player.name}</p>
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
           <span>{player.nba_team || "NBA team unavailable"}</span>
-          {player.injury && <span className="font-bold text-red-500">● Injury</span>}
+          {player.injury && <InjuryFlag showLabel />}
         </div>
       </div>
     </div>
