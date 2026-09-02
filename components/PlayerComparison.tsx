@@ -142,7 +142,7 @@ export default function PlayerComparison() {
               <option value="">Choose from {league === "ldl" ? "LDL" : "BδB"}…</option>
               {availablePlayers.map((player) => (
                 <option key={playerKey(player)} value={playerKey(player)}>
-                  {player.name} · {player.fantasy_team?.name ?? "Unknown team"}
+                  {player.name} · {availabilityLabel(player)}
                 </option>
               ))}
             </select>
@@ -236,7 +236,7 @@ function ComparisonBoard({
           <ComparisonSection title="Fantasy context" gridStyle={gridStyle}>
             <ValueRow label="Impact rank" values={players.map((player) => player.impact_rank ? `#${player.impact_rank}` : "—")} gridStyle={gridStyle} />
             <ValueRow label="Impact score" values={players.map((player) => player.impact_score?.toFixed(2) ?? "—")} gridStyle={gridStyle} />
-            <ValueRow label="Roster status" values={players.map((player) => player.status)} gridStyle={gridStyle} />
+            <ValueRow label="Roster status" values={players.map((player) => playerAvailability(player) === "free_agent" ? "Free agent" : player.status)} gridStyle={gridStyle} />
             <ValueRow label="Injury" values={players.map((player) => injuryLabel(player))} gridStyle={gridStyle} tone="injury" />
             <ValueRow label="Strengths" values={players.map((player) => player.category_strengths.join(", ") || "—")} gridStyle={gridStyle} />
           </ComparisonSection>
@@ -246,7 +246,7 @@ function ComparisonBoard({
               <ValueRow
                 key={season}
                 label={`${season}${index === 0 ? " · current" : ""}`}
-                values={players.map((player) => player.salaries?.[season] ?? "$0 · Free agent")}
+                values={players.map((player) => player.salaries?.[season] ?? "$0 · No salary recorded")}
                 gridStyle={gridStyle}
                 emphasized={index === 0}
               />
@@ -292,10 +292,19 @@ function PlayerHeader({
           <p className="truncate text-xs text-slate-500">{player.nba_team} · {player.position}</p>
         </div>
       </div>
-      <div className="mt-3 flex items-center gap-2">
-        <TeamLogo league={league} name={player.fantasy_team?.name ?? "Unknown"} logo={player.fantasy_team?.logo ?? null} size={24} />
-        <span className="truncate text-xs font-semibold text-slate-600 dark:text-slate-300">{player.fantasy_team?.name}</span>
-      </div>
+      {playerAvailability(player) === "free_agent" ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Free agent</span>
+          {player.availability_rank && player.availability_of && (
+            <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Market #{player.availability_rank} of {player.availability_of}</span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-3 flex items-center gap-2">
+          <TeamLogo league={league} name={player.fantasy_team?.name ?? "Rostered"} logo={player.fantasy_team?.logo ?? null} size={24} />
+          <span className="truncate text-xs font-semibold text-slate-600 dark:text-slate-300">{player.fantasy_team?.name ?? "Rostered"}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -312,7 +321,7 @@ function CategoryRow({
   gridStyle: React.CSSProperties;
 }) {
   const stats = players.map((player) => statsFor(player, statsView));
-  const values = stats.map((item) => fantasyStatValue(item, category));
+  const values = stats.map((item) => item?.games ? fantasyStatValue(item, category) : null);
   const available = values.filter((value): value is number => value !== null);
   const leader = available.length > 1
     ? (category.lowerIsBetter ? Math.min(...available) : Math.max(...available))
@@ -451,7 +460,15 @@ function injuryLabel(player: FantasyPlayerPerformance) {
 }
 
 function playerKey(player: FantasyPlayerPerformance) {
-  return `${player.fantasy_team?.id ?? "unknown"}:${player.nba_id ?? player.name}`;
+  return `${player.fantasy_team?.id ?? "free_agent"}:${player.nba_id ?? player.name}`;
+}
+
+function playerAvailability(player: FantasyPlayerPerformance): "free_agent" | "rostered" {
+  return player.availability ?? (player.fantasy_team ? "rostered" : "free_agent");
+}
+
+function availabilityLabel(player: FantasyPlayerPerformance) {
+  return playerAvailability(player) === "free_agent" ? "Free agent" : player.fantasy_team?.name ?? "Rostered";
 }
 
 function comparisonHref(league: LeagueSlug, ids: string[]) {
