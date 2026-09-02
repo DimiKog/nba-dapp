@@ -204,6 +204,9 @@ export interface FantasyPlayerStats {
 
 export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> {
   identity_status: "resolved" | "unresolved";
+  availability?: "free_agent" | "rostered";
+  availability_rank?: number | null;
+  availability_of?: number | null;
   tenure?: {
     fantasy_season: string;
     year: number;
@@ -218,7 +221,7 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
     name: string;
     logo: string | null;
     owner: string | null;
-  };
+  } | null;
   injury: {
     status: string;
     body_part: string | null;
@@ -871,6 +874,13 @@ export interface LeaguePlayerExplorer {
   categories: string[];
   ranking_method: string;
   ranking_basis: "window" | "season";
+  availability_basis: "latest_league_roster_snapshots";
+  counts: {
+    total: number;
+    rostered: number;
+    free_agents: number;
+    ranked: number;
+  };
   teams: Array<{
     id: string;
     name: string;

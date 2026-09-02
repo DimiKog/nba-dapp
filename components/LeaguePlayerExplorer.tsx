@@ -22,6 +22,7 @@ import {
 
 type LeagueSlug = "ldl" | "bdb";
 type StatsView = "season" | "window";
+type Availability = "all" | "free_agent" | "rostered";
 type Direction = "asc" | "desc";
 type SortKey = "rank" | "name" | "fantasy_team" | "salary" | FantasyCategoryKey;
 
@@ -34,6 +35,7 @@ export default function LeaguePlayerExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [team, setTeam] = useState("all");
+  const [availability, setAvailability] = useState<Availability>("all");
   const [position, setPosition] = useState("all");
   const [status, setStatus] = useState("all");
   const [statsView, setStatsView] = useState<StatsView>("season");
@@ -79,6 +81,7 @@ export default function LeaguePlayerExplorer() {
     setError(null);
     setPayload(null);
     setTeam("all");
+    setAvailability("all");
     setPosition("all");
     setStatus("all");
     setSelectedId("");
@@ -107,11 +110,12 @@ export default function LeaguePlayerExplorer() {
         player.position,
       ].join(" ").toLowerCase();
       return (!normalized || searchable.includes(normalized))
+        && (availability === "all" || playerAvailability(player) === availability)
         && (team === "all" || player.fantasy_team?.id === team)
         && (position === "all" || player.position.split(",").map((item) => item.trim()).includes(position))
         && statusMatches(player, status);
     });
-  }, [payload, position, query, status, team]);
+  }, [availability, payload, position, query, status, team]);
 
   const ordered = useMemo(() => {
     return [...filtered].sort((a, b) => comparePlayers(a, b, sortKey, direction, statsView));
@@ -125,7 +129,7 @@ export default function LeaguePlayerExplorer() {
     ?? ordered[0]
     ?? null;
   const injuredCount = filtered.filter((player) => player.injury).length;
-  const freeAgentCount = filtered.filter((player) => !player.salary_2026_27).length;
+  const freeAgentCount = filtered.filter((player) => playerAvailability(player) === "free_agent").length;
   const hasWindowGames = payload?.players.some((player) => player.window_stats.games > 0) ?? false;
 
   function changeSort(next: SortKey) {
@@ -135,6 +139,11 @@ export default function LeaguePlayerExplorer() {
     }
     setSortKey(next);
     setDirection(next === "rank" || next === "name" || next === "fantasy_team" || next === "turnovers" ? "asc" : "desc");
+  }
+
+  function changeAvailability(next: Availability) {
+    setAvailability(next);
+    if (next === "free_agent") setTeam("all");
   }
 
   function toggleComparison(player: FantasyPlayerPerformance) {
@@ -181,7 +190,7 @@ export default function LeaguePlayerExplorer() {
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Fantasy intelligence</p>
           <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Player Explorer</h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Rank every rostered player by category, performance and contract.
+            Search and rank rostered players and fantasy free agents by category, performance and contract.
           </p>
         </div>
         <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
@@ -217,9 +226,9 @@ export default function LeaguePlayerExplorer() {
       {!loading && payload && (
         <>
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="Visible players" value={filtered.length.toString()} detail={`${payload.players.length} roster slots`} />
+            <SummaryCard label="Visible players" value={filtered.length.toString()} detail={`${payload.counts.total} total players`} />
             <SummaryCard label="Injury alerts" value={injuredCount.toString()} detail="In current result" tone={injuredCount ? "red" : undefined} />
-            <SummaryCard label="Free agents" value={freeAgentCount.toString()} detail="No 2026–27 salary" />
+            <SummaryCard label="Free agents" value={freeAgentCount.toString()} detail={`${payload.counts.free_agents} in league pool`} />
             <SummaryCard
               label="Ranking basis"
               value={payload.ranking_basis === "season" ? "Season" : `${payload.window.days} days`}
@@ -236,7 +245,7 @@ export default function LeaguePlayerExplorer() {
                 placeholder="Search player, NBA team or fantasy team…"
                 className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:ring-blue-950"
               />
-              <FilterSelect label="Fantasy team" value={team} onChange={setTeam}>
+              <FilterSelect label="Fantasy team" value={team} onChange={setTeam} disabled={availability === "free_agent"}>
                 <option value="all">All teams</option>
                 {payload.teams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </FilterSelect>
@@ -244,7 +253,7 @@ export default function LeaguePlayerExplorer() {
                 <option value="all">All positions</option>
                 {positions.map((item) => <option key={item} value={item}>{item}</option>)}
               </FilterSelect>
-              <FilterSelect label="Roster" value={status} onChange={setStatus}>
+              <FilterSelect label="Roster status" value={status} onChange={setStatus}>
                 <option value="all">All statuses</option>
                 <option value="Active">Active</option>
                 <option value="Reserve">Reserve</option>
@@ -254,13 +263,22 @@ export default function LeaguePlayerExplorer() {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-                <StatsButton active={statsView === "season"} onClick={() => setStatsView("season")}>
-                  Season averages
-                </StatsButton>
-                <StatsButton active={statsView === "window"} disabled={!hasWindowGames} onClick={() => setStatsView("window")}>
-                  Last {payload.window.days} days
-                </StatsButton>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                  {(["all", "free_agent", "rostered"] as const).map((value) => (
+                    <StatsButton key={value} active={availability === value} onClick={() => changeAvailability(value)}>
+                      {value === "all" ? "All players" : value === "free_agent" ? "Free agents" : "Rostered"}
+                    </StatsButton>
+                  ))}
+                </div>
+                <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                  <StatsButton active={statsView === "season"} onClick={() => setStatsView("season")}>
+                    Season averages
+                  </StatsButton>
+                  <StatsButton active={statsView === "window"} disabled={!hasWindowGames} onClick={() => setStatsView("window")}>
+                    Last {payload.window.days} days
+                  </StatsButton>
+                </div>
               </div>
               {!hasWindowGames && (
                 <p className="text-xs text-slate-500">No games in the recent window; season averages are shown.</p>
@@ -326,7 +344,12 @@ export default function LeaguePlayerExplorer() {
                             : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
                         }`}
                       >
-                        <td className="px-3 py-3 text-center font-bold tabular-nums text-slate-400">{player.impact_rank ?? "—"}</td>
+                        <td className="px-3 py-3 text-center font-bold tabular-nums text-slate-400">
+                          <span>{player.impact_rank ?? "—"}</span>
+                          {playerAvailability(player) === "free_agent" && player.availability_rank && player.availability_of && (
+                            <span className="mt-0.5 block text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400">FA #{player.availability_rank}/{player.availability_of}</span>
+                          )}
+                        </td>
                         <td className="px-3 py-3 text-center">
                           <button
                             type="button"
@@ -371,10 +394,7 @@ export default function LeaguePlayerExplorer() {
                           <PlayerIdentity player={player} />
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            <TeamLogo league={league} name={player.fantasy_team?.name ?? "Unknown"} logo={player.fantasy_team?.logo ?? null} size={26} />
-                            <span className="max-w-36 truncate font-medium text-slate-700 dark:text-slate-300">{player.fantasy_team?.name ?? "Unknown"}</span>
-                          </div>
+                          <FantasyAvailability league={league} player={player} compact />
                         </td>
                         <td className="px-3 py-3 text-slate-500">{player.position || "—"}</td>
                         <td className="px-3 py-3 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">
@@ -385,7 +405,7 @@ export default function LeaguePlayerExplorer() {
                         </td>
                         {categoryColumns.map((category) => (
                           <td key={category.key} className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                            {formatFantasyStat(stats, category)}
+                            {stats?.games ? formatFantasyStat(stats, category) : "—"}
                           </td>
                         ))}
                       </tr>
@@ -436,12 +456,13 @@ function PlayerDecisionPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-xl font-black text-slate-950 dark:text-white">{player.name}</p>
-              {player.status !== "Active" && <StatusBadge status={player.status} />}
+              {playerAvailability(player) === "free_agent"
+                ? <FreeAgentBadge />
+                : player.status !== "Active" && <StatusBadge status={player.status} />}
             </div>
             <p className="mt-1 text-sm text-slate-500">{player.nba_team || "NBA team unavailable"} · {player.position || "Position unavailable"}</p>
-            <div className="mt-3 flex items-center gap-2">
-              <TeamLogo league={league} name={player.fantasy_team?.name ?? "Unknown"} logo={player.fantasy_team?.logo ?? null} size={28} />
-              <span className="truncate text-sm font-semibold text-slate-700 dark:text-slate-300">{player.fantasy_team?.name}</span>
+            <div className="mt-3">
+              <FantasyAvailability league={league} player={player} />
             </div>
             {player.injury && (
               <p className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
@@ -459,7 +480,7 @@ function PlayerDecisionPanel({
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
-            <p className="text-[11px] text-slate-400">Missing salary = $0 free agent</p>
+            <p className="text-[11px] text-slate-400">Missing salary = $0 cap value</p>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             {SALARY_SEASONS.map((season, index) => {
@@ -475,7 +496,7 @@ function PlayerDecisionPanel({
               >
                 <p className={`text-[10px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
                 <p className={`mt-1 truncate font-black tabular-nums ${index === 0 ? "text-lg" : "text-sm text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
-                {!salary && <p className={`text-[10px] ${index === 0 ? "text-blue-100" : "text-slate-400"}`}>Free agent</p>}
+                {!salary && <p className={`text-[10px] ${index === 0 ? "text-blue-100" : "text-slate-400"}`}>No salary recorded</p>}
               </div>
               );
             })}
@@ -497,7 +518,7 @@ function PlayerDecisionPanel({
             {categories.map((category) => (
                 <div key={category.key} className="rounded-lg border border-slate-200 bg-white/80 p-2 text-center dark:border-slate-700 dark:bg-slate-900/70">
                   <p className="text-[10px] font-bold text-slate-400">{category.label}</p>
-                  <p className="mt-0.5 font-black tabular-nums text-slate-900 dark:text-white">{formatFantasyStat(stats, category)}</p>
+                  <p className="mt-0.5 font-black tabular-nums text-slate-900 dark:text-white">{stats?.games ? formatFantasyStat(stats, category) : "—"}</p>
                 </div>
             ))}
           </div>
@@ -618,11 +639,13 @@ function FilterSelect({
   label,
   value,
   onChange,
+  disabled = false,
   children,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -630,8 +653,9 @@ function FilterSelect({
       <span className="sr-only">{label}</span>
       <select
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
       >
         {children}
       </select>
@@ -658,6 +682,39 @@ function StatsButton({ active, disabled, onClick, children }: { active: boolean;
 
 function StatusBadge({ status }: { status: string }) {
   return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-950 dark:text-amber-300">{status}</span>;
+}
+
+function FreeAgentBadge() {
+  return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Free agent</span>;
+}
+
+function FantasyAvailability({
+  league,
+  player,
+  compact = false,
+}: {
+  league: LeagueSlug;
+  player: FantasyPlayerPerformance;
+  compact?: boolean;
+}) {
+  if (playerAvailability(player) === "free_agent") {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <FreeAgentBadge />
+        {!compact && player.availability_rank && player.availability_of && (
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+            Market #{player.availability_rank} of {player.availability_of}
+          </span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <TeamLogo league={league} name={player.fantasy_team?.name ?? "Rostered"} logo={player.fantasy_team?.logo ?? null} size={compact ? 26 : 28} />
+      <span className="max-w-36 truncate text-sm font-semibold text-slate-700 dark:text-slate-300">{player.fantasy_team?.name ?? "Rostered"}</span>
+    </div>
+  );
 }
 
 function SortableHeader({
@@ -702,7 +759,11 @@ function statsFor(player: FantasyPlayerPerformance, view: StatsView): FantasyPla
 
 function playerKey(player?: FantasyPlayerPerformance) {
   if (!player) return "";
-  return `${player.fantasy_team?.id ?? "unknown"}:${player.nba_id ?? player.name}`;
+  return `${player.fantasy_team?.id ?? "free_agent"}:${player.nba_id ?? player.name}`;
+}
+
+function playerAvailability(player: FantasyPlayerPerformance): "free_agent" | "rostered" {
+  return player.availability ?? (player.fantasy_team ? "rostered" : "free_agent");
 }
 
 function rankPlayers(a: FantasyPlayerPerformance, b: FantasyPlayerPerformance) {
