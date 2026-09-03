@@ -207,6 +207,8 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
   availability?: "free_agent" | "rostered";
   availability_rank?: number | null;
   availability_of?: number | null;
+  nba_relevance?: "current_or_recent" | "legacy_only";
+  nba_relevance_evidence?: Array<"current_team" | "current_salary" | "recent_performance">;
   tenure?: {
     fantasy_season: string;
     year: number;
@@ -879,7 +881,17 @@ export interface LeaguePlayerExplorer {
     total: number;
     rostered: number;
     free_agents: number;
+    free_agents_ranked: number;
+    free_agents_current_or_recent: number;
+    free_agents_legacy_only: number;
     ranked: number;
+  };
+  nba_relevance_basis: {
+    classification: "current_or_recent_evidence";
+    contract_season: string;
+    performance_season: string;
+    evidence: Array<"current_team" | "current_salary" | "recent_performance">;
+    legacy_only_means: string;
   };
   teams: Array<{
     id: string;

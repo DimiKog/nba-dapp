@@ -23,6 +23,7 @@ import {
 type LeagueSlug = "ldl" | "bdb";
 type StatsView = "season" | "window";
 type Availability = "all" | "free_agent" | "rostered";
+type FreeAgentScope = "ranked" | "current_or_recent" | "all_known";
 type Direction = "asc" | "desc";
 type SortKey = "rank" | "name" | "fantasy_team" | "salary" | FantasyCategoryKey;
 
@@ -36,6 +37,7 @@ export default function LeaguePlayerExplorer() {
   const [query, setQuery] = useState("");
   const [team, setTeam] = useState("all");
   const [availability, setAvailability] = useState<Availability>("all");
+  const [freeAgentScope, setFreeAgentScope] = useState<FreeAgentScope>("current_or_recent");
   const [position, setPosition] = useState("all");
   const [status, setStatus] = useState("all");
   const [statsView, setStatsView] = useState<StatsView>("season");
@@ -82,6 +84,7 @@ export default function LeaguePlayerExplorer() {
     setPayload(null);
     setTeam("all");
     setAvailability("all");
+    setFreeAgentScope("current_or_recent");
     setPosition("all");
     setStatus("all");
     setSelectedId("");
@@ -111,11 +114,17 @@ export default function LeaguePlayerExplorer() {
       ].join(" ").toLowerCase();
       return (!normalized || searchable.includes(normalized))
         && (availability === "all" || playerAvailability(player) === availability)
+        && (
+          availability !== "free_agent"
+          || freeAgentScope === "all_known"
+          || (freeAgentScope === "ranked" && player.availability_rank != null)
+          || (freeAgentScope === "current_or_recent" && player.nba_relevance === "current_or_recent")
+        )
         && (team === "all" || player.fantasy_team?.id === team)
         && (position === "all" || player.position.split(",").map((item) => item.trim()).includes(position))
         && statusMatches(player, status);
     });
-  }, [availability, payload, position, query, status, team]);
+  }, [availability, freeAgentScope, payload, position, query, status, team]);
 
   const ordered = useMemo(() => {
     return [...filtered].sort((a, b) => comparePlayers(a, b, sortKey, direction, statsView));
@@ -284,6 +293,29 @@ export default function LeaguePlayerExplorer() {
                 <p className="text-xs text-slate-500">No games in the recent window; season averages are shown.</p>
               )}
             </div>
+            {availability === "free_agent" && (
+              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-950 dark:bg-emerald-950/20">
+                <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">NBA evidence</span>
+                    <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1 shadow-sm dark:bg-slate-900">
+                      <StatsButton active={freeAgentScope === "ranked"} onClick={() => setFreeAgentScope("ranked")}>
+                        Ranked now · {payload.counts.free_agents_ranked}
+                      </StatsButton>
+                      <StatsButton active={freeAgentScope === "current_or_recent"} onClick={() => setFreeAgentScope("current_or_recent")}>
+                        Current or recent NBA · {payload.counts.free_agents_current_or_recent}
+                      </StatsButton>
+                      <StatsButton active={freeAgentScope === "all_known"} onClick={() => setFreeAgentScope("all_known")}>
+                        All known players · {payload.counts.free_agents}
+                      </StatsButton>
+                    </div>
+                  </div>
+                  <p className="max-w-xl text-xs text-emerald-800/80 dark:text-emerald-300/80">
+                    Legacy-only means no current team, salary or recent performance evidence; it does not prove that a player is inactive.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
           {selected && (
@@ -701,6 +733,11 @@ function FantasyAvailability({
     return (
       <div className="flex flex-wrap items-center gap-2">
         <FreeAgentBadge />
+        {player.nba_relevance === "legacy_only" && (
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            Legacy evidence only
+          </span>
+        )}
         {!compact && player.availability_rank && player.availability_of && (
           <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
             Market #{player.availability_rank} of {player.availability_of}
