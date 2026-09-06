@@ -436,6 +436,71 @@ export interface FantasyTradePartners {
   warnings: TradeWarning[];
 }
 
+export type DraftPickValueTier =
+  | "premium"
+  | "strong"
+  | "useful"
+  | "secondary"
+  | "minor"
+  | "fringe";
+
+export interface TradeSuggestionPickOption {
+  id: number;
+  draft_year: number;
+  round: number;
+  original_franchise: { id: string; name: string } | null;
+  current_owner: { id: string; name: string } | null;
+  valuation: {
+    status: "shadow";
+    compensation_band: {
+      conservative: DraftPickValueTier;
+      optimistic: DraftPickValueTier;
+    };
+    confidence?: { order?: "high" | "low"; market?: "high" | "low" };
+    draft_pool?: "rookie_only" | "all_available_free_agents" | "unknown";
+  };
+  assessment: {
+    status: "shadow";
+    sufficiency:
+      | "fully_compensated"
+      | "minimum_compensation_met"
+      | "plausible_only"
+      | "insufficient"
+      | "unavailable";
+    reason: string;
+    minimum_requirement_met?: boolean;
+    full_range_met?: boolean;
+    optimistic_minimum_met?: boolean;
+  };
+}
+
+export interface TradeSuggestionPickCompensation {
+  status:
+    | "not_required"
+    | "possible_options"
+    | "options_below_requirement"
+    | "unavailable";
+  reason: string;
+  affects_recommendations: false;
+  recommendation_effect: "none_shadow_only";
+  automatic_selection: false;
+  direction: "counterparty_to_selected" | "selected_to_counterparty" | null;
+  giving_team_id?: string;
+  receiving_team_id?: string;
+  giving_franchise_id?: string;
+  player_gap: {
+    status: "shadow" | "valuation_unavailable";
+    gap_band?: "small" | "moderate" | "major" | "exceptional";
+    required_pick_compensation?: {
+      conservative: DraftPickValueTier;
+      optimistic: DraftPickValueTier;
+    };
+  } | null;
+  candidate_options: TradeSuggestionPickOption[];
+  options_returned?: number;
+  options_considered?: number;
+}
+
 export interface BalancedTradeSuggestion {
   rank_within_team: number;
   suggestion_tier: "proposable" | "exploratory";
@@ -468,6 +533,7 @@ export interface BalancedTradeSuggestion {
       | "not_recommended_player_only"
       | "value_unavailable";
   };
+  pick_compensation?: TradeSuggestionPickCompensation;
   cap_legality: {
     selected_team: TradeSuggestionCapStatus;
     counterparty_team: TradeSuggestionCapStatus;
