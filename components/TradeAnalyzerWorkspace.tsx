@@ -27,6 +27,7 @@ import {
   type TradePackageProductionValue,
   type TradePlayerSummary,
   type TradePayrollComparison,
+  type TradeSuggestionPickOption,
   type TradeSuggestionPickCompensation,
   type TradeTeamResult,
   type TradeWarning,
@@ -951,9 +952,9 @@ function PickCompensationPanel({ compensation }: { compensation: TradeSuggestion
   const required = compensation.player_gap?.required_pick_compensation;
   const unavailable = compensation.status === "unavailable";
   const title = youReceive
-    ? "Possible pick return"
+    ? "You may receive a pick"
     : youSend
-      ? "Possible pick cost"
+      ? "You may need to send a pick"
       : "Pick compensation unavailable";
   const description = youReceive
     ? "You may ask the partner to include one of these picks."
@@ -965,6 +966,7 @@ function PickCompensationPanel({ compensation }: { compensation: TradeSuggestion
     : youReceive
       ? "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/25"
       : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/25";
+  const [primaryOption, ...alternativeOptions] = compensation.candidate_options;
 
   return (
     <div className={`mt-3 rounded-lg border p-3 ${tone}`}>
@@ -976,36 +978,25 @@ function PickCompensationPanel({ compensation }: { compensation: TradeSuggestion
         </div>
         {required && (
           <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-black text-slate-700 dark:bg-slate-950/40 dark:text-slate-200">
-            Required {pickTierLabel(required.conservative)} → {pickTierLabel(required.optimistic)}
+            Target {pickTierLabel(required.conservative)}–{pickTierLabel(required.optimistic)}
           </span>
         )}
       </div>
-      {compensation.candidate_options.length > 0 && (
-        <div className="mt-3 space-y-2">
-          {compensation.candidate_options.map((option) => {
-            const band = option.valuation.compensation_band;
-            const assessment = pickSufficiencyPresentation(option.assessment.sufficiency);
-            return (
-              <div key={option.id} className="rounded-lg border border-white/80 bg-white/75 p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-black text-slate-900 dark:text-slate-100">
-                      {option.draft_year} {draftRoundLabel(option.round)}
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-slate-500">
-                      Originally {option.original_franchise?.name ?? "unknown franchise"}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${assessment.classes}`}>
-                    {assessment.label}
-                  </span>
-                </div>
-                <p className="mt-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
-                  Conservative {pickTierLabel(band.conservative)} · optimistic {pickTierLabel(band.optimistic)}
-                </p>
+      {primaryOption && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-slate-500">Best fit shown</p>
+          <PickOptionCard option={primaryOption} />
+          {alternativeOptions.length > 0 && (
+            <details className="mt-2 rounded-lg border border-white/80 bg-white/40 dark:border-slate-700 dark:bg-slate-900/30">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-bold text-blue-700 marker:text-slate-400 dark:text-blue-300">
+                Show {alternativeOptions.length} alternative{alternativeOptions.length === 1 ? "" : "s"}
+              </summary>
+              <div className="space-y-2 border-t border-white/80 p-2 dark:border-slate-700">
+                {alternativeOptions.map((option) => <PickOptionCard key={option.id} option={option} />)}
               </div>
-            );
-          })}
+            </details>
+          )}
+          <PickRatingGuide draftPool={primaryOption.valuation.draft_pool} />
         </div>
       )}
       {!unavailable && (
@@ -1017,8 +1008,63 @@ function PickCompensationPanel({ compensation }: { compensation: TradeSuggestion
   );
 }
 
+function PickOptionCard({ option }: { option: TradeSuggestionPickOption }) {
+  const band = option.valuation.compensation_band;
+  const assessment = pickSufficiencyPresentation(option.assessment.sufficiency);
+  return (
+    <div className="rounded-lg border border-white/80 bg-white/75 p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-black text-slate-900 dark:text-slate-100">
+            {option.draft_year} {draftRoundLabel(option.round)}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-500">
+            Originally {option.original_franchise?.name ?? "unknown franchise"}
+          </p>
+        </div>
+        <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${assessment.classes}`}>
+          {assessment.label}
+        </span>
+      </div>
+      <p className="mt-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+        Conservative {pickTierLabel(band.conservative)} {pickTierSlotBand(band.conservative)} · optimistic {pickTierLabel(band.optimistic)} {pickTierSlotBand(band.optimistic)}
+      </p>
+    </div>
+  );
+}
+
+function PickRatingGuide({ draftPool }: { draftPool?: TradeSuggestionPickOption["valuation"]["draft_pool"] }) {
+  const poolText = draftPool === "rookie_only"
+    ? "This league drafts rookies only."
+    : draftPool === "all_available_free_agents"
+      ? "This league drafts from all available free agents."
+      : null;
+  return (
+    <details className="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
+      <summary className="cursor-pointer font-bold text-slate-700 marker:text-slate-400 dark:text-slate-200">What do the pick ratings mean?</summary>
+      <div className="mt-2 rounded-lg bg-white/60 p-3 dark:bg-slate-900/40">
+        <p>Ratings describe a pick&apos;s nominal position band within this league: Premium #1–4, Strong #5–8, Useful #9–14, Secondary #15–24, Minor #25–32, and Fringe #33–40.</p>
+        <p className="mt-1">Conservative is the lower expected value; optimistic is the higher expected value. They are a range, not a guaranteed draft position or an exact player price.</p>
+        {poolText && <p className="mt-1">{poolText} Ratings should not be compared directly across leagues.</p>}
+      </div>
+    </details>
+  );
+}
+
 function pickTierLabel(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function pickTierSlotBand(value: string): string {
+  const bands: Record<string, string> = {
+    premium: "(#1–4)",
+    strong: "(#5–8)",
+    useful: "(#9–14)",
+    secondary: "(#15–24)",
+    minor: "(#25–32)",
+    fringe: "(#33–40)",
+  };
+  return bands[value] ?? "";
 }
 
 function draftRoundLabel(round: number): string {
@@ -1033,15 +1079,15 @@ function pickSufficiencyPresentation(value: string) {
     classes: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
   };
   if (value === "minimum_compensation_met") return {
-    label: "Meets minimum",
+    label: "Covers minimum only",
     classes: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
   };
   if (value === "plausible_only") return {
-    label: "Optimistic fit only",
+    label: "Could work optimistically",
     classes: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
   };
   if (value === "insufficient") return {
-    label: "Below requirement",
+    label: "Does not cover gap",
     classes: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
   };
   return {
