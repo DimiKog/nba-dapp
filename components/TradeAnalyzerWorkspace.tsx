@@ -27,6 +27,7 @@ import {
   type TradePackageProductionValue,
   type TradePlayerSummary,
   type TradePayrollComparison,
+  type TradeSuggestionPickCompensation,
   type TradeTeamResult,
   type TradeWarning,
 } from "@/lib/api";
@@ -849,7 +850,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
           ))}
         </div>
       ) : <SuggestionEmptyState payload={payload} />}
-      <MethodNote>Value-aware one-for-one search · offseason cap obligations remain warnings until October · in-season cap rules stay hard · draft-pick value is not included yet.</MethodNote>
+      <MethodNote>Value-aware one-for-one search · offseason cap obligations remain warnings until October · in-season cap rules stay hard · shadow pick possibilities never change ranking or recommendation tier.</MethodNote>
     </section>
   );
 }
@@ -906,10 +907,13 @@ function SuggestionCard({ suggestion, onAnalyze }: {
         )}
         {valueGap != null && valueGap > 0 && (
           <p className="mt-2 text-[11px] font-semibold text-slate-500">
-            Estimated gap to balanced: {valueGap.toFixed(2)} · picks are not priced yet
+            Estimated production gap to balanced: {valueGap.toFixed(2)}
           </p>
         )}
       </div>
+      {suggestion.pick_compensation && suggestion.pick_compensation.status !== "not_required" && (
+        <PickCompensationPanel compensation={suggestion.pick_compensation} />
+      )}
       <ChipList label="Helps your team" values={suggestion.outcomes.selected_team.helps} tone="positive" />
       <ChipList label="Trade-offs" values={suggestion.outcomes.selected_team.harms} tone="danger" />
       <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-slate-800/70">
@@ -939,6 +943,123 @@ function SuggestionCard({ suggestion, onAnalyze }: {
       </button>
     </article>
   );
+}
+
+function PickCompensationPanel({ compensation }: { compensation: TradeSuggestionPickCompensation }) {
+  const youReceive = compensation.direction === "counterparty_to_selected";
+  const youSend = compensation.direction === "selected_to_counterparty";
+  const required = compensation.player_gap?.required_pick_compensation;
+  const unavailable = compensation.status === "unavailable";
+  const title = youReceive
+    ? "Possible pick return"
+    : youSend
+      ? "Possible pick cost"
+      : "Pick compensation unavailable";
+  const description = youReceive
+    ? "You may ask the partner to include one of these picks."
+    : youSend
+      ? "You may need to include one of your picks for the partner."
+      : pickCompensationUnavailableText(compensation.reason);
+  const tone = unavailable
+    ? "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60"
+    : youReceive
+      ? "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/25"
+      : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/25";
+
+  return (
+    <div className={`mt-3 rounded-lg border p-3 ${tone}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Shadow pick estimate</p>
+          <p className="mt-0.5 text-sm font-black text-slate-900 dark:text-slate-100">{title}</p>
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{description}</p>
+        </div>
+        {required && (
+          <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-black text-slate-700 dark:bg-slate-950/40 dark:text-slate-200">
+            Required {pickTierLabel(required.conservative)} → {pickTierLabel(required.optimistic)}
+          </span>
+        )}
+      </div>
+      {compensation.candidate_options.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {compensation.candidate_options.map((option) => {
+            const band = option.valuation.compensation_band;
+            const assessment = pickSufficiencyPresentation(option.assessment.sufficiency);
+            return (
+              <div key={option.id} className="rounded-lg border border-white/80 bg-white/75 p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-black text-slate-900 dark:text-slate-100">
+                      {option.draft_year} {draftRoundLabel(option.round)}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      Originally {option.original_franchise?.name ?? "unknown franchise"}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase ${assessment.classes}`}>
+                    {assessment.label}
+                  </span>
+                </div>
+                <p className="mt-2 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                  Conservative {pickTierLabel(band.conservative)} · optimistic {pickTierLabel(band.optimistic)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {!unavailable && (
+        <p className="mt-2 text-[10px] font-medium text-slate-500">
+          Possible negotiation assets only — no pick is added automatically and the card&apos;s tier is unchanged.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function pickTierLabel(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function draftRoundLabel(round: number): string {
+  if (round === 1) return "Round A";
+  if (round === 2) return "Round B";
+  return `Round ${round}`;
+}
+
+function pickSufficiencyPresentation(value: string) {
+  if (value === "fully_compensated") return {
+    label: "Covers full range",
+    classes: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  };
+  if (value === "minimum_compensation_met") return {
+    label: "Meets minimum",
+    classes: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  };
+  if (value === "plausible_only") return {
+    label: "Optimistic fit only",
+    classes: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  };
+  if (value === "insufficient") return {
+    label: "Below requirement",
+    classes: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  };
+  return {
+    label: "Unavailable",
+    classes: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  };
+}
+
+function pickCompensationUnavailableText(reason: string): string {
+  const messages: Record<string, string> = {
+    replacement_impact_unavailable: "A trusted player-value comparison is not available for this result.",
+    insufficient_positive_surplus_sample: "The league does not yet have a large enough trusted value sample.",
+    franchise_mapping_unavailable: "Team-to-franchise mapping is temporarily unavailable.",
+    giving_team_franchise_mapping_missing: "The team that would provide compensation has no verified franchise mapping.",
+    draft_asset_inventory_unavailable: "The canonical pick inventory is temporarily unavailable.",
+    no_eligible_valued_picks: "The team has no eligible, valued pick that can be shown safely.",
+  };
+  return messages[reason] ?? "A safe draft-pick estimate cannot be shown for this result.";
 }
 
 function SuggestionEmptyState({ payload }: { payload: FantasyBalancedTradeSuggestions }) {
