@@ -509,12 +509,12 @@ function PlayerDecisionPanel({
           </div>
         </div>
 
-        <div>
+        <div className="@container">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
             <p className="text-[11px] text-slate-400">Missing salary = $0 cap value</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 @sm:grid-cols-3 @3xl:grid-cols-5">
             {SALARY_SEASONS.map((season, index) => {
               const salary = player.salaries?.[season] ?? null;
               return (
@@ -522,12 +522,12 @@ function PlayerDecisionPanel({
                 key={season}
                 className={`rounded-xl border p-3 ${
                   index === 0
-                    ? "col-span-2 border-blue-300 bg-blue-600 text-white sm:col-span-1 sm:scale-[1.04] dark:border-blue-600"
+                    ? "col-span-2 border-blue-300 bg-blue-600 text-white @sm:col-span-1 @sm:scale-[1.04] dark:border-blue-600"
                     : "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70"
                 }`}
               >
                 <p className={`text-[10px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
-                <p className={`mt-1 truncate font-black tabular-nums ${index === 0 ? "text-lg" : "text-sm text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
+                <p className={`mt-1 truncate text-sm font-black tabular-nums ${index === 0 ? "" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
                 {!salary && <p className={`text-[10px] ${index === 0 ? "text-blue-100" : "text-slate-400"}`}>No salary recorded</p>}
               </div>
               );
