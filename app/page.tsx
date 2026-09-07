@@ -294,9 +294,9 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
       </div>
 
       <div className="grid grid-cols-3 divide-x divide-blue-100 border-b border-blue-100 bg-white/60 dark:divide-blue-900/70 dark:border-blue-900/70 dark:bg-slate-950/20">
-        <div className="min-w-0 p-4">
+        <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Cap position</p>
-          <p className={`mt-1 truncate text-base font-black tabular-nums ${
+          <p className={`mt-1 truncate text-xs font-black tabular-nums ${
             capPosition == null
               ? "text-slate-500"
               : capPosition < 0
@@ -310,7 +310,7 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
                 : `${compactMoney(capPosition)} under`}
           </p>
         </div>
-        <div className="min-w-0 p-4">
+        <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Injuries</p>
           <p className={`mt-1 text-base font-black ${injured.length ? "text-red-600 dark:text-red-400" : "text-slate-950 dark:text-white"}`}>
             {performance ? injured.length : "—"}
@@ -319,7 +319,7 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
             {injured.map((player) => player.short_name).join(", ") || (performance ? "No alerts" : "Unavailable")}
           </p>
         </div>
-        <div className="min-w-0 p-4">
+        <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Scoring leader</p>
           <p className="mt-1 truncate text-sm font-black text-slate-950 dark:text-white">
             {leader?.name ?? "No games yet"}
@@ -498,7 +498,7 @@ function TeamIdentity({
           </div>
         )}
       </div>
-      <p className="line-clamp-2 text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">
+      <p className="truncate text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">
         {team.name}
       </p>
     </div>

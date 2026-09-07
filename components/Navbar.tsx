@@ -22,7 +22,7 @@ export default function Navbar() {
           🏀 My NBA
         </Link>
 
-        <div className="order-3 flex w-full items-center gap-1 overflow-x-auto sm:order-none sm:ml-2 sm:w-auto sm:overflow-visible">
+        <div className="order-3 flex w-full items-center gap-1 overflow-x-auto pr-8 shadow-[inset_-16px_0_12px_-12px_rgba(15,23,42,0.18)] sm:order-none sm:ml-2 sm:w-auto sm:overflow-visible sm:pr-0 sm:shadow-none dark:shadow-[inset_-16px_0_12px_-12px_rgba(255,255,255,0.12)]">
           {links.map(({ href, label }) => {
             const active = pathname.startsWith(href);
             return (

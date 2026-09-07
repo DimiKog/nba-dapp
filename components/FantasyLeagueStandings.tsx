@@ -13,12 +13,20 @@ export default function FantasyLeagueStandings({
 }) {
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
-      <div className="mb-6 flex items-end justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fantasy</h1>
           <p className="mt-1 text-slate-500 dark:text-slate-400">2026-27 Season</p>
         </div>
-        <Link href="/" className="text-sm text-blue-500 hover:underline">← NBA Home</Link>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="text-sm text-blue-500 hover:underline">← NBA Home</Link>
+          <Link
+            href={`/fantasy/${active}/my-team`}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            Open my team →
+          </Link>
+        </div>
       </div>
 
       <LeagueTabs active={active} />
