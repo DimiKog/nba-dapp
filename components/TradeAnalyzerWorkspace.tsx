@@ -36,6 +36,9 @@ import {
 type LeagueSlug = "ldl" | "bdb";
 type Mode = "suggestions" | "analyze" | "partners";
 type SuggestionShape = "one_for_one" | "one_for_two";
+type RecommendationFilter = "all" | "proposable" | "exploratory";
+type PickGuidanceFilter = "all" | "receive" | "send" | "not_required" | "unavailable";
+type CapStatusFilter = "all" | "compliant" | "plan_required" | "not_eligible";
 
 export default function TradeAnalyzerWorkspace({
   league,
@@ -806,6 +809,43 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
   payload: FantasyBalancedTradeSuggestions;
   onAnalyze: (suggestion: BalancedTradeSuggestion) => void;
 }) {
+  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
+  const [pickFilter, setPickFilter] = useState<PickGuidanceFilter>("all");
+  const [capFilter, setCapFilter] = useState<CapStatusFilter>("all");
+  const returnedSuggestions = useMemo(
+    () => payload.teams.flatMap((group) => group.suggestions),
+    [payload.teams],
+  );
+  const pickCounts = useMemo(
+    () => countSuggestionCategories(returnedSuggestions, pickGuidanceCategory),
+    [returnedSuggestions],
+  );
+  const capCounts = useMemo(
+    () => countSuggestionCategories(returnedSuggestions, capStatusCategory),
+    [returnedSuggestions],
+  );
+  const filteredTeams = useMemo(
+    () => payload.teams
+      .map((group) => ({
+        ...group,
+        suggestions: group.suggestions.filter((suggestion) => (
+          (recommendationFilter === "all" || suggestion.suggestion_tier === recommendationFilter)
+          && (pickFilter === "all" || pickGuidanceCategory(suggestion) === pickFilter)
+          && (capFilter === "all" || capStatusCategory(suggestion) === capFilter)
+        )),
+      }))
+      .filter((group) => group.suggestions.length > 0),
+    [capFilter, payload.teams, pickFilter, recommendationFilter],
+  );
+  const visibleCount = filteredTeams.reduce((count, group) => count + group.suggestions.length, 0);
+  const filtersActive = recommendationFilter !== "all" || pickFilter !== "all" || capFilter !== "all";
+
+  function clearFilters() {
+    setRecommendationFilter("all");
+    setPickFilter("all");
+    setCapFilter("all");
+  }
+
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 p-5 dark:border-slate-700">
@@ -827,15 +867,70 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
         </div>
       </div>
       {payload.fallback_reason && <FallbackBanner />}
-      {payload.teams.length ? (
+      {payload.teams.length > 0 && (
+        <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Filter returned suggestions</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {visibleCount} of {returnedSuggestions.length} returned suggestion{returnedSuggestions.length === 1 ? "" : "s"} shown
+              </p>
+            </div>
+            {filtersActive && (
+              <button type="button" onClick={clearFilters} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                Clear filters
+              </button>
+            )}
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-3">
+            <SuggestionFilterGroup
+              label="Recommendation"
+              value={recommendationFilter}
+              onChange={setRecommendationFilter}
+              options={[
+                { value: "all", label: "All", count: returnedSuggestions.length },
+                { value: "proposable", label: "Proposable", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "proposable").length },
+                { value: "exploratory", label: "Exploratory", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "exploratory").length },
+              ]}
+            />
+            <SuggestionFilterGroup
+              label="Pick guidance"
+              value={pickFilter}
+              onChange={setPickFilter}
+              options={[
+                { value: "all", label: "All", count: returnedSuggestions.length },
+                { value: "receive", label: "You receive", count: pickCounts.receive ?? 0 },
+                { value: "send", label: "You send", count: pickCounts.send ?? 0 },
+                { value: "not_required", label: "No pick", count: pickCounts.not_required ?? 0 },
+                { value: "unavailable", label: "Unavailable", count: pickCounts.unavailable ?? 0 },
+              ]}
+            />
+            <SuggestionFilterGroup
+              label="Your cap status"
+              value={capFilter}
+              onChange={setCapFilter}
+              options={[
+                { value: "all", label: "All", count: returnedSuggestions.length },
+                { value: "compliant", label: "Compliant now", count: capCounts.compliant ?? 0 },
+                { value: "plan_required", label: "October plan", count: capCounts.plan_required ?? 0 },
+                ...(capCounts.not_eligible ? [{ value: "not_eligible" as const, label: "Not eligible", count: capCounts.not_eligible }] : []),
+              ]}
+            />
+          </div>
+          <p className="mt-3 text-[10px] text-slate-400">Filters apply only to the cards returned by the backend; they do not change the market scan, ranking, or recommendation tier.</p>
+        </div>
+      )}
+      {payload.teams.length && filteredTeams.length ? (
         <div className="space-y-5 p-4">
-          {payload.teams.map((group) => (
+          {filteredTeams.map((group) => (
             <div key={group.team.id}>
               <div className="mb-3 flex items-center gap-3">
                 <TeamLogo league={payload.league.slug} logo={group.team.logo} name={group.team.name} size={38} />
                 <div>
                   <h3 className="font-black text-slate-950 dark:text-white">{group.team.name}</h3>
-                  <p className="text-xs text-slate-500">{group.counts.returned} suggested returns</p>
+                  <p className="text-xs text-slate-500">
+                    {filtersActive ? `${group.suggestions.length} of ${group.counts.returned} suggestions shown` : `${group.counts.returned} suggested returns`}
+                  </p>
                 </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -850,10 +945,68 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
             </div>
           ))}
         </div>
+      ) : payload.teams.length ? (
+        <div className="m-4 rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
+          <h3 className="font-black text-slate-950 dark:text-white">No returned suggestions match these filters</h3>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">The underlying market results are unchanged. Clear or adjust the filters to show the cards again.</p>
+          <button type="button" onClick={clearFilters} className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">Clear filters</button>
+        </div>
       ) : <SuggestionEmptyState payload={payload} />}
       <MethodNote>Value-aware one-for-one search · offseason cap obligations remain warnings until October · in-season cap rules stay hard · shadow pick possibilities never change ranking or recommendation tier.</MethodNote>
     </section>
   );
+}
+
+function SuggestionFilterGroup<T extends string>({ label, value, options, onChange }: {
+  label: string;
+  value: T;
+  options: Array<{ value: T; label: string; count: number }>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{label}</legend>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+            className={`rounded-full border px-2.5 py-1.5 text-[11px] font-bold transition ${value === option.value ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}
+          >
+            {option.label} <span className={value === option.value ? "text-blue-100" : "text-slate-400"}>{option.count}</span>
+          </button>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function countSuggestionCategories<T extends string>(
+  suggestions: BalancedTradeSuggestion[],
+  category: (suggestion: BalancedTradeSuggestion) => T,
+): Partial<Record<T, number>> {
+  return suggestions.reduce<Partial<Record<T, number>>>((counts, suggestion) => {
+    const key = category(suggestion);
+    counts[key] = (counts[key] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function pickGuidanceCategory(suggestion: BalancedTradeSuggestion): Exclude<PickGuidanceFilter, "all"> {
+  const compensation = suggestion.pick_compensation;
+  if (!compensation || compensation.status === "not_required") return "not_required";
+  if (compensation.status === "unavailable") return "unavailable";
+  if (compensation.direction === "counterparty_to_selected") return "receive";
+  if (compensation.direction === "selected_to_counterparty") return "send";
+  return "unavailable";
+}
+
+function capStatusCategory(suggestion: BalancedTradeSuggestion): Exclude<CapStatusFilter, "all"> {
+  const cap = suggestion.cap_legality.selected_team;
+  if (cap.compliance_required) return "plan_required";
+  return cap.eligible ? "compliant" : "not_eligible";
 }
 
 function SuggestionCard({ suggestion, onAnalyze }: {
