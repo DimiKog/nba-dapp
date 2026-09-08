@@ -16,10 +16,15 @@ import {
   type FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
-import { loadCurrentFantasySession } from "@/lib/fantasySessionServer";
+import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 
 export default async function Home() {
-  const session = await loadCurrentFantasySession().catch(() => null);
+  const context = await loadCurrentFantasyContext().catch(() => ({
+    identity: null,
+    identityHeaders: null,
+    session: null,
+  }));
+  const session = context.session;
   const [games, news, ldlTeams, bdbTeams, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
@@ -89,7 +94,11 @@ export default async function Home() {
         )}
       </section>
 
-      <PersonalTeamsGrid teams={personalTeams} hasSession={Boolean(session)} />
+      <PersonalTeamsGrid
+        teams={personalTeams}
+        hasAccessIdentity={Boolean(context.identity)}
+        hasSession={Boolean(session)}
+      />
 
       <HomeRadarPanels radars={radarPanels} />
 
@@ -243,9 +252,11 @@ type PersonalTeamDashboard = {
 
 function PersonalTeamsGrid({
   teams,
+  hasAccessIdentity,
   hasSession,
 }: {
   teams: PersonalTeamDashboard[];
+  hasAccessIdentity: boolean;
   hasSession: boolean;
 }) {
   return (
@@ -263,12 +274,18 @@ function PersonalTeamsGrid({
         {teams.length === 0 && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
             <p className="font-bold text-slate-900 dark:text-white">
-              {hasSession ? "No active fantasy memberships" : "Fantasy identity unavailable"}
+              {hasSession
+                ? "No active fantasy memberships"
+                : hasAccessIdentity
+                  ? "Fantasy session unavailable"
+                  : "Personal features unavailable in this preview"}
             </p>
             <p className="mt-1 text-sm text-slate-500">
               {hasSession
                 ? "Your account is signed in, but no league team is currently assigned."
-                : "Sign in through Cloudflare Access to load your teams and personal tools."}
+                : hasAccessIdentity
+                  ? "Cloudflare Access recognized you, but the fantasy identity service could not load your account."
+                  : "Use the protected production domain to sign in and load your teams and personal tools."}
             </p>
           </div>
         )}

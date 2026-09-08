@@ -60,21 +60,37 @@ export async function fantasyIdentityForRequest(
   return getCloudflareAccessIdentity(request);
 }
 
+export const loadCurrentFantasyContext = cache(async (): Promise<{
+  identity: CloudflareAccessIdentity | null;
+  identityHeaders: Headers | null;
+  session: FantasySession | null;
+}> => {
+  const identity = await getCloudflareAccessIdentityFromHeaders(await headers());
+  if (!identity) return { identity: null, identityHeaders: null, session: null };
+  const loaded = await loadFantasySession(identity);
+  const identityHeaders = fantasyIdentityHeaders(identity);
+  if (!loaded.session || !identityHeaders) {
+    return { identity, identityHeaders, session: null };
+  }
+  return { identity, identityHeaders, session: loaded.session };
+});
+
 export const loadCurrentFantasyAccess = cache(async (): Promise<{
   identity: CloudflareAccessIdentity;
   identityHeaders: Headers;
   session: FantasySession;
 } | null> => {
-  const identity = await getCloudflareAccessIdentityFromHeaders(await headers());
-  if (!identity) return null;
-  const loaded = await loadFantasySession(identity);
-  const identityHeaders = fantasyIdentityHeaders(identity);
-  if (!loaded.session || !identityHeaders) return null;
-  return { identity, identityHeaders, session: loaded.session };
+  const context = await loadCurrentFantasyContext();
+  if (!context.identity || !context.identityHeaders || !context.session) return null;
+  return {
+    identity: context.identity,
+    identityHeaders: context.identityHeaders,
+    session: context.session,
+  };
 });
 
 export const loadCurrentFantasySession = cache(async (): Promise<FantasySession | null> =>
-  (await loadCurrentFantasyAccess())?.session ?? null,
+  (await loadCurrentFantasyContext()).session,
 );
 
 export function membershipFor(

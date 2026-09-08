@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import { loadCurrentFantasySession } from "@/lib/fantasySessionServer";
+import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,7 +25,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await loadCurrentFantasySession().catch(() => null);
+  const context = await loadCurrentFantasyContext().catch(() => ({
+    identity: null,
+    identityHeaders: null,
+    session: null,
+  }));
   return (
     <html
       lang="en"
@@ -33,7 +37,10 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Suspense fallback={<NavbarFallback />}>
-          <Navbar session={session} />
+          <Navbar
+            session={context.session}
+            hasAccessIdentity={Boolean(context.identity)}
+          />
         </Suspense>
         {children}
       </body>

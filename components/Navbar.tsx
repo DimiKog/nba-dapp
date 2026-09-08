@@ -31,7 +31,13 @@ function resolveNavbarLeague(
   return storedLeague;
 }
 
-export default function Navbar({ session }: { session: FantasySession | null }) {
+export default function Navbar({
+  session,
+  hasAccessIdentity,
+}: {
+  session: FantasySession | null;
+  hasAccessIdentity: boolean;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const storedLeague = useSyncExternalStore(
@@ -87,12 +93,14 @@ export default function Navbar({ session }: { session: FantasySession | null }) 
           })}
         </div>
 
-        <a
-          href="/cdn-cgi/access/logout"
-          className="ml-auto shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-        >
-          Sign out
-        </a>
+        {hasAccessIdentity && (
+          <a
+            href="/cdn-cgi/access/logout"
+            className="ml-auto shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+          >
+            Sign out
+          </a>
+        )}
       </nav>
     </header>
   );
