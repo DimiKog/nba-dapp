@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import SearchablePlayerPicker from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
 import {
   fetchLeaguePlayerExplorer,
@@ -32,7 +33,6 @@ export default function PlayerComparison() {
   const [selectedIds, setSelectedIds] = useState<string[]>(initialIds);
   const [payload, setPayload] = useState<LeaguePlayerExplorer | null>(null);
   const [statsView, setStatsView] = useState<StatsView>("season");
-  const [candidateId, setCandidateId] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,10 +61,31 @@ export default function PlayerComparison() {
       .filter((player): player is FantasyPlayerPerformance => Boolean(player)),
     [payload, selectedIds],
   );
-  const availablePlayers = useMemo(
+  const availableOptions = useMemo(
     () => [...(payload?.players ?? [])]
       .filter((player) => !selectedIds.includes(playerKey(player)))
-      .sort((a, b) => a.name.localeCompare(b.name)),
+      .sort((a, b) => {
+        const freeA = playerAvailability(a) === "free_agent" ? 1 : 0;
+        const freeB = playerAvailability(b) === "free_agent" ? 1 : 0;
+        if (freeA !== freeB) return freeA - freeB;
+        const groupA = freeA
+          ? "Free agents"
+          : a.fantasy_team?.name ?? "Rostered";
+        const groupB = freeB
+          ? "Free agents"
+          : b.fantasy_team?.name ?? "Rostered";
+        return groupA.localeCompare(groupB) || a.name.localeCompare(b.name);
+      })
+      .map((player) => ({
+        id: playerKey(player),
+        name: player.name,
+        meta: [availabilityLabel(player), player.position || "—", player.nba_team_short || player.nba_team]
+          .filter(Boolean)
+          .join(" · "),
+        group: playerAvailability(player) === "free_agent"
+          ? "Free agents"
+          : player.fantasy_team?.name ?? "Rostered",
+      })),
     [payload, selectedIds],
   );
   const categories = useMemo(
@@ -79,10 +100,9 @@ export default function PlayerComparison() {
     router.replace(comparisonHref(league, next), { scroll: false });
   }
 
-  function addPlayer() {
-    if (!candidateId || selectedIds.length >= 4) return;
-    updateSelection([...selectedIds, candidateId]);
-    setCandidateId("");
+  function addPlayer(id: string) {
+    if (!id || selectedIds.length >= 4) return;
+    updateSelection([...selectedIds, id]);
   }
 
   function changeLeague(next: LeagueSlug) {
@@ -92,7 +112,6 @@ export default function PlayerComparison() {
     setLeague(next);
     setPayload(null);
     setSelectedIds([]);
-    setCandidateId("");
     router.replace(comparisonHref(next, []), { scroll: false });
   }
 
@@ -131,30 +150,18 @@ export default function PlayerComparison() {
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <label className="min-w-0 flex-1">
-            <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Add player</span>
-            <select
-              value={candidateId}
-              onChange={(event) => setCandidateId(event.target.value)}
+          <div className="min-w-0 flex-1">
+            <SearchablePlayerPicker
+              label="Add player"
+              helper={selectedIds.length >= 4 ? "Comparison is full (4/4)" : `Search ${league === "ldl" ? "LDL" : "BδB"}`}
+              placeholder={`Search ${league === "ldl" ? "LDL" : "BδB"} players…`}
+              value=""
+              options={availableOptions}
               disabled={selectedIds.length >= 4 || loading}
-              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option value="">Choose from {league === "ldl" ? "LDL" : "BδB"}…</option>
-              {availablePlayers.map((player) => (
-                <option key={playerKey(player)} value={playerKey(player)}>
-                  {player.name} · {availabilityLabel(player)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={addPlayer}
-            disabled={!candidateId || selectedIds.length >= 4}
-            className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
-          >
-            Add to comparison
-          </button>
+              emptyLabel="No matching players left to add"
+              onChange={addPlayer}
+            />
+          </div>
           <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
             <ViewButton active={statsView === "season"} onClick={() => setStatsView("season")}>
               Season

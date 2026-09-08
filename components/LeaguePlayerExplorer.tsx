@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   fetchFantasyWatchlist,
   fetchLeaguePlayerExplorer,
@@ -10,6 +11,15 @@ import {
   type FantasyPlayerStats,
   type LeaguePlayerExplorer as ExplorerPayload,
 } from "@/lib/api";
+import {
+  getServerLeagueSnapshot,
+  getStoredLeagueSnapshot,
+  leagueLabel,
+  resolveClientLeague,
+  storeLeague,
+  subscribeLeagueStore,
+  type LeagueSlug,
+} from "@/lib/leagues";
 import TeamLogo from "@/components/TeamLogo";
 import InjuryFlag from "@/components/InjuryFlag";
 import {
@@ -20,7 +30,6 @@ import {
   type FantasyCategoryKey,
 } from "@/lib/fantasyCategories";
 
-type LeagueSlug = "ldl" | "bdb";
 type StatsView = "season" | "window";
 type Availability = "all" | "free_agent" | "rostered";
 type FreeAgentScope = "ranked" | "current_or_recent" | "all_known";
@@ -28,9 +37,18 @@ type Direction = "asc" | "desc";
 type SortKey = "rank" | "name" | "fantasy_team" | "salary" | FantasyCategoryKey;
 
 const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
+const PAGE_SIZE = 40;
 
 export default function LeaguePlayerExplorer() {
-  const [league, setLeague] = useState<LeagueSlug>("ldl");
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlLeague = searchParams.get("league");
+  const storedLeague = useSyncExternalStore(
+    subscribeLeagueStore,
+    getStoredLeagueSnapshot,
+    getServerLeagueSnapshot,
+  );
+  const league = resolveClientLeague(urlLeague, storedLeague);
   const [payload, setPayload] = useState<ExplorerPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +66,26 @@ export default function LeaguePlayerExplorer() {
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
   const [watchPending, setWatchPending] = useState<number | null>(null);
   const [watchError, setWatchError] = useState<string | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
+  const [filterLeague, setFilterLeague] = useState(league);
+
+  if (league !== filterLeague) {
+    setFilterLeague(league);
+    setLoading(true);
+    setError(null);
+    setPayload(null);
+    setQuery("");
+    setTeam("all");
+    setAvailability("all");
+    setFreeAgentScope("current_or_recent");
+    setPosition("all");
+    setStatus("all");
+    setSelectedId("");
+    setComparisonIds([]);
+    setWatchedIds(new Set());
+    setWatchError(null);
+    setVisibleLimit(PAGE_SIZE);
+  }
 
   useEffect(() => {
     let active = true;
@@ -66,7 +104,7 @@ export default function LeaguePlayerExplorer() {
         setSelectedId(playerKey(first));
       })
       .catch(() => {
-        if (active) setError(`Could not load ${league === "ldl" ? "LDL" : "BδB"} players.`);
+        if (active) setError(`Could not load ${leagueLabel(league)} players.`);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -77,21 +115,25 @@ export default function LeaguePlayerExplorer() {
     };
   }, [league]);
 
+  useEffect(() => {
+    storeLeague(league);
+    if (urlLeague !== league) {
+      router.replace(`/players?league=${league}`, { scroll: false });
+    }
+  }, [league, router, urlLeague]);
+
   function changeLeague(next: LeagueSlug) {
     if (next === league) return;
-    setLoading(true);
-    setError(null);
-    setPayload(null);
-    setTeam("all");
-    setAvailability("all");
-    setFreeAgentScope("current_or_recent");
-    setPosition("all");
-    setStatus("all");
-    setSelectedId("");
-    setComparisonIds([]);
-    setWatchedIds(new Set());
-    setWatchError(null);
-    setLeague(next);
+    router.replace(`/players?league=${next}`, { scroll: false });
+  }
+
+  const filterKey = [
+    query, team, availability, freeAgentScope, position, status, sortKey, direction, statsView,
+  ].join("|");
+  const [limitKey, setLimitKey] = useState(filterKey);
+  if (filterKey !== limitKey) {
+    setLimitKey(filterKey);
+    setVisibleLimit(PAGE_SIZE);
   }
 
   const positions = useMemo(() => {
@@ -133,6 +175,8 @@ export default function LeaguePlayerExplorer() {
     () => resolveFantasyCategories(payload?.categories ?? []),
     [payload],
   );
+  const visiblePlayers = ordered.slice(0, visibleLimit);
+  const remainingPlayers = ordered.length - visiblePlayers.length;
 
   const selected = ordered.find((player) => playerKey(player) === selectedId)
     ?? ordered[0]
@@ -335,9 +379,34 @@ export default function LeaguePlayerExplorer() {
                 <h2 className="font-bold text-slate-950 dark:text-white">{payload.league.name} player rankings</h2>
                 <p className="text-xs text-slate-500">Select a row for contract and injury details.</p>
               </div>
-              <p className="text-xs font-semibold text-slate-500">{ordered.length} results</p>
+              <p className="text-xs font-semibold text-slate-500">
+                {ordered.length === 0
+                  ? "0 results"
+                  : `Showing ${visiblePlayers.length} of ${ordered.length}`}
+              </p>
             </div>
-            <div className="max-w-full overflow-x-auto">
+
+            <div className="space-y-3 p-3 md:hidden">
+              {visiblePlayers.map((player) => (
+                <ExplorerMobileCard
+                  key={`${player.fantasy_team?.id}-${playerKey(player)}`}
+                  player={player}
+                  league={league}
+                  statsView={statsView}
+                  categories={categoryColumns}
+                  active={playerKey(player) === playerKey(selected)}
+                  compared={comparisonIds.includes(playerKey(player))}
+                  comparisonFull={!comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
+                  watched={Boolean(player.nba_id && watchedIds.has(player.nba_id))}
+                  watchPending={watchPending === player.nba_id}
+                  onSelect={() => setSelectedId(playerKey(player))}
+                  onCompare={() => toggleComparison(player)}
+                  onWatch={() => watchPlayer(player)}
+                />
+              ))}
+            </div>
+
+            <div className="hidden max-w-full overflow-x-auto md:block">
               <table className="min-w-[1390px] w-full text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
@@ -363,7 +432,7 @@ export default function LeaguePlayerExplorer() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {ordered.map((player) => {
+                  {visiblePlayers.map((player) => {
                     const stats = statsFor(player, statsView);
                     const active = playerKey(player) === playerKey(selected);
                     return (
@@ -449,6 +518,17 @@ export default function LeaguePlayerExplorer() {
             {ordered.length === 0 && (
               <div className="p-10 text-center text-sm text-slate-500">No players match these filters.</div>
             )}
+            {remainingPlayers > 0 && (
+              <div className="border-t border-slate-200 p-4 text-center dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((current) => current + PAGE_SIZE)}
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  Show {Math.min(PAGE_SIZE, remainingPlayers)} more · {remainingPlayers} remaining
+                </button>
+              </div>
+            )}
           </section>
 
           {comparisonPlayers.length > 0 && (
@@ -461,6 +541,125 @@ export default function LeaguePlayerExplorer() {
         </>
       )}
     </main>
+  );
+}
+
+function ExplorerMobileCard({
+  player,
+  league,
+  statsView,
+  categories,
+  active,
+  compared,
+  comparisonFull,
+  watched,
+  watchPending,
+  onSelect,
+  onCompare,
+  onWatch,
+}: {
+  player: FantasyPlayerPerformance;
+  league: LeagueSlug;
+  statsView: StatsView;
+  categories: FantasyCategory[];
+  active: boolean;
+  compared: boolean;
+  comparisonFull: boolean;
+  watched: boolean;
+  watchPending: boolean;
+  onSelect: () => void;
+  onCompare: () => void;
+  onWatch: () => void;
+}) {
+  const stats = statsFor(player, statsView);
+  const topCategories = categories.slice(0, 3);
+  return (
+    <article
+      onClick={onSelect}
+      className={`rounded-xl border p-3 transition ${
+        active
+          ? "border-blue-300 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/30"
+          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <PlayerPhoto player={player} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="truncate font-black text-slate-950 dark:text-white">{player.name}</p>
+                {playerAvailability(player) === "free_agent" && <FreeAgentBadge />}
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                #{player.impact_rank ?? "—"}
+                {player.position ? ` · ${player.position}` : ""}
+                {player.nba_team ? ` · ${player.nba_team}` : ""}
+              </p>
+            </div>
+            <p className="shrink-0 text-sm font-bold tabular-nums text-blue-700 dark:text-blue-400">
+              {player.salary_2026_27 ?? "$0"}
+            </p>
+          </div>
+          <div className="mt-2">
+            <FantasyAvailability league={league} player={player} compact />
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            {topCategories.map((category) => (
+              <div
+                key={category.key}
+                className="rounded-lg bg-slate-50 px-2 py-1.5 text-center dark:bg-slate-800/70"
+              >
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                  {category.label}
+                </p>
+                <p className="mt-0.5 text-sm font-black tabular-nums text-slate-900 dark:text-white">
+                  {stats?.games ? formatFantasyStat(stats, category) : "—"}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCompare();
+              }}
+              disabled={comparisonFull}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
+                compared
+                  ? "bg-blue-600 text-white"
+                  : "bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
+              {compared ? "Selected" : "Compare"}
+            </button>
+            {watched ? (
+              <Link
+                href="/watchlist"
+                onClick={(event) => event.stopPropagation()}
+                className="rounded-lg bg-emerald-100 px-3 py-1.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+              >
+                Watching
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onWatch();
+                }}
+                disabled={!player.nba_id || watchPending}
+                className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
+              >
+                {watchPending ? "Saving…" : "+ Watch"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 

@@ -238,27 +238,74 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, o
   maximum?: number;
   onChange: (selected: number[]) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const matches = (label: string) => !needle || label.toLowerCase().includes(needle);
+    const pinned = items.filter((item) => selectedSet.has(item.id));
+    const rest = items.filter((item) => !selectedSet.has(item.id) && matches(item.label));
+    return [...pinned, ...rest];
+  }, [items, query, selectedSet]);
+  const showFilter = items.length > 5;
+  const hiddenByFilter = Math.max(
+    items.filter((item) => !selectedSet.has(item.id)).length - visible.filter((item) => !selectedSet.has(item.id)).length,
+    0,
+  );
+
   return (
     <fieldset>
       <legend className="text-xs font-bold uppercase tracking-wide text-slate-500">{title}</legend>
-      <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+      {showFilter && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter list…"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-blue-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+          />
+          {selected.length > 0 && (
+            <span className="shrink-0 text-[11px] font-semibold text-slate-400">
+              {selected.length} selected
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
         {items.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">No eligible assets</p>}
-        {items.map((item) => {
-          const checked = selected.includes(item.id);
+        {items.length > 0 && visible.length === 0 && (
+          <p className="px-2 py-1 text-xs text-slate-400">No matches for “{query.trim()}”</p>
+        )}
+        {visible.map((item) => {
+          const checked = selectedSet.has(item.id);
           const limitReached = Boolean(maximum && selected.length >= maximum && !checked);
+          const filteredOutButSelected = checked && query.trim() && !item.label.toLowerCase().includes(query.trim().toLowerCase());
           return (
-            <label key={item.id} className="flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-white dark:text-slate-200 dark:hover:bg-slate-700">
+            <label
+              key={item.id}
+              className={`flex items-center gap-2 rounded px-2 py-1 text-sm text-slate-700 hover:bg-white dark:text-slate-200 dark:hover:bg-slate-700 ${
+                filteredOutButSelected ? "bg-blue-50 dark:bg-blue-950/30" : ""
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={checked}
                 disabled={disabled.has(item.id) || limitReached}
                 onChange={() => onChange(checked ? selected.filter((id) => id !== item.id) : [...selected, item.id])}
               />
-              {item.label}
+              <span className="min-w-0 truncate">{item.label}</span>
             </label>
           );
         })}
       </div>
+      {showFilter && query.trim() && (
+        <p className="mt-1 text-[11px] text-slate-400">
+          Showing {visible.length} of {items.length}
+          {hiddenByFilter > 0 ? ` · ${hiddenByFilter} hidden by filter` : ""}
+          {selected.length > 0 ? " · selected stay visible" : ""}
+        </p>
+      )}
     </fieldset>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   fetchFantasyWatchlist,
   fetchFreeAgentRadar,
@@ -15,17 +16,19 @@ import {
   formatFantasyStat,
   resolveFantasyCategories,
 } from "@/lib/fantasyCategories";
-
-type LeagueSlug = "ldl" | "bdb";
+import { storeLeague, type LeagueSlug } from "@/lib/leagues";
 
 export default function WatchlistRadar({
+  initialLeague,
   initialRadar,
   initialWatchlist,
 }: {
+  initialLeague: LeagueSlug;
   initialRadar: FantasyFreeAgentRadar | null;
   initialWatchlist: FantasyWatchlist | null;
 }) {
-  const [league, setLeague] = useState<LeagueSlug>("ldl");
+  const router = useRouter();
+  const [league, setLeague] = useState<LeagueSlug>(initialLeague);
   const [radar, setRadar] = useState<FantasyFreeAgentRadar | null>(initialRadar);
   const [watchlist, setWatchlist] = useState<FantasyWatchlist | null>(initialWatchlist);
   const [query, setQuery] = useState("");
@@ -34,6 +37,10 @@ export default function WatchlistRadar({
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(30);
+
+  useEffect(() => {
+    storeLeague(league);
+  }, [league]);
 
   const watchedIds = useMemo(
     () => new Set(watchlist?.entries.map((entry) => entry.nba_player_id) ?? []),
@@ -73,6 +80,7 @@ export default function WatchlistRadar({
     setQuery("");
     setPosition("all");
     setVisibleLimit(30);
+    router.replace(`/watchlist?league=${next}`, { scroll: false });
     const [nextRadar, nextWatchlist] = await Promise.all([
       fetchFreeAgentRadar(next).catch(() => null),
       fetchFantasyWatchlist(next).catch(() => null),

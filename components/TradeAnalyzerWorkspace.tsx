@@ -4,6 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import SearchablePlayerPicker, {
+  type SearchablePlayerOption,
+} from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
@@ -673,14 +676,23 @@ function CompactPlayerSelect({ label, value, players, onChange }: {
   players: FantasyPlayerPerformance[];
   onChange: (value: string) => void;
 }) {
+  const options = useMemo(
+    () => players.map((player) => ({
+      id: String(player.nba_id),
+      name: player.name,
+      meta: [player.position || "—", player.nba_team_short || player.nba_team].filter(Boolean).join(" · "),
+    })),
+    [players],
+  );
   return (
-    <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
-      {label}
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-800">
-        <option value="">None</option>
-        {players.map((player) => <option key={player.nba_id} value={String(player.nba_id)}>{player.name}</option>)}
-      </select>
-    </label>
+    <SearchablePlayerPicker
+      label={label}
+      placeholder="Search or leave empty…"
+      value={value}
+      options={options}
+      emptyLabel="No matching players"
+      onChange={onChange}
+    />
   );
 }
 
@@ -709,28 +721,45 @@ function PlayerSelector({ label, helper, value, players, selected, grouped = fal
   grouped?: boolean;
   onChange: (value: string) => void;
 }) {
-  const teams = grouped ? groupPlayers(players) : null;
+  const options = useMemo(
+    () => buildPickerOptions(players, grouped),
+    [players, grouped],
+  );
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <label>
-        <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{label}</span>
-        <span className="ml-2 text-xs text-slate-400">{helper}</span>
-        <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-          <option value="">Select player…</option>
-          {teams ? teams.map(([team, entries]) => (
-            <optgroup key={team} label={team}>
-              {entries.map((player) => <PlayerOption key={player.nba_id} player={player} showTeam />)}
-            </optgroup>
-          )) : players.map((player) => <PlayerOption key={player.nba_id} player={player} />)}
-        </select>
-      </label>
+      <SearchablePlayerPicker
+        label={label}
+        helper={helper}
+        placeholder="Search players…"
+        value={value}
+        options={options}
+        onChange={onChange}
+      />
       {selected ? <SelectedPlayer player={selected} /> : <p className="mt-4 rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400 dark:bg-slate-800/60">No player selected</p>}
     </div>
   );
 }
 
-function PlayerOption({ player, showTeam = false }: { player: FantasyPlayerPerformance; showTeam?: boolean }) {
-  return <option value={String(player.nba_id)}>{player.name} · {player.position || "—"}{showTeam ? ` · ${player.fantasy_team?.name ?? "Unknown team"}` : ""}</option>;
+function buildPickerOptions(
+  players: FantasyPlayerPerformance[],
+  grouped: boolean,
+): SearchablePlayerOption[] {
+  const sorted = grouped
+    ? [...players].sort((a, b) => {
+        const teamCompare = (a.fantasy_team?.name ?? "Unknown team")
+          .localeCompare(b.fantasy_team?.name ?? "Unknown team");
+        return teamCompare || a.name.localeCompare(b.name);
+      })
+    : players;
+
+  return sorted.map((player) => ({
+    id: String(player.nba_id),
+    name: player.name,
+    meta: [player.position || "—", player.nba_team_short || player.nba_team, player.salary_2026_27]
+      .filter(Boolean)
+      .join(" · "),
+    group: grouped ? (player.fantasy_team?.name ?? "Unknown team") : undefined,
+  }));
 }
 
 function SelectedPlayer({ player }: { player: FantasyPlayerPerformance }) {
@@ -1817,15 +1846,6 @@ function MethodNote({ children }: { children: React.ReactNode }) {
 
 function LoadingResult() {
   return <div className="mt-6 h-72 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />;
-}
-
-function groupPlayers(players: FantasyPlayerPerformance[]) {
-  const grouped = new Map<string, FantasyPlayerPerformance[]>();
-  for (const player of players) {
-    const name = player.fantasy_team?.name ?? "Unknown team";
-    grouped.set(name, [...(grouped.get(name) ?? []), player]);
-  }
-  return [...grouped.entries()];
 }
 
 function injuryText(player: FantasyPlayerPerformance) {
