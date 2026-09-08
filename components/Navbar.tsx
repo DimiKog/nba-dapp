@@ -1,19 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useSyncExternalStore } from "react";
+import {
+  getServerLeagueSnapshot,
+  getStoredLeagueSnapshot,
+  storeLeague,
+  subscribeLeagueStore,
+  type LeagueSlug,
+} from "@/lib/leagues";
 
-const links = [
-  { href: "/players", label: "Player Explorer" },
-  { href: "/watchlist", label: "Watchlist" },
-  { href: "/draft-assets", label: "Draft Assets" },
-  { href: "/commissioner/trades", label: "Commissioner" },
-  { href: "/fantasy/ldl", label: "LDL" },
-  { href: "/fantasy/bdb", label: "BδB" },
-];
+type NavLink = {
+  href: string;
+  path: string;
+  label: string;
+};
+
+function resolveNavbarLeague(
+  pathname: string,
+  leagueParam: string | null,
+  storedLeague: LeagueSlug,
+): LeagueSlug {
+  if (leagueParam === "ldl" || leagueParam === "bdb") return leagueParam;
+  const fantasyMatch = pathname.match(/^\/fantasy\/(ldl|bdb)(?:\/|$)/);
+  if (fantasyMatch?.[1] === "ldl" || fantasyMatch?.[1] === "bdb") {
+    return fantasyMatch[1];
+  }
+  return storedLeague;
+}
 
 export default function Navbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const storedLeague = useSyncExternalStore(
+    subscribeLeagueStore,
+    getStoredLeagueSnapshot,
+    getServerLeagueSnapshot,
+  );
+  const league = resolveNavbarLeague(pathname, searchParams.get("league"), storedLeague);
+
+  useEffect(() => {
+    storeLeague(league);
+  }, [league]);
+
+  const links: NavLink[] = [
+    { href: `/players?league=${league}`, path: "/players", label: "Player Explorer" },
+    { href: `/watchlist?league=${league}`, path: "/watchlist", label: "Watchlist" },
+    { href: `/draft-assets?league=${league}`, path: "/draft-assets", label: "Draft Assets" },
+    { href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" },
+    { href: "/fantasy/ldl/my-team", path: "/fantasy/ldl", label: "My LDL" },
+    { href: "/fantasy/bdb/my-team", path: "/fantasy/bdb", label: "My BδB" },
+  ];
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-950/90 backdrop-blur">
@@ -23,11 +61,11 @@ export default function Navbar() {
         </Link>
 
         <div className="order-3 flex w-full items-center gap-1 overflow-x-auto pr-8 shadow-[inset_-16px_0_12px_-12px_rgba(15,23,42,0.18)] sm:order-none sm:ml-2 sm:w-auto sm:overflow-visible sm:pr-0 sm:shadow-none dark:shadow-[inset_-16px_0_12px_-12px_rgba(255,255,255,0.12)]">
-          {links.map(({ href, label }) => {
-            const active = pathname.startsWith(href);
+          {links.map(({ href, path, label }) => {
+            const active = pathname === path || pathname.startsWith(`${path}/`);
             return (
               <Link
-                key={href}
+                key={path}
                 href={href}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   active

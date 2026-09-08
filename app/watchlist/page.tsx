@@ -3,17 +3,28 @@ import {
   fetchFantasyWatchlist,
   fetchFreeAgentRadar,
 } from "@/lib/api";
+import { parseLeagueSlug } from "@/lib/leagues";
 
-export default async function WatchlistPage() {
-  const [ldlRadar, ldlWatchlist] = await Promise.all([
-    fetchFreeAgentRadar("ldl").catch(() => null),
-    fetchFantasyWatchlist("ldl").catch(() => null),
+type PageSearchParams = Promise<{ league?: string }>;
+
+export default async function WatchlistPage({
+  searchParams,
+}: {
+  searchParams: PageSearchParams;
+}) {
+  const params = await searchParams;
+  const league = parseLeagueSlug(params.league);
+  const [radar, watchlist] = await Promise.all([
+    fetchFreeAgentRadar(league).catch(() => null),
+    fetchFantasyWatchlist(league).catch(() => null),
   ]);
 
   return (
     <WatchlistRadar
-      initialRadar={ldlRadar}
-      initialWatchlist={ldlWatchlist}
+      key={league}
+      initialLeague={league}
+      initialRadar={radar}
+      initialWatchlist={watchlist}
     />
   );
 }

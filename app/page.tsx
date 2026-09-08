@@ -150,7 +150,7 @@ function HomeRadarPanels({
           <HomeRadarCard
             key={radar?.league.slug ?? index}
             radar={radar}
-            fallbackLeague={index === 0 ? "LDL" : "BδB"}
+            fallbackLeague={index === 0 ? "ldl" : "bdb"}
           />
         ))}
       </div>
@@ -163,15 +163,17 @@ function HomeRadarCard({
   fallbackLeague,
 }: {
   radar: FantasyFreeAgentRadar | null;
-  fallbackLeague: string;
+  fallbackLeague: "ldl" | "bdb";
 }) {
+  const league = (radar?.league.slug === "bdb" ? "bdb" : fallbackLeague) as "ldl" | "bdb";
+  const leagueName = radar?.league.name ?? (fallbackLeague === "ldl" ? "LDL" : "BδB");
   const leaders = radar?.players.filter((player) => player.trend_rank != null).slice(0, 3) ?? [];
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 dark:border-slate-800">
         <div>
           <h3 className="font-black text-slate-950 dark:text-white">
-            {radar?.league.name ?? fallbackLeague} radar
+            {leagueName} radar
           </h3>
           <p className="text-xs text-slate-500">{radar?.categories.length ?? "—"} categories · last 7 days</p>
         </div>
@@ -183,8 +185,15 @@ function HomeRadarCard({
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {leaders.map((player) => {
             const src = photoUrl(player.photo, player.nba_id);
+            const href = player.player_id
+              ? `/players/${player.player_id}?league=${league}&from=home`
+              : `/watchlist?league=${league}`;
             return (
-              <div key={player.nba_id} className="flex items-center gap-3 px-4 py-3">
+              <Link
+                key={player.nba_id}
+                href={href}
+                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/60"
+              >
                 {src ? (
                   <img src={src} alt="" className="h-9 w-9 rounded-full bg-slate-100 object-cover dark:bg-slate-800" />
                 ) : (
@@ -193,7 +202,7 @@ function HomeRadarCard({
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-slate-900 dark:text-white">
+                  <p className="truncate text-sm font-bold text-slate-900 transition-colors group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
                     #{player.trend_rank} {player.name}
                   </p>
                   <p className="truncate text-xs text-slate-500">
@@ -203,7 +212,7 @@ function HomeRadarCard({
                 <p className="text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
                   {player.trend_score != null && player.trend_score > 0 ? "+" : ""}{player.trend_score}
                 </p>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -253,7 +262,10 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
   const leagueName = performance?.league.name ?? matchup?.league.name ?? dashboard.leagueName;
   const teamName = performance?.team.name ?? matchup?.league.personal_team_name ?? dashboard.teamName;
   const teamId = performance?.team.id ?? matchup?.team_id;
-  const rosterHref = teamId ? `/fantasy/${league}/roster/${teamId}` : `/fantasy/${league}`;
+  const rosterHref = teamId ? `/fantasy/${league}/roster/${encodeURIComponent(teamId)}` : `/fantasy/${league}`;
+  const tradeHref = teamId
+    ? `/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`
+    : null;
   const analysisHref = `${rosterHref}#team-analysis`;
 
   if (!performance && !matchup) {
@@ -285,12 +297,22 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
           </span>
           <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{teamName}</h3>
         </div>
-        <Link
-          href={rosterHref}
-          className="shrink-0 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-        >
-          Open roster →
-        </Link>
+        <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+          <Link
+            href={rosterHref}
+            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+          >
+            Open roster →
+          </Link>
+          {tradeHref && (
+            <Link
+              href={tradeHref}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700"
+            >
+              Analyze trade
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 divide-x divide-blue-100 border-b border-blue-100 bg-white/60 dark:divide-blue-900/70 dark:border-blue-900/70 dark:bg-slate-950/20">
