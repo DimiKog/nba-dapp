@@ -1,47 +1,10 @@
 import "server-only";
 
+import type { DraftAssetsResponse } from "@/lib/draftAssetTypes";
+
+export type { DraftAsset, DraftAssetsResponse } from "@/lib/draftAssetTypes";
+
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
-
-export type DraftAsset = {
-  id: number;
-  league_slug: "ldl" | "bdb";
-  draft_year: number;
-  round: number;
-  original_franchise: { id: string; name: string };
-  current_owner: { id: string; name: string } | null;
-  ownership_state: "owned" | "conditional";
-  status: "active" | "consumed" | "cancelled" | "archived";
-  optimistic_version: number;
-  eligibility: {
-    mode: "enabled" | "draft_year_only" | "disabled";
-    eligible: boolean;
-    reason: string;
-    opens_at: string | null;
-    closes_at: string | null;
-    evaluated_at: string;
-  };
-  conditional_obligations: Array<{
-    obligation_key: string;
-    draft_year: number;
-    round: number;
-    condition_type: "best_of" | "worst_of";
-    beneficiary_franchise_id: string;
-    beneficiary_name: string;
-    status: "unresolved" | "resolved" | "cancelled";
-  }>;
-  valuation: null;
-};
-
-export type DraftAssetsResponse = {
-  league_slug: "ldl" | "bdb";
-  rule_set: {
-    fantasy_season: string;
-    version: number;
-    activated_at: string;
-  };
-  count: number;
-  assets: DraftAsset[];
-};
 
 export function validDraftLeague(value: string): value is "ldl" | "bdb" {
   return value === "ldl" || value === "bdb";

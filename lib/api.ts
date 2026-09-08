@@ -754,6 +754,51 @@ export interface FantasyAutomaticTradePackageSuggestions {
   };
 }
 
+export interface ResolvedTradePickAsset {
+  type: "draft_pick";
+  pick_id: number;
+  from_team: "selected_team" | "counterparty_team";
+  to_team: "selected_team" | "counterparty_team";
+  draft_year: number;
+  round: number;
+  original_franchise: { id: string; name: string } | null;
+  current_owner: { id: string; name: string } | null;
+  eligibility: { eligible: boolean; reason?: string };
+  valuation: {
+    status: "shadow";
+    compensation_band: { conservative: DraftPickValueTier; optimistic: DraftPickValueTier };
+  } | null;
+  valuation_unavailable_reason?: string | null;
+}
+
+export interface ExplicitPickSideAssessment {
+  status: "no_pick_received" | "valuation_unavailable" | "player_gap_unavailable" | "additional_future_value" | "assessed";
+  incoming_assets: ResolvedTradePickAsset[];
+  combined_valuation: {
+    compensation_band: { conservative: DraftPickValueTier; optimistic: DraftPickValueTier };
+    [key: string]: unknown;
+  } | null;
+  player_gap: TradeSuggestionPickCompensation["player_gap"];
+  assessment: {
+    sufficiency: "fully_compensated" | "minimum_compensation_met" | "plausible_only" | "insufficient" | "unavailable" | "not_required";
+    reason: string;
+  } | null;
+}
+
+export interface FantasyTradePackageAnalysis extends AutomaticTradePackageSuggestion {
+  package: AutomaticTradePackageSuggestion["package"] & {
+    assets: ResolvedTradePickAsset[];
+  };
+  pick_value?: {
+    status: "not_present" | "shadow";
+    affects_recommendations: false;
+    recommendation_effect: "none_shadow_only";
+    automatic_selection: false;
+    selected_team: ExplicitPickSideAssessment;
+    counterparty_team: ExplicitPickSideAssessment;
+  };
+}
+
 export type FantasyCategoryVerdict =
   | "strength"
   | "neutral"
@@ -1249,6 +1294,47 @@ export async function fetchAutomaticOneForTwoSuggestions(
   if (!res.ok) {
     const payload = await res.json().catch(() => null) as { error?: string } | null;
     throw new ApiResponseError(payload?.error ?? "Automatic one-for-two suggestions failed", res.status);
+  }
+  return res.json();
+}
+
+export async function fetchTradePackageAnalysis(
+  league: "ldl" | "bdb",
+  request: {
+    selected_team_id: string;
+    counterparty_team_id: string;
+    selected_team_sends: number[];
+    counterparty_team_sends: number[];
+    drops: { selected_team: number | null; counterparty_team: number | null };
+    assets: Array<{ type: "draft_pick"; pick_id: number; from_team: "selected_team" | "counterparty_team" }>;
+    basis: TradeBasis;
+    window_days?: number;
+  },
+): Promise<FantasyTradePackageAnalysis> {
+  const res = await fetch(`/api/fantasy/${league}/trade-package-analysis`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...request, intent: "balanced", window_days: request.window_days ?? 14 }),
+  });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Manual trade-package analysis failed", res.status);
+  }
+  const payload = await res.json() as FantasyTradePackageAnalysis;
+  if (request.assets.length > 0 && !payload.pick_value) {
+    throw new ApiResponseError("The backend did not assess the selected picks; deploy the canonical pick-analysis release before using them.", 503);
+  }
+  return payload;
+}
+
+export async function fetchTradeDraftAssets(
+  league: "ldl" | "bdb",
+): Promise<import("@/lib/draftAssetTypes").DraftAssetsResponse> {
+  const res = await fetch(`/api/fantasy/${league}/draft-assets?eligibility=eligible`, { cache: "no-store" });
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Draft assets could not be loaded", res.status);
   }
   return res.json();
 }
