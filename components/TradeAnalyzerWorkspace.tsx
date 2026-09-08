@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
@@ -11,6 +11,8 @@ import {
   fetchBalancedTradeSuggestions,
   fetchFantasyTradeAnalysis,
   fetchFantasyTradePartners,
+  fetchTradeDraftAssets,
+  fetchTradePackageAnalysis,
   photoUrl,
   type AutomaticTradePackageSuggestion,
   type BalancedTradeSuggestion,
@@ -19,6 +21,7 @@ import {
   type FantasyPlayerPerformance,
   type FantasyTradeAnalysis,
   type FantasyTradePartners,
+  type FantasyTradePackageAnalysis,
   type TradeBasis,
   type TradeCapResult,
   type TradeCategoryChange,
@@ -32,6 +35,7 @@ import {
   type TradeTeamResult,
   type TradeWarning,
 } from "@/lib/api";
+import type { DraftAsset } from "@/lib/draftAssetTypes";
 
 type LeagueSlug = "ldl" | "bdb";
 type Mode = "suggestions" | "analyze" | "partners";
@@ -63,11 +67,20 @@ export default function TradeAnalyzerWorkspace({
   const [basis, setBasis] = useState<TradeBasis>(initialState.basis);
   const [outgoing, setOutgoing] = useState(initialState.outgoing);
   const [incoming, setIncoming] = useState(initialState.incoming);
+  const [outgoingTwo, setOutgoingTwo] = useState("");
+  const [incomingTwo, setIncomingTwo] = useState("");
+  const [selectedDrop, setSelectedDrop] = useState("");
+  const [counterpartyDrop, setCounterpartyDrop] = useState("");
+  const [selectedPicks, setSelectedPicks] = useState<number[]>([]);
+  const [counterpartyPicks, setCounterpartyPicks] = useState<number[]>([]);
+  const [draftAssets, setDraftAssets] = useState<DraftAsset[]>([]);
+  const [draftAssetsError, setDraftAssetsError] = useState<string | null>(null);
   const [partnerTeam, setPartnerTeam] = useState(initialState.partner);
   const [analysis, setAnalysis] = useState<FantasyTradeAnalysis | null>(null);
   const [partners, setPartners] = useState<FantasyTradePartners | null>(null);
   const [suggestions, setSuggestions] = useState<FantasyBalancedTradeSuggestions | null>(null);
   const [packageSuggestions, setPackageSuggestions] = useState<FantasyAutomaticTradePackageSuggestions | null>(null);
+  const [packageAnalysis, setPackageAnalysis] = useState<FantasyTradePackageAnalysis | null>(null);
   const [suggestionShape, setSuggestionShape] = useState<SuggestionShape>("one_for_one");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +107,30 @@ export default function TradeAnalyzerWorkspace({
   );
   const outgoingPlayer = selectableOwn.find((player) => String(player.nba_id) === outgoing) ?? null;
   const incomingPlayer = leaguePlayers.find((player) => String(player.nba_id) === incoming) ?? null;
+  const counterpartyTeamId = incomingPlayer?.fantasy_team?.id ?? partnerTeam;
+  const selectedTeamPicks = useMemo(
+    () => draftAssets.filter((asset) => asset.current_owner?.fantrax_team_external_id === teamId),
+    [draftAssets, teamId],
+  );
+  const counterpartyTeamPicks = useMemo(
+    () => counterpartyTeamId
+      ? draftAssets.filter((asset) => asset.current_owner?.fantrax_team_external_id === counterpartyTeamId)
+      : [],
+    [counterpartyTeamId, draftAssets],
+  );
   const hasRecentGames = leaguePlayers.some((player) => player.window_stats.games > 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTradeDraftAssets(league)
+      .then((payload) => {
+        if (!cancelled) setDraftAssets(payload.assets);
+      })
+      .catch((caught) => {
+        if (!cancelled) setDraftAssetsError(caught instanceof Error ? caught.message : "Draft assets could not be loaded");
+      });
+    return () => { cancelled = true; };
+  }, [league]);
 
   function syncUrl(next: {
     mode?: Mode;
@@ -124,6 +160,7 @@ export default function TradeAnalyzerWorkspace({
     setPartners(null);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setError(null);
     if (next !== "analyze") {
       setIncoming("");
@@ -144,7 +181,10 @@ export default function TradeAnalyzerWorkspace({
     setPartners(null);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setError(null);
+    if (outgoingTwo === value) setOutgoingTwo("");
+    if (selectedDrop === value) setSelectedDrop("");
     syncUrl({ outgoing: value });
     if (mode === "suggestions" && value) {
       void loadSuggestions(value, basis);
@@ -155,9 +195,17 @@ export default function TradeAnalyzerWorkspace({
     requestSequence.current += 1;
     setIncoming(value);
     setAnalysis(null);
+    setPackageAnalysis(null);
     setError(null);
     const selected = leaguePlayers.find((player) => String(player.nba_id) === value);
     const destination = selected?.fantasy_team?.id ?? partnerTeam;
+    if (incomingTwo === value) setIncomingTwo("");
+    if (counterpartyDrop === value) setCounterpartyDrop("");
+    if (destination !== partnerTeam) {
+      setIncomingTwo("");
+      setCounterpartyDrop("");
+      setCounterpartyPicks([]);
+    }
     setPartnerTeam(destination);
     syncUrl({ incoming: value, partner: destination });
   }
@@ -169,6 +217,7 @@ export default function TradeAnalyzerWorkspace({
     setPartners(null);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setError(null);
     syncUrl({ basis: value });
     if (mode === "suggestions" && outgoing) {
@@ -181,6 +230,7 @@ export default function TradeAnalyzerWorkspace({
     setSuggestionShape(next);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setError(null);
     if (outgoing) void loadSuggestions(outgoing, basis, next);
   }
@@ -223,6 +273,7 @@ export default function TradeAnalyzerWorkspace({
     setError(null);
     setAnalysis(null);
     setPartners(null);
+    setPackageAnalysis(null);
     try {
       if (mode === "partners") {
         const payload = await fetchFantasyTradePartners(league, teamId, Number(outgoing), basis);
@@ -238,8 +289,25 @@ export default function TradeAnalyzerWorkspace({
           if (requestSequence.current === requestId) setSuggestions(payload);
         }
       } else {
-        const payload = await fetchFantasyTradeAnalysis(league, teamId, Number(outgoing), Number(incoming), basis);
-        if (requestSequence.current === requestId) setAnalysis(payload);
+        if (!counterpartyTeamId) throw new Error("Select a counterparty player first.");
+        const selectedIds = [Number(outgoing), ...(outgoingTwo ? [Number(outgoingTwo)] : [])];
+        const counterpartyIds = [Number(incoming), ...(incomingTwo ? [Number(incomingTwo)] : [])];
+        const payload = await fetchTradePackageAnalysis(league, {
+          selected_team_id: teamId,
+          counterparty_team_id: counterpartyTeamId,
+          selected_team_sends: selectedIds,
+          counterparty_team_sends: counterpartyIds,
+          drops: {
+            selected_team: selectedDrop ? Number(selectedDrop) : null,
+            counterparty_team: counterpartyDrop ? Number(counterpartyDrop) : null,
+          },
+          assets: [
+            ...selectedPicks.map((pickId) => ({ type: "draft_pick" as const, pick_id: pickId, from_team: "selected_team" as const })),
+            ...counterpartyPicks.map((pickId) => ({ type: "draft_pick" as const, pick_id: pickId, from_team: "counterparty_team" as const })),
+          ],
+          basis,
+        });
+        if (requestSequence.current === requestId) setPackageAnalysis(payload);
       }
     } catch (caught) {
       if (requestSequence.current === requestId) {
@@ -259,6 +327,7 @@ export default function TradeAnalyzerWorkspace({
     setPartnerTeam(suggestion.trade.counterparty_team_id);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setLoading(true);
     setError(null);
     syncUrl({
@@ -301,7 +370,14 @@ export default function TradeAnalyzerWorkspace({
     setPartners(null);
     setSuggestions(null);
     setPackageSuggestions(null);
+    setPackageAnalysis(null);
     setSuggestionShape("one_for_one");
+    setOutgoingTwo("");
+    setIncomingTwo("");
+    setSelectedDrop("");
+    setCounterpartyDrop("");
+    setSelectedPicks([]);
+    setCounterpartyPicks([]);
     setError(null);
     router.replace(`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`, { scroll: false });
   }
@@ -374,6 +450,30 @@ export default function TradeAnalyzerWorkspace({
           )}
         </div>
 
+        {mode === "analyze" && outgoing && incoming && (
+          <ExactPackageBuilder
+            ownPlayers={selectableOwn}
+            counterpartyPlayers={incomingPlayers}
+            outgoing={outgoing}
+            incoming={incoming}
+            outgoingTwo={outgoingTwo}
+            incomingTwo={incomingTwo}
+            selectedDrop={selectedDrop}
+            counterpartyDrop={counterpartyDrop}
+            selectedPicks={selectedPicks}
+            counterpartyPicks={counterpartyPicks}
+            selectedTeamPicks={selectedTeamPicks}
+            counterpartyTeamPicks={counterpartyTeamPicks}
+            draftAssetsError={draftAssetsError}
+            onOutgoingTwo={(value) => { setOutgoingTwo(value); setPackageAnalysis(null); }}
+            onIncomingTwo={(value) => { setIncomingTwo(value); setPackageAnalysis(null); }}
+            onSelectedDrop={(value) => { setSelectedDrop(value); setPackageAnalysis(null); }}
+            onCounterpartyDrop={(value) => { setCounterpartyDrop(value); setPackageAnalysis(null); }}
+            onSelectedPicks={(value) => { setSelectedPicks(value); setPackageAnalysis(null); }}
+            onCounterpartyPicks={(value) => { setCounterpartyPicks(value); setPackageAnalysis(null); }}
+          />
+        )}
+
         {mode === "suggestions" && (
           <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -417,8 +517,179 @@ export default function TradeAnalyzerWorkspace({
       {partners && <PartnerRankingResult payload={partners} onExplore={exploreReturns} />}
       {suggestions && <BalancedSuggestionsResult payload={suggestions} onAnalyze={analyzeSuggestion} />}
       {packageSuggestions && <OneForTwoSuggestionsResult payload={packageSuggestions} />}
+      {packageAnalysis && <ExactPackageResult payload={packageAnalysis} league={league} />}
     </>
   );
+}
+
+function ExactPackageBuilder({
+  ownPlayers,
+  counterpartyPlayers,
+  outgoing,
+  incoming,
+  outgoingTwo,
+  incomingTwo,
+  selectedDrop,
+  counterpartyDrop,
+  selectedPicks,
+  counterpartyPicks,
+  selectedTeamPicks,
+  counterpartyTeamPicks,
+  draftAssetsError,
+  onOutgoingTwo,
+  onIncomingTwo,
+  onSelectedDrop,
+  onCounterpartyDrop,
+  onSelectedPicks,
+  onCounterpartyPicks,
+}: {
+  ownPlayers: FantasyPlayerPerformance[];
+  counterpartyPlayers: FantasyPlayerPerformance[];
+  outgoing: string;
+  incoming: string;
+  outgoingTwo: string;
+  incomingTwo: string;
+  selectedDrop: string;
+  counterpartyDrop: string;
+  selectedPicks: number[];
+  counterpartyPicks: number[];
+  selectedTeamPicks: DraftAsset[];
+  counterpartyTeamPicks: DraftAsset[];
+  draftAssetsError: string | null;
+  onOutgoingTwo: (value: string) => void;
+  onIncomingTwo: (value: string) => void;
+  onSelectedDrop: (value: string) => void;
+  onCounterpartyDrop: (value: string) => void;
+  onSelectedPicks: (value: number[]) => void;
+  onCounterpartyPicks: (value: number[]) => void;
+}) {
+  const ownAvailable = ownPlayers.filter((player) => String(player.nba_id) !== outgoing);
+  const counterpartyAvailable = counterpartyPlayers.filter((player) => String(player.nba_id) !== incoming);
+  const ownDropCandidates = ownAvailable.filter((player) => String(player.nba_id) !== outgoingTwo);
+  const counterpartyDropCandidates = counterpartyAvailable.filter((player) => String(player.nba_id) !== incomingTwo);
+  return (
+    <div className="border-t border-slate-200 bg-blue-50/35 p-4 dark:border-slate-700 dark:bg-blue-950/10">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Exact package builder</p>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Add an optional second player, up to two canonical picks per side, and a roster-completion drop.</p>
+      </div>
+      <div className="mt-4 grid gap-4 xl:grid-cols-2">
+        <PackageInputs
+          title="Your team"
+          secondPlayers={ownAvailable}
+          secondValue={outgoingTwo}
+          dropPlayers={ownDropCandidates}
+          dropValue={selectedDrop}
+          picks={selectedTeamPicks}
+          selectedPicks={selectedPicks}
+          onSecond={onOutgoingTwo}
+          onDrop={onSelectedDrop}
+          onPicks={onSelectedPicks}
+        />
+        <PackageInputs
+          title="Partner team"
+          secondPlayers={counterpartyAvailable}
+          secondValue={incomingTwo}
+          dropPlayers={counterpartyDropCandidates}
+          dropValue={counterpartyDrop}
+          picks={counterpartyTeamPicks}
+          selectedPicks={counterpartyPicks}
+          onSecond={onIncomingTwo}
+          onDrop={onCounterpartyDrop}
+          onPicks={onCounterpartyPicks}
+        />
+      </div>
+      {draftAssetsError && <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">Picks unavailable: {draftAssetsError}. Player-only analysis remains available.</p>}
+      <p className="mt-3 text-xs text-slate-500">Only eligible, unencumbered picks mapped to the canonical current owner are shown. Nothing is transferred automatically.</p>
+    </div>
+  );
+}
+
+function PackageInputs({
+  title, secondPlayers, secondValue, dropPlayers, dropValue, picks, selectedPicks,
+  onSecond, onDrop, onPicks,
+}: {
+  title: string;
+  secondPlayers: FantasyPlayerPerformance[];
+  secondValue: string;
+  dropPlayers: FantasyPlayerPerformance[];
+  dropValue: string;
+  picks: DraftAsset[];
+  selectedPicks: number[];
+  onSecond: (value: string) => void;
+  onDrop: (value: string) => void;
+  onPicks: (value: number[]) => void;
+}) {
+  function togglePick(pickId: number) {
+    if (selectedPicks.includes(pickId)) onPicks(selectedPicks.filter((id) => id !== pickId));
+    else if (selectedPicks.length < 2) onPicks([...selectedPicks, pickId]);
+  }
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+      <h3 className="font-black text-slate-950 dark:text-white">{title}</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <CompactPlayerSelect
+          label="Second player (optional)"
+          value={secondValue}
+          players={secondPlayers}
+          onChange={(value) => {
+            if (dropValue === value) onDrop("");
+            onSecond(value);
+          }}
+        />
+        <CompactPlayerSelect label="Drop after trade (optional)" value={dropValue} players={dropPlayers} onChange={onDrop} />
+      </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Draft picks sent</p>
+          <span className="text-[10px] font-semibold text-slate-400">{selectedPicks.length}/2</span>
+        </div>
+        {picks.length ? (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {picks.map((pick) => {
+              const checked = selectedPicks.includes(pick.id);
+              const disabled = !checked && selectedPicks.length >= 2;
+              return (
+                <label key={pick.id} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 ${checked ? "border-blue-500 bg-blue-50 dark:bg-blue-950/30" : "border-slate-200 dark:border-slate-700"} ${disabled ? "cursor-not-allowed opacity-45" : ""}`}>
+                  <input type="checkbox" checked={checked} disabled={disabled} onChange={() => togglePick(pick.id)} className="mt-0.5" />
+                  <span className="min-w-0 text-xs">
+                    <span className="block font-black text-slate-900 dark:text-white">{pick.draft_year} · Round {pick.round}</span>
+                    <span className="block truncate text-slate-500">Originally {pick.original_franchise.name}</span>
+                    <span className="mt-1 block font-semibold text-blue-700 dark:text-blue-300">{pickBandLabel(pick)}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        ) : <p className="mt-2 text-xs text-slate-400">No eligible canonical picks for this team.</p>}
+      </div>
+    </div>
+  );
+}
+
+function CompactPlayerSelect({ label, value, players, onChange }: {
+  label: string;
+  value: string;
+  players: FantasyPlayerPerformance[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-800">
+        <option value="">None</option>
+        {players.map((player) => <option key={player.nba_id} value={String(player.nba_id)}>{player.name}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function pickBandLabel(pick: DraftAsset): string {
+  const band = pick.valuation?.compensation_band;
+  if (!band) return "Valuation unavailable";
+  return band.conservative === band.optimistic
+    ? band.conservative.replaceAll("_", " ")
+    : `${band.conservative.replaceAll("_", " ")} → ${band.optimistic.replaceAll("_", " ")}`;
 }
 
 function ModeButton({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -529,10 +800,11 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
   );
 }
 
-function OneForTwoSuggestionCard({ suggestion, rank, league }: {
+function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false }: {
   suggestion: AutomaticTradePackageSuggestion;
   rank: number;
   league: LeagueSlug;
+  picksAssessed?: boolean;
 }) {
   const legalAsProposed = suggestion.completion_status === "legal_as_proposed";
   const drops = suggestion.completion_options.drop_candidates;
@@ -566,7 +838,7 @@ function OneForTwoSuggestionCard({ suggestion, rank, league }: {
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} />
       </div>
 
-      <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} />
+      <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
 
       <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
         <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
@@ -640,7 +912,7 @@ function oneForOneValueVerdict(value: TradePackageProductionValue) {
   };
 }
 
-function ProductionValuePanel({ value, usesCompletion }: { value: TradePackageProductionValue; usesCompletion: boolean }) {
+function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: { value: TradePackageProductionValue; usesCompletion: boolean; picksAssessed?: boolean }) {
   const yourRatio = retainedValuePercent(value.selected_team.retained_ratio);
   const partnerRatio = retainedValuePercent(value.counterparty_team.retained_ratio);
   const gap = Math.max(
@@ -689,9 +961,66 @@ function ProductionValuePanel({ value, usesCompletion }: { value: TradePackagePr
       </div>
       {value.compensation_required && (
         <p className="mt-3 text-xs font-bold">
-          Unpriced picks are not counted yet{gap > 0 ? ` · estimated production gap to the balanced threshold: ${formatValueScore(gap)}` : ""}.
+          {picksAssessed ? "Pick value is assessed separately below and does not alter this player-value result" : "Unpriced picks are not counted yet"}{gap > 0 ? ` · estimated production gap to the balanced threshold: ${formatValueScore(gap)}` : ""}.
         </p>
       )}
+    </div>
+  );
+}
+
+function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
+      <div className="border-b border-blue-100 p-5 dark:border-blue-900/60">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Exact package result</p>
+        <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Players, legality and picks evaluated together</h2>
+        <p className="mt-1 text-sm text-slate-500">The player recommendation remains independent from the ordinal pick assessment.</p>
+      </div>
+      <div className="p-4">
+        <OneForTwoSuggestionCard suggestion={payload} rank={1} league={league} picksAssessed={payload.package.assets.length > 0} />
+        <PickValuePanel payload={payload} />
+      </div>
+      <MethodNote>Manual exact package · 1–2 players per side · up to two canonical picks per side · no automatic transfer · pick value never changes the recommendation tier.</MethodNote>
+    </section>
+  );
+}
+
+function PickValuePanel({ payload }: { payload: FantasyTradePackageAnalysis }) {
+  const assets = payload.package.assets;
+  const pickValue = payload.pick_value;
+  return (
+    <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900 dark:bg-violet-950/20">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">Canonical pick compensation</p>
+          <h3 className="mt-1 font-black text-slate-950 dark:text-white">{assets.length ? `${assets.length} pick${assets.length === 1 ? "" : "s"} assessed` : "No picks included"}</h3>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase text-violet-700 dark:bg-slate-900 dark:text-violet-300">Shadow value only</span>
+      </div>
+      {assets.length > 0 && pickValue && (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <PickSideAssessment title="Your team receives" side={pickValue.selected_team} />
+          <PickSideAssessment title="Partner receives" side={pickValue.counterparty_team} />
+        </div>
+      )}
+      <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Picks are read from the canonical ledger and checked against their mapped current owner. This analysis neither transfers them nor silently turns an exploratory player package into a proposable one.</p>
+    </div>
+  );
+}
+
+function PickSideAssessment({ title, side }: { title: string; side: NonNullable<FantasyTradePackageAnalysis["pick_value"]>["selected_team"] }) {
+  const band = side.combined_valuation?.compensation_band;
+  const sufficiency = side.assessment?.sufficiency;
+  return (
+    <div className="rounded-lg border border-violet-100 bg-white p-3 dark:border-violet-900 dark:bg-slate-900">
+      <p className="text-xs font-bold text-slate-500">{title}</p>
+      <p className="mt-1 font-black text-slate-950 dark:text-white">
+        {band ? (band.conservative === band.optimistic ? band.conservative : `${band.conservative} → ${band.optimistic}`).replaceAll("_", " ") : "No valued pick received"}
+      </p>
+      {sufficiency && <p className="mt-1 text-xs font-semibold text-violet-700 dark:text-violet-300">{sufficiency.replaceAll("_", " ")}</p>}
+      {side.incoming_assets.map((asset) => (
+        <p key={asset.pick_id} className="mt-2 text-xs text-slate-500">{asset.draft_year} Round {asset.round} · originally {asset.original_franchise?.name ?? "unknown"}</p>
+      ))}
     </div>
   );
 }

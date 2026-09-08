@@ -51,7 +51,7 @@ export default async function FantasyTradeAnalyzerPage({
         </p>
         <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Trade Analyzer</h1>
         <p className="mt-1 max-w-3xl text-sm text-slate-500 dark:text-slate-400">
-          Discover balanced returns, test an exact one-for-one move, or find which teams need your player most.
+          Discover balanced returns, build an exact 1–2 player package with canonical picks, or find which teams need your player most.
         </p>
       </div>
       <TradeAnalyzerWorkspace
