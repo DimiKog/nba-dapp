@@ -1174,6 +1174,7 @@ export async function fetchFantasyCategoryTargets(
     category?: string;
     limit?: number;
   } = {},
+  identityHeaders?: HeadersInit,
 ): Promise<FantasyCategoryTargets> {
   const params = new URLSearchParams({
     basis: options.basis ?? "season",
@@ -1185,7 +1186,7 @@ export async function fetchFantasyCategoryTargets(
   if (options.category) params.set("category", options.category);
   const res = await fetch(
     `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
-    { next: { revalidate: 300 } },
+    { cache: "no-store", headers: identityHeaders },
   );
   if (!res.ok) throw new Error("Failed to fetch category targets");
   return res.json();
@@ -1206,7 +1207,7 @@ export async function fetchFantasyTradeAnalysis(
     window: String(window),
   });
   const res = await fetch(
-    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-analysis?${params}`,
+    `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-analysis?${params}`,
     { cache: "no-store" },
   );
   if (!res.ok) {
@@ -1231,7 +1232,7 @@ export async function fetchFantasyTradePartners(
     limit: String(limit),
   });
   const res = await fetch(
-    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-partners?${params}`,
+    `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade-partners?${params}`,
     { cache: "no-store" },
   );
   if (!res.ok) {
@@ -1369,10 +1370,22 @@ export async function fetchFantasyWatchlist(
   window = 7,
 ): Promise<FantasyWatchlist> {
   const res = await fetch(
-    `${BASE}/api/fantasy/${league}/watchlist?window=${window}`,
+    `/api/watchlist/${league}?window=${window}`,
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error("Failed to fetch fantasy watchlist");
+  return res.json();
+}
+
+export async function fetchFantasyMatchupsForTeam(
+  leagueSlug: string,
+  teamId: string,
+): Promise<FantasyMatchupPeriod> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${encodeURIComponent(leagueSlug)}/matchups/${encodeURIComponent(teamId)}`,
+    { next: { revalidate: 60 } },
+  );
+  if (!res.ok) throw new Error("Failed to fetch fantasy matchups");
   return res.json();
 }
 
@@ -1391,12 +1404,7 @@ export async function fetchPersonalFantasyMatchups(
   const league = leagues.find((item) => item.slug === leagueSlug && item.enabled);
   if (!league?.personal_team_id) return null;
 
-  const res = await fetch(
-    `${BASE}/api/fantasy/${encodeURIComponent(league.slug)}/matchups/${encodeURIComponent(league.personal_team_id)}`,
-    { next: { revalidate: 60 } },
-  );
-  if (!res.ok) throw new Error("Failed to fetch personal fantasy matchups");
-  return res.json();
+  return fetchFantasyMatchupsForTeam(league.slug, league.personal_team_id);
 }
 
 export async function fetchPersonalFantasyPerformance(

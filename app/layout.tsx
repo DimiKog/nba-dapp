@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import { loadCurrentFantasySession } from "@/lib/fantasySessionServer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,11 +20,12 @@ export const metadata: Metadata = {
   description: "NBA fantasy decisions, player performance and payroll",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await loadCurrentFantasySession().catch(() => null);
   return (
     <html
       lang="en"
@@ -31,7 +33,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Suspense fallback={<NavbarFallback />}>
-          <Navbar />
+          <Navbar session={session} />
         </Suspense>
         {children}
       </body>

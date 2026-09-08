@@ -3,7 +3,7 @@ import "server-only";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { fetchFantasyLeagues } from "@/lib/api";
+import { loadCurrentFantasySession, membershipFor } from "@/lib/fantasySessionServer";
 
 type LeagueSlug = "ldl" | "bdb";
 
@@ -12,14 +12,11 @@ export default async function PersonalTeamRedirect({
 }: {
   league: LeagueSlug;
 }) {
-  const leagues = await fetchFantasyLeagues().catch(() => []);
-  const configuredLeague = leagues.find(
-    (item) => item.slug === league && item.enabled,
-  );
+  const configuredLeague = membershipFor(await loadCurrentFantasySession(), league);
 
-  if (configuredLeague?.personal_team_id) {
+  if (configuredLeague?.fantrax_team_id) {
     redirect(
-      `/fantasy/${league}/roster/${encodeURIComponent(configuredLeague.personal_team_id)}`,
+      `/fantasy/${league}/roster/${encodeURIComponent(configuredLeague.fantrax_team_id)}`,
     );
   }
 
@@ -34,7 +31,7 @@ export default async function PersonalTeamRedirect({
           Personal team unavailable
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-          This league does not currently have a personal team configured.
+          Your account does not currently have an active team mapping in this league.
         </p>
         <Link
           href={`/fantasy/${league}`}

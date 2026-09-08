@@ -1,3 +1,5 @@
+import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
 const ALLOWED_PARAMS = [
@@ -20,6 +22,10 @@ export async function GET(
   if (!/^[a-zA-Z0-9_-]{1,80}$/.test(teamId)) {
     return Response.json({ error: "Invalid team" }, { status: 400 });
   }
+  const access = await authorizeFantasyRequest(request, league, {
+    selectedTeamId: teamId,
+  });
+  if (!access.ok) return access.response;
 
   const incoming = new URL(request.url).searchParams;
   const params = new URLSearchParams();
@@ -29,8 +35,8 @@ export async function GET(
   }
 
   const response = await fetch(
-    `${BACKEND}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
-    { cache: "no-store" },
+    `${BACKEND}/api/fantasy/${league}/roster/${encodeURIComponent(access.membership.fantrax_team_id!)}/targets?${params}`,
+    { cache: "no-store", headers: access.identityHeaders },
   ).catch(() => null);
   if (!response) {
     return Response.json({ error: "Recommendation service unavailable" }, { status: 502 });

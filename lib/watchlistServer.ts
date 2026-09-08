@@ -8,16 +8,18 @@ export function validLeague(value: string): value is "ldl" | "bdb" {
 
 export async function readWatchlist(
   league: "ldl" | "bdb",
+  identityHeaders: HeadersInit,
   windowDays = 7,
 ): Promise<Response> {
   return fetch(
     `${BACKEND}/api/fantasy/${league}/watchlist?window=${windowDays}`,
-    { cache: "no-store" },
+    { cache: "no-store", headers: identityHeaders },
   );
 }
 
 export async function mutateWatchlist(
   league: "ldl" | "bdb",
+  identityHeaders: HeadersInit,
   method: "POST" | "DELETE",
   body?: {
     nba_player_id: number;
@@ -26,20 +28,12 @@ export async function mutateWatchlist(
   },
   nbaPlayerId?: number,
 ): Promise<Response> {
-  const apiKey = process.env.FANTASY_WATCHLIST_API_KEY?.trim();
-  if (!apiKey) {
-    return Response.json(
-      { error: "Watchlist writes are not configured" },
-      { status: 503 },
-    );
-  }
   const suffix = method === "DELETE" ? `/${nbaPlayerId}` : "";
+  const headers = new Headers(identityHeaders);
+  if (body) headers.set("Content-Type", "application/json");
   return fetch(`${BACKEND}/api/fantasy/${league}/watchlist${suffix}`, {
     method,
-    headers: {
-      "X-Internal-API-Key": apiKey,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });

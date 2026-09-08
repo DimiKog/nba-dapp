@@ -1,13 +1,10 @@
-import { verifyCloudflareAccess } from "@/lib/cloudflareAccess";
 import { mutateWatchlist, validLeague } from "@/lib/watchlistServer";
+import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
 
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ league: string; nbaPlayerId: string }> },
 ) {
-  if (!await verifyCloudflareAccess(request)) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { league, nbaPlayerId: rawPlayerId } = await context.params;
   const nbaPlayerId = Number(rawPlayerId);
   if (!validLeague(league)) {
@@ -17,8 +14,12 @@ export async function DELETE(
     return Response.json({ error: "Invalid player" }, { status: 400 });
   }
 
+  const access = await authorizeFantasyRequest(request, league);
+  if (!access.ok) return access.response;
+
   const response = await mutateWatchlist(
     league,
+    access.identityHeaders,
     "DELETE",
     undefined,
     nbaPlayerId,

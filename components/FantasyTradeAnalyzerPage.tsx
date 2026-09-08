@@ -6,6 +6,7 @@ import {
   fetchLeaguePlayerExplorer,
   type TradeBasis,
 } from "@/lib/api";
+import { loadCurrentFantasySession, membershipFor } from "@/lib/fantasySessionServer";
 
 type LeagueSlug = "ldl" | "bdb";
 
@@ -26,6 +27,10 @@ export default async function FantasyTradeAnalyzerPage({
   teamId: string;
   initialState: TradeAnalyzerInitialState;
 }) {
+  const membership = membershipFor(await loadCurrentFantasySession(), league);
+  if (!membership?.fantrax_team_id || membership.fantrax_team_id !== teamId) {
+    notFound();
+  }
   let performance;
   let explorer;
   try {
@@ -58,7 +63,7 @@ export default async function FantasyTradeAnalyzerPage({
         league={league}
         teamId={teamId}
         teamName={performance.team.name}
-        personalTeamId={performance.league.personal_team_id}
+        personalTeamId={membership.fantrax_team_id}
         ownPlayers={performance.players}
         leaguePlayers={explorer.players}
         initialState={initialState}

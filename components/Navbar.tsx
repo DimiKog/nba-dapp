@@ -10,6 +10,7 @@ import {
   subscribeLeagueStore,
   type LeagueSlug,
 } from "@/lib/leagues";
+import type { FantasySession } from "@/lib/fantasySessionTypes";
 
 type NavLink = {
   href: string;
@@ -30,7 +31,7 @@ function resolveNavbarLeague(
   return storedLeague;
 }
 
-export default function Navbar() {
+export default function Navbar({ session }: { session: FantasySession | null }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const storedLeague = useSyncExternalStore(
@@ -44,13 +45,20 @@ export default function Navbar() {
     storeLeague(league);
   }, [league]);
 
+  const membership = session?.memberships.find((item) => item.league_slug === league);
   const links: NavLink[] = [
     { href: `/players?league=${league}`, path: "/players", label: "Player Explorer" },
     { href: `/watchlist?league=${league}`, path: "/watchlist", label: "Watchlist" },
     { href: `/draft-assets?league=${league}`, path: "/draft-assets", label: "Draft Assets" },
-    { href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" },
-    { href: "/fantasy/ldl/my-team", path: "/fantasy/ldl", label: "My LDL" },
-    { href: "/fantasy/bdb/my-team", path: "/fantasy/bdb", label: "My BδB" },
+    ...(membership?.commissioner
+      ? [{ href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" }]
+      : []),
+    ...(session?.memberships.some((item) => item.league_slug === "ldl" && item.fantrax_team_id)
+      ? [{ href: "/fantasy/ldl/my-team", path: "/fantasy/ldl", label: "My LDL" }]
+      : []),
+    ...(session?.memberships.some((item) => item.league_slug === "bdb" && item.fantrax_team_id)
+      ? [{ href: "/fantasy/bdb/my-team", path: "/fantasy/bdb", label: "My BδB" }]
+      : []),
   ];
 
   return (
