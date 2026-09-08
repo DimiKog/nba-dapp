@@ -2,7 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PlayerIntelligenceDashboard from "@/components/PlayerIntelligenceDashboard";
-import { ApiResponseError, fetchFantasyWatchlist, fetchPlayer, fetchPlayerIntelligence, photoUrl, type PlayerDetail } from "@/lib/api";
+import { ApiResponseError, fetchPlayer, fetchPlayerIntelligence, photoUrl, type FantasyWatchlist, type PlayerDetail } from "@/lib/api";
+import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
+import { readWatchlist } from "@/lib/watchlistServer";
 
 type League = "ldl" | "bdb";
 
@@ -33,7 +35,13 @@ export default async function PlayerPage({ params, searchParams }: {
   }).catch(() => null);
   if (!intelligence) return <PlayerUnavailable title={`${player.name}'s intelligence is temporarily unavailable`} retryHref={currentHref(playerId, query)} />;
 
-  const watchlist = league ? await fetchFantasyWatchlist(league, 7).catch(() => null) : null;
+  const access = league ? await loadCurrentFantasyAccess() : null;
+  const membership = league ? membershipFor(access?.session ?? null, league) : null;
+  const watchlist = league && access && membership
+    ? await readWatchlist(league, access.identityHeaders, 7)
+        .then(async (response) => response.ok ? await response.json() as FantasyWatchlist : null)
+        .catch(() => null)
+    : null;
   const initiallyWatched = Boolean(player.nba_id && watchlist?.entries.some((entry) => entry.nba_player_id === player.nba_id));
 
   return <PlayerIntelligenceDashboard intelligence={intelligence} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} />;

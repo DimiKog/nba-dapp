@@ -1,3 +1,5 @@
+import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
 type PackageSuggestionRequest = {
@@ -47,12 +49,19 @@ export async function POST(
     return Response.json({ error: "Invalid automatic trade-package suggestion request" }, { status: 400 });
   }
 
+  const access = await authorizeFantasyRequest(request, league, {
+    selectedTeamId: body.selected_team_id,
+  });
+  if (!access.ok) return access.response;
+  const outgoingHeaders = new Headers(access.identityHeaders);
+  outgoingHeaders.set("Content-Type", "application/json");
+
   const response = await fetch(`${BACKEND}/api/fantasy/${league}/trade-package-suggestions`, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
+    headers: outgoingHeaders,
     body: JSON.stringify({
-      selected_team_id: body.selected_team_id,
+      selected_team_id: access.membership.fantrax_team_id,
       outgoing_player_id: outgoingPlayerId,
       intent: body.intent,
       basis: body.basis,

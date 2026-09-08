@@ -1,13 +1,10 @@
-import { verifyCloudflareAccess } from "@/lib/cloudflareAccess";
 import { mutateWatchlist, readWatchlist, validLeague } from "@/lib/watchlistServer";
+import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ league: string }> },
 ) {
-  if (!await verifyCloudflareAccess(request)) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { league } = await context.params;
   if (!validLeague(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
@@ -17,7 +14,9 @@ export async function GET(
   if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 30) {
     return Response.json({ error: "Invalid window" }, { status: 400 });
   }
-  const response = await readWatchlist(league, windowDays);
+  const access = await authorizeFantasyRequest(request, league);
+  if (!access.ok) return access.response;
+  const response = await readWatchlist(league, access.identityHeaders, windowDays);
   return new Response(response.body, {
     status: response.status,
     headers: {
@@ -31,9 +30,6 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ league: string }> },
 ) {
-  if (!await verifyCloudflareAccess(request)) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
   const { league } = await context.params;
   if (!validLeague(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
@@ -56,7 +52,10 @@ export async function POST(
     return Response.json({ error: "Invalid watchlist entry" }, { status: 400 });
   }
 
-  const response = await mutateWatchlist(league, "POST", {
+  const access = await authorizeFantasyRequest(request, league);
+  if (!access.ok) return access.response;
+
+  const response = await mutateWatchlist(league, access.identityHeaders, "POST", {
     nba_player_id: nbaPlayerId,
     notes,
     priority: priority as 1 | 2 | 3,

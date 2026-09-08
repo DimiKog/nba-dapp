@@ -14,6 +14,7 @@ import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamPayrollPanel from "@/components/TeamPayrollPanel";
 import TeamSectionNav from "@/components/TeamSectionNav";
 import { notFound } from "next/navigation";
+import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 
 type LeagueSlug = "ldl" | "bdb";
 
@@ -30,6 +31,8 @@ export default async function FantasyRosterPage({
   let windowProfile = null;
   let initialTargets = null;
   let isPersonalTeam = false;
+  const access = await loadCurrentFantasyAccess();
+  const membership = membershipFor(access?.session ?? null, league);
   try {
     const [rosterResult, performanceResult, seasonResult, windowResult] = await Promise.all([
       fetchFantasyRoster(league, teamId),
@@ -41,9 +44,14 @@ export default async function FantasyRosterPage({
     performance = performanceResult;
     seasonProfile = seasonResult;
     windowProfile = windowResult;
-    isPersonalTeam = performanceResult?.league.personal_team_id === teamId;
+    isPersonalTeam = membership?.fantrax_team_id === teamId;
     if (isPersonalTeam) {
-      initialTargets = await fetchFantasyCategoryTargets(league, teamId).catch(() => null);
+      initialTargets = await fetchFantasyCategoryTargets(
+        league,
+        teamId,
+        {},
+        access?.identityHeaders,
+      ).catch(() => null);
     }
   } catch {
     notFound();
@@ -157,13 +165,15 @@ export default async function FantasyRosterPage({
         />
       )}
 
-      <CategoryNeedsSection
-        league={league}
-        teamId={teamId}
-        teamName={roster.team_name}
-        initialTargets={initialTargets}
-        isPersonalTeam={isPersonalTeam}
-      />
+      {isPersonalTeam && (
+        <CategoryNeedsSection
+          league={league}
+          teamId={teamId}
+          teamName={roster.team_name}
+          initialTargets={initialTargets}
+          isPersonalTeam
+        />
+      )}
     </main>
   );
 }

@@ -56,34 +56,37 @@ export function validTradeLedgerLeague(value: string): value is "ldl" | "bdb" {
   return value === "ldl" || value === "bdb";
 }
 
-function backendHeaders(extra?: HeadersInit): Headers {
+function backendHeaders(identityHeaders: HeadersInit, extra?: HeadersInit): Headers {
   const apiKey = process.env.FANTASY_TRADE_LEDGER_API_KEY?.trim();
-  const headers = new Headers(extra);
+  const headers = new Headers(identityHeaders);
+  new Headers(extra).forEach((value, key) => headers.set(key, value));
   if (apiKey) headers.set("X-Internal-API-Key", apiKey);
   return headers;
 }
 
 export async function readCompletedTradeOptions(
   league: "ldl" | "bdb",
+  identityHeaders: HeadersInit,
 ): Promise<Response> {
   if (!process.env.FANTASY_TRADE_LEDGER_API_KEY?.trim()) {
     return Response.json({ error: "Trade ledger is not configured" }, { status: 503 });
   }
   return fetch(
     `${BACKEND}/api/fantasy/${league}/commissioner/completed-trades/options`,
-    { cache: "no-store", headers: backendHeaders() },
+    { cache: "no-store", headers: backendHeaders(identityHeaders) },
   );
 }
 
 export async function readCompletedTrades(
   league: "ldl" | "bdb",
+  identityHeaders: HeadersInit,
 ): Promise<Response> {
   if (!process.env.FANTASY_TRADE_LEDGER_API_KEY?.trim()) {
     return Response.json({ error: "Trade ledger is not configured" }, { status: 503 });
   }
   return fetch(
     `${BACKEND}/api/fantasy/${league}/commissioner/completed-trades?limit=50`,
-    { cache: "no-store", headers: backendHeaders() },
+    { cache: "no-store", headers: backendHeaders(identityHeaders) },
   );
 }
 
@@ -91,18 +94,19 @@ export async function createCompletedTrade(
   league: "ldl" | "bdb",
   body: unknown,
   idempotencyKey: string,
+  identityHeaders: HeadersInit,
+  actorSubject: string,
 ): Promise<Response> {
   const apiKey = process.env.FANTASY_TRADE_LEDGER_API_KEY?.trim();
-  const actor = process.env.FANTASY_TRADE_LEDGER_ACTOR_SUBJECT?.trim();
-  if (!apiKey || !actor) {
+  if (!apiKey) {
     return Response.json({ error: "Trade ledger write is not configured" }, { status: 503 });
   }
   return fetch(`${BACKEND}/api/fantasy/${league}/commissioner/completed-trades`, {
     method: "POST",
     cache: "no-store",
-    headers: backendHeaders({
+    headers: backendHeaders(identityHeaders, {
       "Content-Type": "application/json",
-      "X-Commissioner-Subject": actor,
+      "X-Commissioner-Subject": actorSubject,
       "Idempotency-Key": idempotencyKey,
     }),
     body: JSON.stringify(body),
@@ -111,10 +115,11 @@ export async function createCompletedTrade(
 
 export async function loadCompletedTradeWorkspace(
   league: "ldl" | "bdb",
+  identityHeaders: HeadersInit,
 ): Promise<{ options: CompletedTradeOptions; history: CompletedTradeList }> {
   const [optionsResponse, historyResponse] = await Promise.all([
-    readCompletedTradeOptions(league),
-    readCompletedTrades(league),
+    readCompletedTradeOptions(league, identityHeaders),
+    readCompletedTrades(league, identityHeaders),
   ]);
   if (!optionsResponse.ok || !historyResponse.ok) {
     throw new Error("Completed-trade workspace is unavailable");

@@ -1,3 +1,5 @@
+import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
 type PickAsset = { type?: unknown; pick_id?: unknown; from_team?: unknown };
@@ -76,11 +78,22 @@ export async function POST(
     return Response.json({ error: "Invalid manual trade-package request" }, { status: 400 });
   }
 
+  const access = await authorizeFantasyRequest(request, league, {
+    selectedTeamId: body.selected_team_id,
+  });
+  if (!access.ok) return access.response;
+  const outgoingHeaders = new Headers(access.identityHeaders);
+  outgoingHeaders.set("Content-Type", "application/json");
+
   const response = await fetch(`${BACKEND}/api/fantasy/${league}/trade-package-analysis`, {
     method: "POST",
     cache: "no-store",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, window_days: windowDays }),
+    headers: outgoingHeaders,
+    body: JSON.stringify({
+      ...body,
+      selected_team_id: access.membership.fantrax_team_id,
+      window_days: windowDays,
+    }),
   }).catch(() => null);
 
   if (!response) {

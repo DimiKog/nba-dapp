@@ -4,9 +4,8 @@ import {
   fetchScoreboard,
   fetchNews,
   fetchFantasyStandings,
-  fetchFantasyLeagues,
-  fetchPersonalFantasyMatchups,
-  fetchPersonalFantasyPerformance,
+  fetchFantasyMatchupsForTeam,
+  fetchFantasyRosterPerformance,
   fetchFantasyTeamCategoryProfile,
   fetchFreeAgentRadar,
   photoUrl,
@@ -17,35 +16,43 @@ import {
   type FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
+import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 
 export default async function Home() {
+  const context = await loadCurrentFantasyContext().catch(() => ({
+    identity: null,
+    identityHeaders: null,
+    session: null,
+  }));
+  const session = context.session;
   const [games, news, ldlTeams, bdbTeams, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
     fetchFantasyStandings("ldl").catch(() => []),
     fetchFantasyStandings("bdb").catch(() => []),
-    fetchFantasyLeagues()
-      .then((leagues) => Promise.all(
-        leagues
-          .filter((league) => league.enabled && league.personal_team_id)
-          .map(async (league) => {
-            const slug = league.slug as "ldl" | "bdb";
+    Promise.all(
+      (session?.memberships ?? [])
+        .filter((membership) => (
+          membership.league_slug === "ldl" || membership.league_slug === "bdb"
+        ) && membership.fantrax_team_id)
+        .map(async (membership) => {
+            const slug = membership.league_slug as "ldl" | "bdb";
+            const teamId = membership.fantrax_team_id!;
             const [matchup, performance, profile] = await Promise.all([
-              fetchPersonalFantasyMatchups(league.slug).catch(() => null),
-              fetchPersonalFantasyPerformance(league.slug).catch(() => null),
-              fetchFantasyTeamCategoryProfile(slug, league.personal_team_id!).catch(() => null),
+              fetchFantasyMatchupsForTeam(slug, teamId).catch(() => null),
+              fetchFantasyRosterPerformance(slug, teamId).catch(() => null),
+              fetchFantasyTeamCategoryProfile(slug, teamId).catch(() => null),
             ]);
             return {
-              league: league.slug,
-              leagueName: league.name,
-              teamName: league.personal_team_name,
+              league: slug,
+              leagueName: slug === "ldl" ? "LDL" : "BδB",
+              teamName: membership.franchise_name,
               matchup,
               performance,
               profile,
             };
           }),
-      ))
-      .catch(() => []),
+    ).catch(() => []),
     Promise.all([
       fetchFreeAgentRadar("ldl").catch(() => null),
       fetchFreeAgentRadar("bdb").catch(() => null),
@@ -87,7 +94,11 @@ export default async function Home() {
         )}
       </section>
 
-      <PersonalTeamsGrid teams={personalTeams} />
+      <PersonalTeamsGrid
+        teams={personalTeams}
+        hasAccessIdentity={Boolean(context.identity)}
+        hasSession={Boolean(session)}
+      />
 
       <HomeRadarPanels radars={radarPanels} />
 
@@ -239,7 +250,15 @@ type PersonalTeamDashboard = {
   profile: FantasyTeamCategoryProfile | null;
 };
 
-function PersonalTeamsGrid({ teams }: { teams: PersonalTeamDashboard[] }) {
+function PersonalTeamsGrid({
+  teams,
+  hasAccessIdentity,
+  hasSession,
+}: {
+  teams: PersonalTeamDashboard[];
+  hasAccessIdentity: boolean;
+  hasSession: boolean;
+}) {
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
@@ -252,6 +271,24 @@ function PersonalTeamsGrid({ teams }: { teams: PersonalTeamDashboard[] }) {
         {teams.map((team) => (
           <PersonalTeamCard key={team.league} dashboard={team} />
         ))}
+        {teams.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
+            <p className="font-bold text-slate-900 dark:text-white">
+              {hasSession
+                ? "No active fantasy memberships"
+                : hasAccessIdentity
+                  ? "Fantasy session unavailable"
+                  : "Personal features unavailable in this preview"}
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              {hasSession
+                ? "Your account is signed in, but no league team is currently assigned."
+                : hasAccessIdentity
+                  ? "Cloudflare Access recognized you, but the fantasy identity service could not load your account."
+                  : "Use the protected production domain to sign in and load your teams and personal tools."}
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
