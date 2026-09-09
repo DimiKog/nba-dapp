@@ -529,9 +529,32 @@ export interface BalancedTradeSuggestion {
   production_value: TradePackageProductionValue & {
     recommendation?:
       | "player_only_balanced"
+      | "replacement_level_value_indeterminate"
       | "additional_assets_required"
       | "not_recommended_player_only"
       | "value_unavailable";
+  };
+  qualification?: {
+    strict_proposal: boolean;
+    gates: {
+      selected_team_category_fit: {
+        passed: boolean;
+        score: number;
+        reason: string;
+      };
+      counterparty_acceptance: {
+        passed: boolean;
+        status: "positive" | "neutral" | "negative" | "blocked";
+        score: number;
+        reason: string;
+      };
+      production_value_balance: {
+        passed: boolean;
+        classification: TradePackageProductionValue["classification"];
+        reason: string;
+      };
+    };
+    exploratory_reasons: string[];
   };
   pick_compensation?: TradeSuggestionPickCompensation;
   cap_legality: {
@@ -569,6 +592,18 @@ export interface FantasyBalancedTradeSuggestions {
     eligible_pairs: number;
     excluded: Record<string, number>;
     warnings?: Record<string, number>;
+    outgoing_player?: {
+      status: "eligible" | "missing_statistics";
+      blocking_reason: "outgoing_player_missing_statistics" | null;
+    };
+    strict_gate_counts?: {
+      eligible_after_hard_filters: number;
+      selected_team_category_fit: number;
+      counterparty_acceptance: number;
+      production_value_balance: number;
+      all_strict_gates: number;
+    };
+    production_value_classifications?: Record<string, number>;
     messages: string[];
     safe_next_steps: Array<{ key: string; message: string }>;
   };
@@ -631,7 +666,7 @@ export interface TradeTeamProductionValue {
   received: number | null;
   delta: number | null;
   retained_ratio: number | null;
-  classification: "balanced" | "uneven" | "severely_uneven" | "unknown";
+  classification: "balanced" | "materially_equivalent" | "uneven" | "severely_uneven" | "unknown";
   reason: string;
   value_gap_to_balanced: number | null;
   contributions: {
@@ -646,7 +681,8 @@ export interface TradePackageProductionValue {
   replacement_impact: number | null;
   selected_team: TradeTeamProductionValue;
   counterparty_team: TradeTeamProductionValue;
-  classification: "balanced" | "uneven" | "severely_uneven" | "unknown";
+  classification: "balanced" | "materially_equivalent" | "uneven" | "severely_uneven" | "unknown";
+  reason?: string;
   worst_side_ratio: number | null;
   compensation_required: boolean;
   compensation_reason?: string | null;
