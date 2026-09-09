@@ -918,6 +918,13 @@ function oneForOneValueVerdict(value: TradePackageProductionValue) {
     text: "text-emerald-800 dark:text-emerald-200",
     badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200",
   };
+  if (value.classification === "materially_equivalent") return {
+    label: "Replacement-level comparison",
+    description: "Both players are at or below the current free-agent replacement baseline. This remains exploratory because the value model cannot distinguish a strict win-win return.",
+    box: "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/25",
+    text: "text-sky-800 dark:text-sky-200",
+    badge: "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200",
+  };
   if (value.classification === "uneven") return {
     label: "Additional assets required",
     description: "The player return is close, but a useful pick or another asset should bridge the value gap.",
@@ -954,7 +961,13 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
       detail: "Both teams retain at least 85% of the production value they send.",
       classes: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/25 dark:text-emerald-200",
     }
-    : value.classification === "uneven"
+    : value.classification === "materially_equivalent"
+      ? {
+        title: "Replacement-level comparison",
+        detail: "Both packages are at or below the current replacement baseline. Keep this as context, not as a balanced recommendation.",
+        classes: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/25 dark:text-sky-200",
+      }
+      : value.classification === "uneven"
       ? {
         title: "Additional asset compensation required",
         detail: "The player return is somewhat uneven. A useful pick or another asset may bridge the gap, especially in an offseason cap-relief deal.",
@@ -1197,6 +1210,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
   );
   const visibleCount = filteredTeams.reduce((count, group) => count + group.suggestions.length, 0);
   const filtersActive = recommendationFilter !== "all" || pickFilter !== "all" || capFilter !== "all";
+  const gateCounts = payload.diagnostics.strict_gate_counts;
 
   function clearFilters() {
     setRecommendationFilter("all");
@@ -1217,7 +1231,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
           </div>
           <div className="text-right">
             <div className="flex flex-wrap justify-end gap-2 text-xs font-bold">
-              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} proposable candidates</span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} strict win-win matches</span>
               <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.counts.exploratory} exploratory candidates</span>
             </div>
             <p className="mt-1 text-[10px] text-slate-400">Candidate counts cover the full market scan; cards show the top returned results.</p>
@@ -1225,6 +1239,18 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
         </div>
       </div>
       {payload.fallback_reason && <FallbackBanner />}
+      {gateCounts && gateCounts.eligible_after_hard_filters > 0 && (
+        <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Strict qualification gates</p>
+          <p className="mt-1 text-xs text-slate-500">Each count is measured independently across {gateCounts.eligible_after_hard_filters} cap-legal pairs.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <GateCount label="Helps or preserves your categories" passed={gateCounts.selected_team_category_fit} total={gateCounts.eligible_after_hard_filters} />
+            <GateCount label="Partner has positive incentive" passed={gateCounts.counterparty_acceptance} total={gateCounts.eligible_after_hard_filters} />
+            <GateCount label="Production value is balanced" passed={gateCounts.production_value_balance} total={gateCounts.eligible_after_hard_filters} />
+            <GateCount label="Passes all three" passed={gateCounts.all_strict_gates} total={gateCounts.eligible_after_hard_filters} emphasized />
+          </div>
+        </div>
+      )}
       {payload.teams.length > 0 && (
         <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1247,7 +1273,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
               onChange={setRecommendationFilter}
               options={[
                 { value: "all", label: "All", count: returnedSuggestions.length },
-                { value: "proposable", label: "Proposable", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "proposable").length },
+                { value: "proposable", label: "Strict win-win", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "proposable").length },
                 { value: "exploratory", label: "Exploratory", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "exploratory").length },
               ]}
             />
@@ -1367,6 +1393,64 @@ function capStatusCategory(suggestion: BalancedTradeSuggestion): Exclude<CapStat
   return cap.eligible ? "compliant" : "not_eligible";
 }
 
+function GateCount({ label, passed, total, emphasized = false }: {
+  label: string;
+  passed: number;
+  total: number;
+  emphasized?: boolean;
+}) {
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${emphasized ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className={`mt-1 text-lg font-black tabular-nums ${emphasized ? "text-emerald-700 dark:text-emerald-300" : "text-slate-900 dark:text-white"}`}>{passed}<span className="text-xs font-semibold text-slate-400"> / {total}</span></p>
+    </div>
+  );
+}
+
+function gateReasonText(reason: string): string {
+  const messages: Record<string, string> = {
+    selected_team_fit_nonnegative: "The swap helps or preserves your category profile.",
+    selected_team_category_tradeoff: "The swap reduces your overall category fit.",
+    counterparty_acceptance_positive: "The partner has a positive measured incentive.",
+    counterparty_acceptance_neutral: "The partner has no clear measured incentive.",
+    counterparty_acceptance_negative: "The partner is projected to lose category utility.",
+    counterparty_acceptance_blocked: "The partner is blocked by the current cap rules.",
+    production_value_balanced: "Both sides retain the required production value.",
+    both_sides_at_or_below_replacement: "Both players are at or below the free-agent replacement baseline.",
+    replacement_impact_unavailable: "A trusted replacement-value baseline is unavailable.",
+    replacement_value_unavailable: "A trusted replacement-value baseline is unavailable.",
+    production_value_unknown: "Production value could not be verified.",
+    two_sided_retained_value_ratio: "At least one side does not retain enough production value.",
+  };
+  return messages[reason] ?? reason.replaceAll("_", " ");
+}
+
+function SuggestionQualification({ suggestion }: { suggestion: BalancedTradeSuggestion }) {
+  const qualification = suggestion.qualification;
+  if (!qualification) return null;
+  const rows = [
+    { label: "Your category fit", gate: qualification.gates.selected_team_category_fit },
+    { label: "Partner incentive", gate: qualification.gates.counterparty_acceptance },
+    { label: "Production value", gate: qualification.gates.production_value_balance },
+  ];
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Why this result is classified here</p>
+      <div className="mt-2 space-y-2">
+        {rows.map(({ label, gate }) => (
+          <div key={label} className="flex items-start gap-2 text-xs">
+            <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${gate.passed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"}`}>{gate.passed ? "Pass" : "Review"}</span>
+            <div>
+              <p className="font-bold text-slate-800 dark:text-slate-100">{label}</p>
+              <p className="text-slate-500 dark:text-slate-400">{gateReasonText(gate.reason)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SuggestionCard({ suggestion, onAnalyze }: {
   suggestion: BalancedTradeSuggestion;
   onAnalyze: () => void;
@@ -1397,10 +1481,11 @@ function SuggestionCard({ suggestion, onAnalyze }: {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${proposable ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
-          {proposable ? "Proposable" : "Exploratory"}
+          {proposable ? "Strict win-win" : "Exploratory"}
         </span>
         <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Fit {formatSigned(suggestion.selected_category_score)}</span>
       </div>
+      <SuggestionQualification suggestion={suggestion} />
       <div className={`mt-3 rounded-lg border p-3 ${valueVerdict.box}`}>
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -1620,9 +1705,14 @@ function pickCompensationUnavailableText(reason: string): string {
 }
 
 function SuggestionEmptyState({ payload }: { payload: FantasyBalancedTradeSuggestions }) {
+  const missingOutgoingStats = payload.diagnostics.outgoing_player?.blocking_reason
+    === "outgoing_player_missing_statistics";
   return (
     <div className="m-4 rounded-xl border border-dashed border-slate-300 p-6 dark:border-slate-700">
-      <h3 className="font-black text-slate-950 dark:text-white">No balanced one-for-one suggestions</h3>
+      <h3 className="font-black text-slate-950 dark:text-white">{missingOutgoingStats ? "Statistics are not available for this player yet" : "No balanced one-for-one suggestions"}</h3>
+      {missingOutgoingStats && (
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">The analyzer cannot compare trade value safely until the outgoing player records games in the selected basis.</p>
+      )}
       <div className="mt-2 space-y-1 text-sm text-slate-600 dark:text-slate-300">
         {payload.diagnostics.messages.map((message) => <p key={message}>{message}</p>)}
       </div>
