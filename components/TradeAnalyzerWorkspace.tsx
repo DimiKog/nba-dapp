@@ -94,23 +94,28 @@ export default function TradeAnalyzerWorkspace({
       .sort((a, b) => a.name.localeCompare(b.name)),
     [ownPlayers],
   );
+  const counterpartyTeams = useMemo(() => {
+    const teams = new Map<string, NonNullable<FantasyPlayerPerformance["fantasy_team"]>>();
+    for (const player of leaguePlayers) {
+      const team = player.fantasy_team;
+      if (team?.id && team.id !== teamId) teams.set(team.id, team);
+    }
+    return [...teams.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [leaguePlayers, teamId]);
   const incomingPlayers = useMemo(
     () => leaguePlayers
       .filter((player) => (
         player.nba_id != null
         && player.fantasy_team?.id
         && player.fantasy_team.id !== teamId
-        && (!partnerTeam || player.fantasy_team.id === partnerTeam)
+        && player.fantasy_team.id === partnerTeam
       ))
-      .sort((a, b) => {
-        const teamOrder = (a.fantasy_team?.name ?? "").localeCompare(b.fantasy_team?.name ?? "");
-        return teamOrder || a.name.localeCompare(b.name);
-      }),
+      .sort((a, b) => a.name.localeCompare(b.name)),
     [leaguePlayers, partnerTeam, teamId],
   );
   const outgoingPlayer = selectableOwn.find((player) => String(player.nba_id) === outgoing) ?? null;
-  const incomingPlayer = leaguePlayers.find((player) => String(player.nba_id) === incoming) ?? null;
-  const counterpartyTeamId = incomingPlayer?.fantasy_team?.id ?? partnerTeam;
+  const incomingPlayer = incomingPlayers.find((player) => String(player.nba_id) === incoming) ?? null;
+  const counterpartyTeamId = partnerTeam;
   const selectedTeamPicks = useMemo(
     () => draftAssets.filter((asset) => asset.current_owner?.fantrax_team_external_id === teamId),
     [draftAssets, teamId],
@@ -200,17 +205,22 @@ export default function TradeAnalyzerWorkspace({
     setAnalysis(null);
     setPackageAnalysis(null);
     setError(null);
-    const selected = leaguePlayers.find((player) => String(player.nba_id) === value);
-    const destination = selected?.fantasy_team?.id ?? partnerTeam;
     if (incomingTwo === value) setIncomingTwo("");
     if (counterpartyDrop === value) setCounterpartyDrop("");
-    if (destination !== partnerTeam) {
-      setIncomingTwo("");
-      setCounterpartyDrop("");
-      setCounterpartyPicks([]);
-    }
-    setPartnerTeam(destination);
-    syncUrl({ incoming: value, partner: destination });
+    syncUrl({ incoming: value });
+  }
+
+  function changePartnerTeam(value: string) {
+    requestSequence.current += 1;
+    setPartnerTeam(value);
+    setIncoming("");
+    setIncomingTwo("");
+    setCounterpartyDrop("");
+    setCounterpartyPicks([]);
+    setAnalysis(null);
+    setPackageAnalysis(null);
+    setError(null);
+    syncUrl({ incoming: "", partner: value });
   }
 
   function changeBasis(value: TradeBasis) {
@@ -421,14 +431,14 @@ export default function TradeAnalyzerWorkspace({
             selected={outgoingPlayer}
           />
           {mode === "analyze" ? (
-            <PlayerSelector
-              label="You receive"
-              helper={partnerTeam ? `Choose a return from ${incomingPlayers[0]?.fantasy_team?.name ?? "selected team"}` : "Rostered players on every other team"}
+            <CounterpartyPlayerSelector
+              teams={counterpartyTeams}
+              teamValue={partnerTeam}
+              onTeamChange={changePartnerTeam}
               value={incoming}
               players={incomingPlayers}
               onChange={changeIncoming}
               selected={incomingPlayer}
-              grouped
             />
           ) : mode === "partners" ? (
             <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50/60 p-5 dark:border-blue-800 dark:bg-blue-950/20">
@@ -736,6 +746,59 @@ function PlayerSelector({ label, helper, value, players, selected, grouped = fal
         onChange={onChange}
       />
       {selected ? <SelectedPlayer player={selected} /> : <p className="mt-4 rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400 dark:bg-slate-800/60">No player selected</p>}
+    </div>
+  );
+}
+
+function CounterpartyPlayerSelector({ teams, teamValue, onTeamChange, value, players, selected, onChange }: {
+  teams: Array<NonNullable<FantasyPlayerPerformance["fantasy_team"]>>;
+  teamValue: string;
+  onTeamChange: (value: string) => void;
+  value: string;
+  players: FantasyPlayerPerformance[];
+  selected: FantasyPlayerPerformance | null;
+  onChange: (value: string) => void;
+}) {
+  const teamOptions = useMemo(
+    () => teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      meta: team.owner ? `Manager: ${team.owner}` : undefined,
+    })),
+    [teams],
+  );
+  const playerOptions = useMemo(() => buildPickerOptions(players, false), [players]);
+  const teamName = teams.find((team) => team.id === teamValue)?.name;
+
+  return (
+    <div className="min-w-0 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <SearchablePlayerPicker
+        label="Trade partner"
+        helper="Choose the team first"
+        placeholder="Search teams…"
+        value={teamValue}
+        options={teamOptions}
+        emptyLabel="No matching teams"
+        itemLabel="teams"
+        onChange={onTeamChange}
+      />
+      <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+        <SearchablePlayerPicker
+          label="You receive"
+          helper={teamName ? `Players on ${teamName}` : "Available after selecting a trade partner"}
+          placeholder={teamValue ? "Search players…" : "Choose a team first"}
+          value={value}
+          options={playerOptions}
+          disabled={!teamValue}
+          emptyLabel="No matching players"
+          onChange={onChange}
+        />
+      </div>
+      {selected
+        ? <SelectedPlayer player={selected} />
+        : <p className="mt-4 rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400 dark:bg-slate-800/60">
+            {teamValue ? "No player selected" : "Choose a team, then select a player"}
+          </p>}
     </div>
   );
 }
