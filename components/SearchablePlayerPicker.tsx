@@ -19,6 +19,7 @@ export default function SearchablePlayerPicker({
   options,
   disabled = false,
   emptyLabel = "No players match",
+  itemLabel = "players",
   onChange,
 }: {
   label?: string;
@@ -28,6 +29,7 @@ export default function SearchablePlayerPicker({
   options: SearchablePlayerOption[];
   disabled?: boolean;
   emptyLabel?: string;
+  itemLabel?: string;
   onChange: (id: string) => void;
 }) {
   const listId = useId();
@@ -234,7 +236,7 @@ export default function SearchablePlayerPicker({
           )}
           <p className="border-t border-slate-100 px-3 py-2 text-[11px] text-slate-400 dark:border-slate-800">
             Showing {visible.length} of {filtered.length}
-            {query.trim() ? " matches" : " players"}
+            {query.trim() ? " matches" : ` ${itemLabel}`}
           </p>
         </div>
       )}
