@@ -1020,10 +1020,98 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
       </div>
       <div className="p-4">
         <OneForTwoSuggestionCard suggestion={payload} rank={1} league={league} picksAssessed={payload.package.assets.length > 0} />
+        <ManualTradeCategoryImpact changes={payload.selected_team.category_changes} />
         <PickValuePanel payload={payload} />
       </div>
       <MethodNote>Manual exact package · 1–2 players per side · up to two canonical picks per side · no automatic transfer · pick value never changes the recommendation tier.</MethodNote>
     </section>
+  );
+}
+
+function ManualTradeCategoryImpact({ changes }: { changes: TradeCategoryChange[] }) {
+  const finiteDeltas = changes
+    .map((change) => change.z_delta)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const maximumDelta = Math.max(0, ...finiteDeltas.map((value) => Math.abs(value)));
+  const scaleCeiling = Math.max(0.5, Math.ceil(maximumDelta * 2) / 2);
+  const improving = changes.filter((change) => ["weakness_resolved", "improved"].includes(change.transition)).length;
+  const declining = changes.filter((change) => ["new_weakness", "declined"].includes(change.transition)).length;
+  const stable = changes.length - improving - declining;
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" aria-labelledby="manual-category-impact-title">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 p-4 dark:border-slate-700">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Your team · category impact</p>
+          <h3 id="manual-category-impact-title" className="mt-1 text-lg font-black text-slate-950 dark:text-white">Before → after the trade</h3>
+          <p className="mt-1 text-xs text-slate-500">Rank shows your position among league teams; the bar shows the relative strength change.</p>
+        </div>
+        <div className="flex flex-wrap gap-3 text-xs font-bold text-slate-500">
+          <span><strong className="text-emerald-600 dark:text-emerald-400">{improving}</strong> improve</span>
+          <span><strong className="text-red-600 dark:text-red-400">{declining}</strong> decline</span>
+          <span><strong className="text-slate-700 dark:text-slate-200">{stable}</strong> stable</span>
+        </div>
+      </div>
+
+      <div className="grid gap-x-6 px-4 py-2 xl:grid-cols-2">
+        {changes.map((change) => (
+          <CategoryImpactBar key={change.key} change={change} scaleCeiling={scaleCeiling} />
+        ))}
+      </div>
+
+      <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
+        <p><strong>How to read it:</strong> positive means your team improves relative to the league; negative means it declines. It is not a percentage or a probability.</p>
+        <details className="mt-2">
+          <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">What does the z-score change mean? See an example</summary>
+          <div className="mt-2 space-y-1 rounded-lg bg-white p-3 dark:bg-slate-900">
+            <p>If FG% moves from z-score −0.30 to +0.28, the displayed change is <strong>+0.58z</strong>. Your team moved from below the league average to above it.</p>
+            <p>The rank beside it makes that technical value concrete: for example, <strong>#12 → #7</strong>.</p>
+            <p>Turnovers are already direction-adjusted, so a positive change means fewer turnovers and therefore a better result.</p>
+          </div>
+        </details>
+        <p className="mt-2 text-[10px] text-slate-400">Shared chart scale: ±{scaleCeiling.toFixed(1)}z. Exact values remain visible for comparison.</p>
+      </div>
+    </section>
+  );
+}
+
+function CategoryImpactBar({ change, scaleCeiling }: {
+  change: TradeCategoryChange;
+  scaleCeiling: number;
+}) {
+  const delta = change.z_delta;
+  const positive = ["weakness_resolved", "improved"].includes(change.transition);
+  const negative = ["new_weakness", "declined"].includes(change.transition);
+  const barWidth = delta == null ? 0 : Math.min(Math.abs(delta) / scaleCeiling, 1) * 50;
+  const tone = positive
+    ? "bg-emerald-500"
+    : negative
+      ? "bg-red-500"
+      : "bg-slate-500";
+  const valueTone = positive
+    ? "text-emerald-600 dark:text-emerald-400"
+    : negative
+      ? "text-red-600 dark:text-red-400"
+      : "text-slate-500";
+  const direction = positive ? "improves" : negative ? "declines" : "is stable";
+  const deltaLabel = delta == null ? "—" : `${formatSigned(delta)}z`;
+
+  return (
+    <div className="grid min-h-14 grid-cols-[42px_92px_minmax(70px,1fr)_58px] items-center gap-2 border-b border-slate-100 py-2 dark:border-slate-800" aria-label={`${change.label}: rank ${formatRank(change.before.league_rank)} to ${formatRank(change.after.league_rank)}, ${direction}, ${deltaLabel}`}>
+      <span className="text-xs font-black text-slate-800 dark:text-slate-100">{change.label}</span>
+      <span className="whitespace-nowrap text-xs tabular-nums text-slate-500">#{formatRank(change.before.league_rank)} → <strong className="text-slate-800 dark:text-slate-100">#{formatRank(change.after.league_rank)}</strong></span>
+      <span className="relative h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700" aria-hidden="true">
+        <span className="absolute inset-y-0 left-1/2 w-px bg-slate-400 dark:bg-slate-500" />
+        {delta != null && delta !== 0 && (
+          <span
+            className={`absolute inset-y-0 rounded-full ${tone} ${delta > 0 ? "left-1/2" : "right-1/2"}`}
+            style={{ width: `${barWidth}%` }}
+          />
+        )}
+        {delta === 0 && <span className="absolute inset-y-0 left-1/2 w-1 -translate-x-1/2 rounded-full bg-slate-500" />}
+      </span>
+      <strong className={`text-right text-xs tabular-nums ${valueTone}`}>{deltaLabel}</strong>
+    </div>
   );
 }
 
