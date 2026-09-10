@@ -1114,6 +1114,10 @@ export interface FantasyLeague {
   personal_team_name: string;
   enabled: boolean;
   season_phase?: FantasySeasonPhase;
+  roster_rules?: {
+    minimum_players?: number;
+    standard_maximum?: number;
+  } | null;
 }
 
 export interface MatchupTeam {
