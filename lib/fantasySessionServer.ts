@@ -51,7 +51,7 @@ export async function loadFantasySession(
     return { response: unavailable, session: null };
   }
   if (!response.ok) return { response, session: null };
-  return { response, session: await response.json() as FantasySession };
+  return { response, session: await response.clone().json() as FantasySession };
 }
 
 export async function fantasyIdentityForRequest(

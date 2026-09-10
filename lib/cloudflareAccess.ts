@@ -85,7 +85,10 @@ export async function getCloudflareAccessIdentityFromHeaders(
       next: { revalidate: 3600 },
     });
     if (!certsResponse.ok) return null;
-    const certs = await certsResponse.json() as { keys?: CloudflareJwk[] };
+    // Next.js can deduplicate concurrent cached fetches and hand callers the
+    // same Response body. Clone it so parallel authentication requests do not
+    // race while decoding Cloudflare's certificate payload.
+    const certs = await certsResponse.clone().json() as { keys?: CloudflareJwk[] };
     const jwk = certs.keys?.find((key) => key.kid === header.kid);
     if (!jwk) return null;
 
