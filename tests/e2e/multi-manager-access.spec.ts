@@ -57,6 +57,30 @@ test("membership-aware navigation differs by manager role", async ({ page, reque
   await expect(page.getByText("xrtc", { exact: true }).first()).toBeVisible();
 });
 
+test("Manager Today recommendations stay isolated per manager membership", async ({ page, request }) => {
+  const [tokenA, tokenB] = await Promise.all([
+    tokenFor(request, "manager-a-subject"),
+    tokenFor(request, "manager-b-subject"),
+  ]);
+
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
+  await page.goto(app);
+  await expect(page.getByRole("heading", { name: /Alice/ })).toBeVisible();
+  await expect(page.getByText("LDL Manager A Target", { exact: true })).toBeVisible();
+  await expect(page.getByText("BDB Manager A Target", { exact: true })).toBeVisible();
+  await expect(page.getByText(/xrtc Target/, { exact: false })).toHaveCount(0);
+  await expect(page.getByText(/over the cap/)).toBeVisible();
+
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenB });
+  await page.goto(app);
+  await expect(page.getByRole("heading", { name: /Bob/ })).toBeVisible();
+  await expect(page.getByText("LDL xrtc Target", { exact: true })).toBeVisible();
+  await expect(page.getByText("BDB xrtc Target", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Manager A Target/, { exact: false })).toHaveCount(0);
+  await expect(page.getByText("Provisional roster", { exact: true })).toBeVisible();
+  await expect(page.getByText("38", { exact: true })).toBeVisible();
+});
+
 test("trade suggestions are restricted to the signed-in manager team", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),

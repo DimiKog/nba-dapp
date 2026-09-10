@@ -40,14 +40,14 @@ Object.assign(publicJwk, { kid: keyId, alg: "RS256", use: "sig" });
 
 const sessions = {
   "manager-a-subject": {
-    user: { id: 1, email: "manager-a@example.test", display_name: "Manager A" },
+    user: { id: 1, email: "manager-a@example.test", display_name: "Alice Example" },
     memberships: [
       membership("ldl", "ldl-franchise-a", "Manager A LDL", "ldl-team-a", true),
       membership("bdb", "bdb-franchise-a", "Manager A BDB", "bdb-team-a", false),
     ],
   },
   "manager-b-subject": {
-    user: { id: 2, email: "manager-b@example.test", display_name: "Manager B" },
+    user: { id: 2, email: "manager-b@example.test", display_name: "Bob Example" },
     memberships: [
       membership("ldl", "ldl-franchise-b", "xrtc", "ldl-team-b", false),
       membership("bdb", "bdb-franchise-b", "xrtc", "bdb-team-b", false),
@@ -115,6 +115,31 @@ const server = createServer((request, response) => {
       players: [],
     });
   }
+  const performanceMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/performance$/);
+  if (performanceMatch) {
+    const [, league, teamId] = performanceMatch;
+    const membership = membershipByTeam(league, teamId);
+    if (!membership) return send(response, 403, { error: "Not your team" });
+    const incomplete = teamId === "bdb-team-b";
+    return send(response, 200, rosterPerformanceFixture(league, membership, incomplete));
+  }
+  const profileMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/category-profile$/);
+  if (profileMatch) {
+    const [, league, teamId] = profileMatch;
+    const membership = membershipByTeam(league, teamId);
+    if (!membership) return send(response, 403, { error: "Not your team" });
+    return send(response, 200, categoryProfileFixture(league, membership));
+  }
+  const targetsMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/targets$/);
+  if (targetsMatch) {
+    const [, league, teamId] = targetsMatch;
+    const session = sessionFor(request);
+    const membership = session?.memberships.find((item) => (
+      item.league_slug === league && item.fantrax_team_id === teamId
+    ));
+    if (!membership) return send(response, 403, { error: "Not your team" });
+    return send(response, 200, targetsFixture(league, membership, session.user.id));
+  }
   if (/^\/api\/fantasy\/(ldl|bdb)\/trade-suggestions$/.test(url.pathname)) {
     let rawBody = "";
     request.on("data", (chunk) => { rawBody += chunk; });
@@ -131,6 +156,134 @@ const server = createServer((request, response) => {
 
   send(response, 404, { error: `No E2E fixture for ${url.pathname}` });
 });
+
+function leagueFixture(slug) {
+  return {
+    slug,
+    name: slug === "ldl" ? "LDL" : "BδB",
+    league_id: `${slug}-league`,
+    personal_team_id: "global-config-must-not-be-used",
+    personal_team_name: "Global config must not be used",
+    enabled: true,
+    season_phase: "off_season",
+    roster_rules: { minimum_players: 13, standard_maximum: 14 },
+  };
+}
+
+function membershipByTeam(league, teamId) {
+  return Object.values(sessions)
+    .flatMap((session) => session.memberships)
+    .find((item) => item.league_slug === league && item.fantrax_team_id === teamId) ?? null;
+}
+
+function rosterPerformanceFixture(league, membership, incomplete) {
+  const playerCount = incomplete ? 8 : 14;
+  return {
+    league: leagueFixture(league),
+    team: {
+      id: membership.fantrax_team_id,
+      name: membership.franchise_name,
+      logo: null,
+      owner: null,
+      ...(league === "bdb" ? { claim_budget: { remaining: 38, source: "fixture" } } : {}),
+    },
+    window: { days: 7, from: "2026-09-03", to: "2026-09-10", season: "2026-27" },
+    categories: ["FT%", "3PTM", "AST"],
+    ranking_method: "fixture",
+    payroll: league === "ldl" ? {
+      includes_statuses: ["Active", "Reserve", "IR"],
+      seasons: [{
+        season: "2026-27",
+        total: membership.fantrax_team_id.endsWith("-a") ? 230_000_000 : 190_000_000,
+        known_players: playerCount,
+        free_agents: 0,
+        cap: 217_500_000,
+        remaining: membership.fantrax_team_id.endsWith("-a") ? -12_500_000 : 27_500_000,
+        status: membership.fantrax_team_id.endsWith("-a") ? "over" : "under",
+        cap_provisional: false,
+      }],
+    } : undefined,
+    players: Array.from({ length: playerCount }, (_, index) => ({
+      nba_id: 10_000 + index,
+      player_id: 20_000 + index,
+      name: `Fixture Player ${index + 1}`,
+      short_name: `Player ${index + 1}`,
+      nba_team: "Test Team",
+      nba_team_short: "TST",
+      position: "G",
+      photo: null,
+      fantasy_team: null,
+      injury: index === 0 && membership.fantrax_team_id.endsWith("-a")
+        ? { status: "GTD", body_part: "ankle", detail: null, source: "fixture", updated_at: null }
+        : null,
+      latest_game: null,
+      window_stats: { games: 0 },
+      season_average: null,
+      category_strengths: [],
+      impact_rank: null,
+      impact_score: null,
+      freshness: { roster: null, stats: null, injury: null },
+    })),
+  };
+}
+
+function categoryProfileFixture(league, membership) {
+  return {
+    league: leagueFixture(league),
+    team: { id: membership.fantrax_team_id, name: membership.franchise_name, logo: null, owner: null },
+    basis_requested: "season",
+    basis_used: "season",
+    scope: "roster_rate",
+    window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
+    snapshot: { captured_at: "2026-09-10T08:00:00Z", generated_at: "2026-09-10T08:01:00Z", source: "database_cache" },
+    sample: { league_teams: 14, players_included: 14, players_missing_stats: 0, league_players_included: { minimum: 13, maximum: 14, average: 14 } },
+    categories: [],
+    weaknesses: ["FT%", "TO"],
+    strengths: ["3PTM", "AST"],
+    severe_weaknesses: [],
+    method: { ranking: "fixture", ratios: "fixture", turnovers: "fixture", window_scope: "fixture" },
+  };
+}
+
+function targetsFixture(league, membership, managerId) {
+  const name = managerId === 1
+    ? `${league.toUpperCase()} Manager A Target`
+    : `${league.toUpperCase()} xrtc Target`;
+  return {
+    league: leagueFixture(league),
+    team: { id: membership.fantrax_team_id, name: membership.franchise_name, logo: null, owner: null },
+    basis_requested: "season",
+    basis_used: "season",
+    fallback_reason: null,
+    window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
+    need_source: "profile_weaknesses",
+    needs: [],
+    sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: 80, returned: 1 },
+    filters: { availability: "free_agent", position: null, limit: 12 },
+    candidates: [{
+      player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
+      nba_id: managerId * 1_000 + (league === "ldl" ? 1 : 2),
+      name,
+      short_name: name,
+      nba_team: "Test Team",
+      nba_team_short: "TST",
+      position: "G",
+      photo: null,
+      availability: "free_agent",
+      fantasy_team: null,
+      fit_rank: 1,
+      fit_score: managerId === 1 ? 1.25 : 0.85,
+      confidence: "high",
+      recommendation_tier: "strong",
+      recommendation_labels: ["fixture"],
+      helps: ["FT%", "AST"],
+      hurts_needs: [],
+      tradeoffs: ["TO"],
+      salary_2026_27: null,
+      injury: null,
+    }],
+  };
+}
 
 function accessToken(subject, user) {
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");

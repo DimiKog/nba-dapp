@@ -16,6 +16,7 @@ import {
   type FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
+import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
 import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 
 export default async function Home() {
@@ -47,6 +48,7 @@ export default async function Home() {
               league: slug,
               leagueName: slug === "ldl" ? "LDL" : "BδB",
               teamName: membership.franchise_name,
+              teamId,
               matchup,
               performance,
               profile,
@@ -62,7 +64,19 @@ export default async function Home() {
   return (
     <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
 
-      {/* Scoreboard */}
+      <ManagerTodayHeader
+        displayName={session?.user.display_name ?? null}
+        teamCount={personalTeams.length}
+      />
+
+      <NeedsAttention teams={personalTeams} />
+
+      <PersonalTeamsGrid
+        teams={personalTeams}
+        hasAccessIdentity={Boolean(context.identity)}
+        hasSession={Boolean(session)}
+      />
+
       {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
@@ -80,11 +94,11 @@ export default async function Home() {
                 : formatGameDate(g.date) ?? g.status;
 
               return (
-                <div key={g.id} className="flex items-center gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 shadow-sm min-w-[220px]">
+                <div key={g.id} className="flex min-w-[220px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
                   <TeamScore team={g.away} showScore={showScore} />
-                  <span className="text-xs text-slate-400 font-medium">@</span>
+                  <span className="text-xs font-medium text-slate-400">@</span>
                   <TeamScore team={g.home} showScore={showScore} />
-                  <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${g.completed ? "bg-slate-100 dark:bg-slate-800 text-slate-500" : "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300"}`}>
+                  <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${g.completed ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"}`}>
                     {displayStatus}
                   </span>
                 </div>
@@ -93,12 +107,6 @@ export default async function Home() {
           </div>
         )}
       </section>
-
-      <PersonalTeamsGrid
-        teams={personalTeams}
-        hasAccessIdentity={Boolean(context.identity)}
-        hasSession={Boolean(session)}
-      />
 
       <HomeRadarPanels radars={radarPanels} />
 
@@ -135,6 +143,124 @@ export default async function Home() {
         </section>
       </div>
     </main>
+  );
+}
+
+function ManagerTodayHeader({
+  displayName,
+  teamCount,
+}: {
+  displayName: string | null;
+  teamCount: number;
+}) {
+  const firstName = displayName?.trim().split(/\s+/)[0] ?? null;
+  const greeting = greetingForAthens();
+  return (
+    <section className="overflow-hidden rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 px-6 py-7 text-white shadow-lg shadow-blue-950/10 dark:border-blue-800">
+      <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-100">Manager Today</p>
+      <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">
+        {firstName ? `${greeting}, ${firstName}` : "Your fantasy command center"}
+      </h1>
+      <p className="mt-2 max-w-2xl text-sm text-blue-100 sm:text-base">
+        {teamCount > 0
+          ? `The most useful signals and next actions across ${teamCount === 1 ? "your team" : `your ${teamCount} teams`}.`
+          : "Sign in to see your teams, urgent checks and best available moves in one place."}
+      </p>
+    </section>
+  );
+}
+
+type AttentionItem = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  tone: "critical" | "warning";
+};
+
+function NeedsAttention({ teams }: { teams: PersonalTeamDashboard[] }) {
+  const rosterItems: AttentionItem[] = [];
+  const capItems: AttentionItem[] = [];
+  const injuryItems: AttentionItem[] = [];
+
+  for (const dashboard of teams) {
+    const performance = dashboard.performance;
+    const rosterHref = `/fantasy/${dashboard.league}/roster/${encodeURIComponent(dashboard.teamId)}`;
+    const minimum = performance?.league.roster_rules?.minimum_players;
+    const rosterCount = performance?.players.length;
+    if (minimum != null && rosterCount != null && rosterCount < minimum) {
+      rosterItems.push({
+        key: `${dashboard.league}-roster`,
+        title: `${dashboard.teamName} roster is incomplete`,
+        detail: `${rosterCount} of at least ${minimum} players. Recommendations remain provisional.`,
+        href: `/watchlist?league=${dashboard.league}`,
+        tone: "critical",
+      });
+    }
+
+    const remaining = performance?.payroll?.seasons[0]?.remaining;
+    if (remaining != null && remaining < 0) {
+      capItems.push({
+        key: `${dashboard.league}-cap`,
+        title: `${dashboard.teamName} is ${compactMoney(Math.abs(remaining))} over the cap`,
+        detail: "Review salaries before the next roster decision.",
+        href: rosterHref,
+        tone: "critical",
+      });
+    }
+
+    const injuries = performance?.players.filter((player) => player.injury) ?? [];
+    if (injuries.length > 0) {
+      injuryItems.push({
+        key: `${dashboard.league}-injuries`,
+        title: `${injuries.length} injury ${injuries.length === 1 ? "alert" : "alerts"} on ${dashboard.teamName}`,
+        detail: injuries.slice(0, 3).map((player) => player.short_name).join(" · "),
+        href: rosterHref,
+        tone: "warning",
+      });
+    }
+  }
+
+  const items = [...rosterItems, ...capItems, ...injuryItems];
+  if (teams.length === 0) return null;
+
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">Needs attention</h2>
+          <p className="mt-1 text-sm text-slate-500">Roster checks first, then cap and health.</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          {items.length} {items.length === 1 ? "item" : "items"}
+        </span>
+      </div>
+      {items.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {items.map((item) => (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={`rounded-2xl border p-4 transition-transform hover:-translate-y-0.5 ${
+                item.tone === "critical"
+                  ? "border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30"
+                  : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+              }`}
+            >
+              <p className={`text-sm font-black ${item.tone === "critical" ? "text-rose-800 dark:text-rose-300" : "text-amber-800 dark:text-amber-300"}`}>
+                {item.title}
+              </p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{item.detail}</p>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+          <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">No urgent roster, cap or injury actions.</p>
+          <p className="mt-1 text-xs text-slate-500">The free-agent scan below may still find an upgrade.</p>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -242,9 +368,10 @@ function HomeRadarCard({
 }
 
 type PersonalTeamDashboard = {
-  league: string;
+  league: "ldl" | "bdb";
   leagueName: string;
   teamName: string;
+  teamId: string;
   matchup: FantasyMatchupPeriod | null;
   performance: FantasyRosterPerformance | null;
   profile: FantasyTeamCategoryProfile | null;
@@ -263,9 +390,9 @@ function PersonalTeamsGrid({
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-          My fantasy teams
+          My teams
         </h2>
-        <p className="text-xs text-slate-400">Cap, health and current matchups</p>
+        <p className="text-xs text-slate-400">Status, best move and quick actions</p>
       </div>
       <div className="grid items-start gap-5 lg:grid-cols-2">
         {teams.map((team) => (
@@ -297,33 +424,33 @@ function PersonalTeamsGrid({
 function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
   const { league, matchup, performance } = dashboard;
   const leagueName = performance?.league.name ?? matchup?.league.name ?? dashboard.leagueName;
-  const teamName = performance?.team.name ?? matchup?.league.personal_team_name ?? dashboard.teamName;
-  const teamId = performance?.team.id ?? matchup?.team_id;
-  const rosterHref = teamId ? `/fantasy/${league}/roster/${encodeURIComponent(teamId)}` : `/fantasy/${league}`;
-  const tradeHref = teamId
-    ? `/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`
-    : null;
+  const teamName = performance?.team.name ?? dashboard.teamName;
+  const teamId = dashboard.teamId;
+  const rosterHref = `/fantasy/${league}/roster/${encodeURIComponent(teamId)}`;
+  const tradeHref = `/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`;
   const analysisHref = `${rosterHref}#team-analysis`;
-
-  if (!performance && !matchup) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
-        <span className="rounded-full bg-slate-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-          {leagueName}
-        </span>
-        <p className="mt-3 font-bold text-slate-900 dark:text-white">{teamName}</p>
-        <p className="mt-1 text-sm text-slate-500">Personal fantasy data is temporarily unavailable.</p>
-      </div>
-    );
-  }
 
   const currentPayroll = performance?.payroll?.seasons[0];
   const injured = performance?.players.filter((player) => player.injury) ?? [];
-  const leader = [...(performance?.players ?? [])]
-    .filter((player) => (player.season_average?.games ?? 0) > 0)
-    .sort((a, b) => (b.season_average?.points ?? 0) - (a.season_average?.points ?? 0))[0];
-
   const capPosition = currentPayroll?.remaining;
+  const claimBudget = performance?.team.claim_budget?.remaining;
+  const rosterCount = performance?.players.length;
+  const rosterMinimum = performance?.league.roster_rules?.minimum_players;
+  const rosterIncomplete = rosterCount != null && rosterMinimum != null && rosterCount < rosterMinimum;
+  const rosterShortfall = rosterIncomplete ? rosterMinimum - rosterCount : null;
+  const resourceLabel = claimBudget != null ? "UFA tokens" : "Cap position";
+  const resourceValue = claimBudget != null
+    ? String(claimBudget)
+    : capPosition == null
+      ? "Unavailable"
+      : capPosition < 0
+        ? `${compactMoney(Math.abs(capPosition))} over`
+        : `${compactMoney(capPosition)} under`;
+  const resourceTone = claimBudget != null || (capPosition != null && capPosition >= 0)
+    ? "text-emerald-600 dark:text-emerald-400"
+    : capPosition != null
+      ? "text-red-600 dark:text-red-400"
+      : "text-slate-500";
 
   return (
     <article className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-sm dark:border-blue-900 dark:from-blue-950/60 dark:via-slate-900 dark:to-indigo-950/50">
@@ -334,39 +461,33 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
           </span>
           <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{teamName}</h3>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-          <Link
-            href={rosterHref}
-            className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-          >
-            Open roster →
-          </Link>
-          {tradeHref && (
-            <Link
-              href={tradeHref}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              Analyze trade
-            </Link>
-          )}
-        </div>
+        {rosterIncomplete && (
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+            Roster incomplete
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-3 divide-x divide-blue-100 border-b border-blue-100 bg-white/60 dark:divide-blue-900/70 dark:border-blue-900/70 dark:bg-slate-950/20">
         <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Cap position</p>
-          <p className={`mt-1 truncate text-xs font-black tabular-nums ${
-            capPosition == null
-              ? "text-slate-500"
-              : capPosition < 0
-                ? "text-red-600 dark:text-red-400"
-                : "text-emerald-600 dark:text-emerald-400"
-          }`}>
-            {capPosition == null
-              ? "Unavailable"
-              : capPosition < 0
-                ? `${compactMoney(Math.abs(capPosition))} over`
-                : `${compactMoney(capPosition)} under`}
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Roster</p>
+          <p className={`mt-1 truncate text-sm font-black tabular-nums ${rosterIncomplete ? "text-amber-700 dark:text-amber-300" : "text-slate-950 dark:text-white"}`}>
+            {rosterCount == null ? "Unavailable" : `${rosterCount} players`}
+          </p>
+          <p className="truncate text-[11px] text-slate-500">
+            {rosterIncomplete
+              ? `${rosterShortfall} below minimum`
+              : rosterCount == null
+                ? "Data unavailable"
+                : rosterMinimum == null
+                  ? "Minimum unavailable"
+                  : `Minimum ${rosterMinimum}`}
+          </p>
+        </div>
+        <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{resourceLabel}</p>
+          <p className={`mt-1 truncate text-xs font-black tabular-nums ${resourceTone}`}>
+            {resourceValue}
           </p>
         </div>
         <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
@@ -376,15 +497,6 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
           </p>
           <p className="truncate text-[11px] text-slate-500">
             {injured.map((player) => player.short_name).join(", ") || (performance ? "No alerts" : "Unavailable")}
-          </p>
-        </div>
-        <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Scoring leader</p>
-          <p className="mt-1 truncate text-sm font-black text-slate-950 dark:text-white">
-            {leader?.name ?? "No games yet"}
-          </p>
-          <p className="truncate text-[11px] font-semibold text-slate-500">
-            {leader ? `${leader.season_average?.points ?? 0} PTS` : "—"}
           </p>
         </div>
       </div>
@@ -419,6 +531,14 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         </div>
       )}
 
+      <div className="border-b border-blue-100 bg-white/70 px-4 py-4 dark:border-blue-900/70 dark:bg-slate-950/20">
+        <ManagerTodayRecommendation
+          league={league}
+          teamId={teamId}
+          provisional={rosterIncomplete}
+        />
+      </div>
+
       <div className="p-4">
         {matchup ? (
           <>
@@ -440,7 +560,25 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
           <p className="text-sm text-slate-500">Current matchup is temporarily unavailable.</p>
         )}
       </div>
+
+      <div className="grid grid-cols-2 gap-2 border-t border-blue-100 bg-white/70 p-4 dark:border-blue-900/70 dark:bg-slate-950/20 sm:grid-cols-4">
+        <QuickAction href={rosterHref} label="Roster" />
+        <QuickAction href={`/watchlist?league=${league}`} label="Free agents" />
+        <QuickAction href={tradeHref} label="Analyze trade" />
+        <QuickAction href={`/draft-assets?league=${league}`} label="Draft assets" />
+      </div>
     </article>
+  );
+}
+
+function QuickAction({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-xs font-bold text-blue-700 transition-colors hover:border-blue-400 hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-blue-950"
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -600,4 +738,15 @@ function formatGameDate(value: string): string | null {
   );
 
   return `${part("weekday")} ${part("day")} ${part("month")} · ${part("hour")}:${part("minute")}`;
+}
+
+function greetingForAthens(): string {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Athens",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date()));
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
 }
