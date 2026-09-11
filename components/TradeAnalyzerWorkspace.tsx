@@ -1334,6 +1334,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
   const [pickFilter, setPickFilter] = useState<PickGuidanceFilter>("all");
   const [capFilter, setCapFilter] = useState<CapStatusFilter>("all");
+  const [highlightedCandidate, setHighlightedCandidate] = useState<string | null>(null);
   const returnedSuggestions = useMemo(
     () => payload.teams.flatMap((group) => group.suggestions),
     [payload.teams],
@@ -1362,6 +1363,21 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
   const visibleCount = filteredTeams.reduce((count, group) => count + group.suggestions.length, 0);
   const filtersActive = recommendationFilter !== "all" || pickFilter !== "all" || capFilter !== "all";
   const gateCounts = payload.diagnostics.strict_gate_counts;
+  const closestAlternatives = payload.closest_alternatives;
+
+  function focusAlternative(counterpartyTeamId: string, incomingNbaId: number | null) {
+    const key = suggestionCandidateKey(counterpartyTeamId, incomingNbaId);
+    setRecommendationFilter("all");
+    setPickFilter("all");
+    setCapFilter("all");
+    setHighlightedCandidate(key);
+    requestAnimationFrame(() => {
+      document.getElementById(`trade-suggestion-${key}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  }
 
   function clearFilters() {
     setRecommendationFilter("all");
@@ -1401,6 +1417,14 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
             <GateCount label="Passes all three" passed={gateCounts.all_strict_gates} total={gateCounts.eligible_after_hard_filters} emphasized />
           </div>
         </div>
+      )}
+      {payload.counts.proposable === 0 && closestAlternatives && closestAlternatives.returned > 0 && (
+        <ClosestAlternativesPanel
+          alternatives={closestAlternatives}
+          gateCounts={gateCounts}
+          suggestions={returnedSuggestions}
+          onView={focusAlternative}
+        />
       )}
       {payload.teams.length > 0 && (
         <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
@@ -1473,6 +1497,10 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
                   <SuggestionCard
                     key={`${group.team.id}-${suggestion.trade.incoming.nba_id}`}
                     suggestion={suggestion}
+                    highlighted={highlightedCandidate === suggestionCandidateKey(
+                      suggestion.trade.counterparty_team_id,
+                      suggestion.trade.incoming.nba_id,
+                    )}
                     onAnalyze={() => onAnalyze(suggestion)}
                   />
                 ))}
@@ -1558,6 +1586,99 @@ function GateCount({ label, passed, total, emphasized = false }: {
   );
 }
 
+type ClosestAlternatives = NonNullable<
+  FantasyBalancedTradeSuggestions["closest_alternatives"]
+>;
+type ClosestAlternative = ClosestAlternatives["items"][number];
+
+function suggestionCandidateKey(
+  counterpartyTeamId: string,
+  incomingNbaId: number | null,
+): string {
+  return `${counterpartyTeamId}-${incomingNbaId ?? "unknown"}`;
+}
+
+function closestActionText(alternative: ClosestAlternative): string {
+  const messages: Record<ClosestAlternative["suggested_action"]["type"], string> = {
+    review_category_tradeoff: "Review the category loss before using this as a starting point.",
+    improve_partner_return: "Improve what the partner receives or restructure the return.",
+    additional_compensation: "Consider an additional player or the displayed shadow pick guidance.",
+    restructure_package: "More than one check failed; restructure the package rather than making a small adjustment.",
+  };
+  return messages[alternative.suggested_action.type];
+}
+
+function closestGateLabel(gate: ClosestAlternative["failed_gates"][number]): string {
+  return {
+    selected_team_category_fit: "your category fit",
+    counterparty_acceptance: "partner incentive",
+    production_value_balance: "production value",
+  }[gate];
+}
+
+function ClosestAlternativesPanel({ alternatives, gateCounts, suggestions, onView }: {
+  alternatives: ClosestAlternatives;
+  gateCounts: FantasyBalancedTradeSuggestions["diagnostics"]["strict_gate_counts"];
+  suggestions: BalancedTradeSuggestion[];
+  onView: (counterpartyTeamId: string, incomingNbaId: number | null) => void;
+}) {
+  const byKey = new Map(suggestions.map((suggestion) => [
+    suggestionCandidateKey(
+      suggestion.trade.counterparty_team_id,
+      suggestion.trade.incoming.nba_id,
+    ),
+    suggestion,
+  ]));
+  return (
+    <div className="border-b border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-amber-800 dark:text-amber-300">Why no strict match?</p>
+      {gateCounts && (
+        <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+          {gateCounts.eligible_after_hard_filters} cap-legal pairs checked. {gateCounts.selected_team_category_fit} helped or preserved your categories, {gateCounts.counterparty_acceptance} gave the partner positive incentive, and {gateCounts.production_value_balance} had balanced production value. None passed all three checks together.
+        </p>
+      )}
+      <h3 className="mt-4 font-black text-slate-950 dark:text-white">Closest alternatives</h3>
+      <p className="mt-1 text-xs text-slate-500">These are negotiation starting points, not recommended offers. No threshold was relaxed.</p>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        {alternatives.items.map((alternative) => {
+          const key = suggestionCandidateKey(
+            alternative.counterparty_team_id,
+            alternative.incoming_nba_id,
+          );
+          const suggestion = byKey.get(key);
+          if (!suggestion) return null;
+          return (
+            <article key={key} className="rounded-xl border border-amber-200 bg-white p-3 dark:border-amber-900 dark:bg-slate-900">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-black text-slate-950 dark:text-white">{suggestion.trade.incoming.name}</p>
+                  <p className="text-xs text-slate-500">{suggestion.counterparty_team.team.name}</p>
+                </div>
+                <span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-black uppercase text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                  {alternative.classification === "one_check_short" ? "One check short" : "Needs changes"}
+                </span>
+              </div>
+              <p className="mt-3 text-xs font-bold text-slate-700 dark:text-slate-200">Passes {alternative.passed_gate_count}/3 checks</p>
+              <p className="mt-1 text-xs text-slate-500">Review: {alternative.failed_gates.map(closestGateLabel).join(" and ")}.</p>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{closestActionText(alternative)}</p>
+              <button
+                type="button"
+                onClick={() => onView(
+                  alternative.counterparty_team_id,
+                  alternative.incoming_nba_id,
+                )}
+                className="mt-3 text-xs font-black text-blue-700 hover:underline dark:text-blue-300"
+              >
+                View full analysis →
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function gateReasonText(reason: string): string {
   const messages: Record<string, string> = {
     selected_team_fit_nonnegative: "The swap helps or preserves your category profile.",
@@ -1602,8 +1723,9 @@ function SuggestionQualification({ suggestion }: { suggestion: BalancedTradeSugg
   );
 }
 
-function SuggestionCard({ suggestion, onAnalyze }: {
+function SuggestionCard({ suggestion, highlighted = false, onAnalyze }: {
   suggestion: BalancedTradeSuggestion;
+  highlighted?: boolean;
   onAnalyze: () => void;
 }) {
   const incoming = suggestion.trade.incoming;
@@ -1618,8 +1740,15 @@ function SuggestionCard({ suggestion, onAnalyze }: {
   const valueGap = selectedValue.value_gap_to_balanced;
   const selectedCap = suggestion.cap_legality.selected_team;
   const amountToClear = selectedCap.amount_to_clear ?? 0;
+  const candidateKey = suggestionCandidateKey(
+    suggestion.trade.counterparty_team_id,
+    suggestion.trade.incoming.nba_id,
+  );
   return (
-    <article className={`flex min-w-0 flex-col rounded-xl border p-4 ${proposable ? "border-emerald-200 dark:border-emerald-900" : "border-amber-200 dark:border-amber-900"}`}>
+    <article
+      id={`trade-suggestion-${candidateKey}`}
+      className={`flex min-w-0 scroll-mt-24 flex-col rounded-xl border p-4 transition-shadow ${highlighted ? "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900" : ""} ${proposable ? "border-emerald-200 dark:border-emerald-900" : "border-amber-200 dark:border-amber-900"}`}
+    >
       <div className="flex items-start gap-3">
         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
           {photo ? <Image src={photo} alt={incoming.name} fill className="object-cover" unoptimized /> : null}
