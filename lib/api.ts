@@ -582,6 +582,40 @@ export interface FantasyBalancedTradeSuggestions {
   intent: "balanced";
   strategy_applied: false;
   counts: { proposable: number; exploratory: number; returned: number };
+  closest_alternatives?: {
+    selection_method: "fewest_failed_gates_then_existing_deterministic_order";
+    scope: "returned_exploratory_suggestions";
+    total_considered: number;
+    excluded_not_safe: number;
+    returned: number;
+    items: Array<{
+      counterparty_team_id: string;
+      incoming_nba_id: number | null;
+      classification: "one_check_short" | "needs_changes";
+      passed_gate_count: number;
+      failed_gate_count: number;
+      failed_gates: Array<
+        | "selected_team_category_fit"
+        | "counterparty_acceptance"
+        | "production_value_balance"
+      >;
+      primary_blocker: {
+        gate:
+          | "selected_team_category_fit"
+          | "counterparty_acceptance"
+          | "production_value_balance";
+        reason: string;
+      };
+      suggested_action: {
+        type:
+          | "review_category_tradeoff"
+          | "improve_partner_return"
+          | "additional_compensation"
+          | "restructure_package";
+        pick_guidance: TradeSuggestionPickCompensation["status"] | null;
+      };
+    }>;
+  };
   teams: Array<{
     team: { id: string; name: string; logo: string | null; owner: string | null };
     counts: { proposable: number; exploratory: number; returned: number };
