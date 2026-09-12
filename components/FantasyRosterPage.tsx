@@ -80,9 +80,14 @@ export default async function FantasyRosterPage({
           </div>
         </div>
         {isPersonalTeam && (
-          <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
-            Analyze a trade →
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/fantasy/${league}/strategy`} className="w-fit rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
+              Category strategy
+            </Link>
+            <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+              Analyze a trade →
+            </Link>
+          </div>
         )}
       </div>
 
