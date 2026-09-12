@@ -1599,10 +1599,25 @@ function suggestionCandidateKey(
 }
 
 function closestActionText(alternative: ClosestAlternative): string {
+  if (alternative.suggested_action.type === "additional_compensation") {
+    switch (alternative.suggested_action.pick_guidance) {
+      case "possible_options":
+        return "Consider an additional player or review the displayed shadow pick options.";
+      case "options_below_requirement":
+        return "An additional player is likely needed; the displayed shadow pick options do not fully cover the gap.";
+      case "unavailable":
+        return "Add another player or restructure the package; reliable pick guidance is unavailable.";
+      case "not_required":
+        return "Add another player or restructure the package; no pick adjustment is indicated for this comparison.";
+      case null:
+        return "Add another player or restructure the package; no pick guidance is available for this comparison.";
+    }
+  }
+
   const messages: Record<ClosestAlternative["suggested_action"]["type"], string> = {
     review_category_tradeoff: "Review the category loss before using this as a starting point.",
     improve_partner_return: "Improve what the partner receives or restructure the return.",
-    additional_compensation: "Consider an additional player or the displayed shadow pick guidance.",
+    additional_compensation: "Add another player or restructure the package.",
     restructure_package: "More than one check failed; restructure the package rather than making a small adjustment.",
   };
   return messages[alternative.suggested_action.type];
