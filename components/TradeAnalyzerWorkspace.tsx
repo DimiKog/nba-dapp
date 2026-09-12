@@ -618,7 +618,7 @@ function PackageRepairBanner({ context, outgoingName }: {
         </span>
       </div>
       <p className="mt-3 border-t border-blue-200 pt-3 text-xs text-slate-600 dark:border-blue-900 dark:text-slate-300">
-        The primary players and partner are preselected. Add an optional second player or eligible canonical pick below, then run Analyze trade. Nothing is added automatically.
+        The primary players and partner are preselected. Adjust either side with an optional second player, then run Analyze trade. You can also attach eligible canonical picks as shadow negotiation context; picks never change the recommendation tier. Nothing is added automatically.
       </p>
       <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
         Primary blocker: {gateReasonText(context.primaryBlockerReason)}
