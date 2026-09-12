@@ -2,6 +2,10 @@ import "server-only";
 
 import Link from "next/link";
 import TeamCategoryStrategyEditor from "@/components/TeamCategoryStrategyEditor";
+import {
+  fetchFantasyTeamCategoryProfile,
+  type FantasyTeamCategoryProfile,
+} from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 import type { TeamCategoryStrategy } from "@/lib/teamCategoryStrategy";
 import { readTeamCategoryStrategy } from "@/lib/teamCategoryStrategyServer";
@@ -27,10 +31,14 @@ export default async function TeamCategoryStrategyPage({
     );
   }
 
-  const response = await readTeamCategoryStrategy(
-    league,
-    access.identityHeaders,
-  ).catch(() => null);
+  const [response, profile] = await Promise.all([
+    readTeamCategoryStrategy(league, access.identityHeaders).catch(() => null),
+    fetchFantasyTeamCategoryProfile(
+      league,
+      membership.fantrax_team_id,
+      "season",
+    ).catch(() => null),
+  ]);
   const strategy = response?.ok
     ? await response.json() as TeamCategoryStrategy
     : null;
@@ -59,7 +67,11 @@ export default async function TeamCategoryStrategyPage({
 
       <div className="mt-6">
         {strategy ? (
-          <TeamCategoryStrategyEditor league={league} initialStrategy={strategy} />
+          <TeamCategoryStrategyEditor
+            league={league}
+            initialStrategy={strategy}
+            initialProfile={profile as FantasyTeamCategoryProfile | null}
+          />
         ) : (
           <UnavailableCard
             title="Strategy service unavailable"
