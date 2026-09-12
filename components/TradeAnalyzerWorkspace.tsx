@@ -46,6 +46,18 @@ type SuggestionShape = "one_for_one" | "one_for_two";
 type RecommendationFilter = "all" | "proposable" | "exploratory";
 type PickGuidanceFilter = "all" | "receive" | "send" | "not_required" | "unavailable";
 type CapStatusFilter = "all" | "compliant" | "plan_required" | "not_eligible";
+type ClosestAlternatives = NonNullable<
+  FantasyBalancedTradeSuggestions["closest_alternatives"]
+>;
+type ClosestAlternative = ClosestAlternatives["items"][number];
+type PackageRepairContext = {
+  incomingName: string;
+  counterpartyTeamName: string;
+  passedGateCount: number;
+  failedGates: ClosestAlternative["failed_gates"];
+  primaryBlockerReason: string;
+  suggestedAction: string;
+};
 
 export default function TradeAnalyzerWorkspace({
   league,
@@ -85,6 +97,7 @@ export default function TradeAnalyzerWorkspace({
   const [packageSuggestions, setPackageSuggestions] = useState<FantasyAutomaticTradePackageSuggestions | null>(null);
   const [packageAnalysis, setPackageAnalysis] = useState<FantasyTradePackageAnalysis | null>(null);
   const [suggestionShape, setSuggestionShape] = useState<SuggestionShape>("one_for_one");
+  const [packageRepairContext, setPackageRepairContext] = useState<PackageRepairContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -169,6 +182,7 @@ export default function TradeAnalyzerWorkspace({
     setSuggestions(null);
     setPackageSuggestions(null);
     setPackageAnalysis(null);
+    setPackageRepairContext(null);
     setError(null);
     if (next !== "analyze") {
       setIncoming("");
@@ -190,6 +204,7 @@ export default function TradeAnalyzerWorkspace({
     setSuggestions(null);
     setPackageSuggestions(null);
     setPackageAnalysis(null);
+    setPackageRepairContext(null);
     setError(null);
     if (outgoingTwo === value) setOutgoingTwo("");
     if (selectedDrop === value) setSelectedDrop("");
@@ -204,6 +219,7 @@ export default function TradeAnalyzerWorkspace({
     setIncoming(value);
     setAnalysis(null);
     setPackageAnalysis(null);
+    setPackageRepairContext(null);
     setError(null);
     if (incomingTwo === value) setIncomingTwo("");
     if (counterpartyDrop === value) setCounterpartyDrop("");
@@ -219,6 +235,7 @@ export default function TradeAnalyzerWorkspace({
     setCounterpartyPicks([]);
     setAnalysis(null);
     setPackageAnalysis(null);
+    setPackageRepairContext(null);
     setError(null);
     syncUrl({ incoming: "", partner: value });
   }
@@ -331,13 +348,24 @@ export default function TradeAnalyzerWorkspace({
     }
   }
 
-  async function analyzeSuggestion(suggestion: BalancedTradeSuggestion) {
+  async function analyzeSuggestion(
+    suggestion: BalancedTradeSuggestion,
+    repairContext: PackageRepairContext | null = null,
+  ) {
     const incomingId = suggestion.trade.incoming.nba_id;
     if (incomingId == null) return;
     const requestId = ++requestSequence.current;
     setMode("analyze");
     setIncoming(String(incomingId));
     setPartnerTeam(suggestion.trade.counterparty_team_id);
+    setOutgoingTwo("");
+    setIncomingTwo("");
+    setSelectedDrop("");
+    setCounterpartyDrop("");
+    setSelectedPicks([]);
+    setCounterpartyPicks([]);
+    setPackageRepairContext(repairContext);
+    setAnalysis(null);
     setSuggestions(null);
     setPackageSuggestions(null);
     setPackageAnalysis(null);
@@ -360,6 +388,21 @@ export default function TradeAnalyzerWorkspace({
     } finally {
       if (requestSequence.current === requestId) setLoading(false);
     }
+  }
+
+  function buildAlternativePackage(
+    alternative: ClosestAlternative,
+    suggestion: BalancedTradeSuggestion,
+  ) {
+    void analyzeSuggestion(suggestion, {
+      incomingName: suggestion.trade.incoming.name,
+      counterpartyTeamName: suggestion.counterparty_team.team.name,
+      passedGateCount: alternative.passed_gate_count,
+      failedGates: alternative.failed_gates,
+      primaryBlockerReason: alternative.primary_blocker.reason,
+      suggestedAction: closestActionText(alternative),
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function exploreReturns(partner: TradePartner) {
@@ -391,6 +434,7 @@ export default function TradeAnalyzerWorkspace({
     setCounterpartyDrop("");
     setSelectedPicks([]);
     setCounterpartyPicks([]);
+    setPackageRepairContext(null);
     setError(null);
     router.replace(`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`, { scroll: false });
   }
@@ -463,6 +507,13 @@ export default function TradeAnalyzerWorkspace({
           )}
         </div>
 
+        {mode === "analyze" && packageRepairContext && outgoingPlayer && incomingPlayer && (
+          <PackageRepairBanner
+            context={packageRepairContext}
+            outgoingName={outgoingPlayer.name}
+          />
+        )}
+
         {mode === "analyze" && outgoing && incoming && (
           <ExactPackageBuilder
             ownPlayers={selectableOwn}
@@ -478,12 +529,12 @@ export default function TradeAnalyzerWorkspace({
             selectedTeamPicks={selectedTeamPicks}
             counterpartyTeamPicks={counterpartyTeamPicks}
             draftAssetsError={draftAssetsError}
-            onOutgoingTwo={(value) => { setOutgoingTwo(value); setPackageAnalysis(null); }}
-            onIncomingTwo={(value) => { setIncomingTwo(value); setPackageAnalysis(null); }}
-            onSelectedDrop={(value) => { setSelectedDrop(value); setPackageAnalysis(null); }}
-            onCounterpartyDrop={(value) => { setCounterpartyDrop(value); setPackageAnalysis(null); }}
-            onSelectedPicks={(value) => { setSelectedPicks(value); setPackageAnalysis(null); }}
-            onCounterpartyPicks={(value) => { setCounterpartyPicks(value); setPackageAnalysis(null); }}
+            onOutgoingTwo={(value) => { setOutgoingTwo(value); setAnalysis(null); setPackageAnalysis(null); }}
+            onIncomingTwo={(value) => { setIncomingTwo(value); setAnalysis(null); setPackageAnalysis(null); }}
+            onSelectedDrop={(value) => { setSelectedDrop(value); setAnalysis(null); setPackageAnalysis(null); }}
+            onCounterpartyDrop={(value) => { setCounterpartyDrop(value); setAnalysis(null); setPackageAnalysis(null); }}
+            onSelectedPicks={(value) => { setSelectedPicks(value); setAnalysis(null); setPackageAnalysis(null); }}
+            onCounterpartyPicks={(value) => { setCounterpartyPicks(value); setAnalysis(null); setPackageAnalysis(null); }}
           />
         )}
 
@@ -528,10 +579,51 @@ export default function TradeAnalyzerWorkspace({
       {loading && <LoadingResult />}
       {analysis && <TradeAnalysisResult analysis={analysis} outgoing={outgoingPlayer} incoming={incomingPlayer} league={league} />}
       {partners && <PartnerRankingResult payload={partners} onExplore={exploreReturns} />}
-      {suggestions && <BalancedSuggestionsResult payload={suggestions} onAnalyze={analyzeSuggestion} />}
+      {suggestions && (
+        <BalancedSuggestionsResult
+          payload={suggestions}
+          onAnalyze={analyzeSuggestion}
+          onBuildPackage={buildAlternativePackage}
+        />
+      )}
       {packageSuggestions && <OneForTwoSuggestionsResult payload={packageSuggestions} />}
       {packageAnalysis && <ExactPackageResult payload={packageAnalysis} league={league} />}
     </>
+  );
+}
+
+function PackageRepairBanner({ context, outgoingName }: {
+  context: PackageRepairContext;
+  outgoingName: string;
+}) {
+  return (
+    <div className="border-t border-blue-200 bg-blue-50 px-4 py-4 dark:border-blue-900 dark:bg-blue-950/25">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">
+            Package repair starting point
+          </p>
+          <h2 className="mt-1 font-black text-slate-950 dark:text-white">
+            {outgoingName} for {context.incomingName}
+          </h2>
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            This one-for-one starting point passes {context.passedGateCount}/3 strict checks. Review: {context.failedGates.map(closestGateLabel).join(" and ")}.
+          </p>
+          <p className="mt-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
+            {context.suggestedAction}
+          </p>
+        </div>
+        <span className="w-fit shrink-0 rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase text-blue-700 shadow-sm dark:bg-slate-900 dark:text-blue-300">
+          {context.counterpartyTeamName}
+        </span>
+      </div>
+      <p className="mt-3 border-t border-blue-200 pt-3 text-xs text-slate-600 dark:border-blue-900 dark:text-slate-300">
+        The primary players and partner are preselected. Add an optional second player or eligible canonical pick below, then run Analyze trade. Nothing is added automatically.
+      </p>
+      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+        Primary blocker: {gateReasonText(context.primaryBlockerReason)}
+      </p>
+    </div>
   );
 }
 
@@ -1327,9 +1419,13 @@ function OneForTwoEmptyState({ payload }: { payload: FantasyAutomaticTradePackag
   );
 }
 
-function BalancedSuggestionsResult({ payload, onAnalyze }: {
+function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
   payload: FantasyBalancedTradeSuggestions;
   onAnalyze: (suggestion: BalancedTradeSuggestion) => void;
+  onBuildPackage: (
+    alternative: ClosestAlternative,
+    suggestion: BalancedTradeSuggestion,
+  ) => void;
 }) {
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("all");
   const [pickFilter, setPickFilter] = useState<PickGuidanceFilter>("all");
@@ -1424,6 +1520,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze }: {
           gateCounts={gateCounts}
           suggestions={returnedSuggestions}
           onView={focusAlternative}
+          onBuildPackage={onBuildPackage}
         />
       )}
       {payload.teams.length > 0 && (
@@ -1586,11 +1683,6 @@ function GateCount({ label, passed, total, emphasized = false }: {
   );
 }
 
-type ClosestAlternatives = NonNullable<
-  FantasyBalancedTradeSuggestions["closest_alternatives"]
->;
-type ClosestAlternative = ClosestAlternatives["items"][number];
-
 function suggestionCandidateKey(
   counterpartyTeamId: string,
   incomingNbaId: number | null,
@@ -1631,11 +1723,21 @@ function closestGateLabel(gate: ClosestAlternative["failed_gates"][number]): str
   }[gate];
 }
 
-function ClosestAlternativesPanel({ alternatives, gateCounts, suggestions, onView }: {
+function ClosestAlternativesPanel({
+  alternatives,
+  gateCounts,
+  suggestions,
+  onView,
+  onBuildPackage,
+}: {
   alternatives: ClosestAlternatives;
   gateCounts: FantasyBalancedTradeSuggestions["diagnostics"]["strict_gate_counts"];
   suggestions: BalancedTradeSuggestion[];
   onView: (counterpartyTeamId: string, incomingNbaId: number | null) => void;
+  onBuildPackage: (
+    alternative: ClosestAlternative,
+    suggestion: BalancedTradeSuggestion,
+  ) => void;
 }) {
   const byKey = new Map(suggestions.map((suggestion) => [
     suggestionCandidateKey(
@@ -1676,16 +1778,25 @@ function ClosestAlternativesPanel({ alternatives, gateCounts, suggestions, onVie
               <p className="mt-3 text-xs font-bold text-slate-700 dark:text-slate-200">Passes {alternative.passed_gate_count}/3 checks</p>
               <p className="mt-1 text-xs text-slate-500">Review: {alternative.failed_gates.map(closestGateLabel).join(" and ")}.</p>
               <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">{closestActionText(alternative)}</p>
-              <button
-                type="button"
-                onClick={() => onView(
-                  alternative.counterparty_team_id,
-                  alternative.incoming_nba_id,
-                )}
-                className="mt-3 text-xs font-black text-blue-700 hover:underline dark:text-blue-300"
-              >
-                View full analysis →
-              </button>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => onBuildPackage(alternative, suggestion)}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-black text-white hover:bg-blue-700"
+                >
+                  Build a better package →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onView(
+                    alternative.counterparty_team_id,
+                    alternative.incoming_nba_id,
+                  )}
+                  className="text-xs font-black text-blue-700 hover:underline dark:text-blue-300"
+                >
+                  View result card
+                </button>
+              </div>
             </article>
           );
         })}
