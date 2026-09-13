@@ -396,8 +396,10 @@ export interface FantasyTradeAnalysis {
     selected_team_id: string;
     counterparty_team_id: string;
   };
-  selected_team: TradeTeamResult;
+  selected_team: TradeTeamResult & { category_score: TradePackageCategoryScore };
   counterparty_team: TradeTeamResult;
+  strategy_applied: boolean;
+  strategy: TradeCategoryStrategyContext;
   verdict: {
     key: "likely_improvement" | "mixed" | "likely_decline" | "not_cap_compliant" | "insufficient_data";
     headline: string;
@@ -568,7 +570,8 @@ export interface BalancedTradeSuggestion {
   };
   confidence: "high" | "medium" | "low";
   warnings: TradeWarning[];
-  strategy_applied: false;
+  strategy_applied: boolean;
+  strategy: TradeCategoryStrategyContext;
 }
 
 export interface FantasyBalancedTradeSuggestions {
@@ -580,7 +583,8 @@ export interface FantasyBalancedTradeSuggestions {
   selected_team_id: string;
   outgoing: TradePlayerSummary;
   intent: "balanced";
-  strategy_applied: false;
+  strategy_applied: boolean;
+  strategy: TradeCategoryStrategyContext;
   counts: { proposable: number; exploratory: number; returned: number };
   closest_alternatives?: {
     selection_method: "fewest_failed_gates_then_existing_deterministic_order";
@@ -668,8 +672,28 @@ export type TradePackageCompletionStatus =
 
 export interface TradePackageCategoryScore {
   score: number;
+  balanced_score?: number;
+  strategy?: TradeCategoryStrategyContext;
+  components?: Array<{
+    key: string;
+    label: string;
+    transition: TradeCategoryChange["transition"];
+    balanced_contribution: number;
+    contribution: number;
+    strategy_stance: "target" | "neutral" | "punt";
+    strategy_weight: number;
+    rank_delta: number | null;
+    z_delta: number | null;
+  }>;
   helps?: string[];
   harms?: string[];
+}
+
+export interface TradeCategoryStrategyContext {
+  applied: boolean;
+  version: number | null;
+  target_categories: string[];
+  punt_categories: string[];
 }
 
 export interface TradePackageRosterLegality {
@@ -791,6 +815,8 @@ export interface AutomaticTradePackageSuggestion {
   };
   verdict: FantasyTradeAnalysis["verdict"];
   warnings: TradeWarning[];
+  strategy_applied: boolean;
+  strategy: TradeCategoryStrategyContext;
 }
 
 export interface FantasyAutomaticTradePackageSuggestions {
@@ -820,7 +846,8 @@ export interface FantasyAutomaticTradePackageSuggestions {
     category_aggregation: string;
     unequal_package_scoring: string;
     completion_hydration: string;
-    strategy_applied: false;
+    strategy_applied: boolean;
+    strategy?: TradeCategoryStrategyContext;
   };
 }
 
