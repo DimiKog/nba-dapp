@@ -28,6 +28,7 @@ import {
   type TradeBasis,
   type TradeCapResult,
   type TradeCategoryChange,
+  type TradeCategoryStrategyContext,
   type TradePartner,
   type TradePackageCompletionOption,
   type TradePackageProductionValue,
@@ -984,11 +985,12 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
   );
 }
 
-function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false }: {
+function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false, showStrategyImpact = true }: {
   suggestion: AutomaticTradePackageSuggestion;
   rank: number;
   league: LeagueSlug;
   picksAssessed?: boolean;
+  showStrategyImpact?: boolean;
 }) {
   const legalAsProposed = suggestion.completion_status === "legal_as_proposed";
   const drops = suggestion.completion_options.drop_candidates;
@@ -1015,6 +1017,14 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = fal
           </span>
         </div>
       </div>
+
+      {showStrategyImpact && (
+        <StrategyImpactPanel
+          strategy={suggestion.strategy}
+          changes={suggestion.selected_team.category_changes}
+          compact
+        />
+      )}
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.4fr)] lg:items-stretch">
         <PackageSide title="You send" players={suggestion.package.selected_team_sends} />
@@ -1165,6 +1175,79 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
   );
 }
 
+function StrategyImpactPanel({
+  strategy,
+  changes,
+  compact = false,
+}: {
+  strategy?: TradeCategoryStrategyContext;
+  changes: TradeCategoryChange[];
+  compact?: boolean;
+}) {
+  const byKey = new Map(changes.map((change) => [change.key, change]));
+  if (!strategy?.applied) {
+    return (
+      <div className={`${compact ? "mx-4 mt-3" : "mx-4 mt-4"} rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400`}>
+        Balanced category scoring is used because this team has no saved Target/Punt strategy.
+      </div>
+    );
+  }
+
+  const targets = strategy.target_categories.map((key) => {
+    const change = byKey.get(key);
+    const positive = change && ["weakness_resolved", "improved"].includes(change.transition);
+    const negative = change && ["new_weakness", "declined"].includes(change.transition);
+    return {
+      key,
+      label: change?.label ?? key,
+      state: positive ? "improves" : negative ? "declines" : "holds",
+    };
+  });
+  const puntLabels = strategy.punt_categories.map(
+    (key) => byKey.get(key)?.label ?? key,
+  );
+
+  return (
+    <div className={`${compact ? "mx-4 mt-3 rounded-xl border border-blue-200 px-3 py-2.5 dark:border-blue-900" : "border-b border-slate-200 px-4 py-3 dark:border-slate-700"} bg-blue-50/60 dark:bg-blue-950/20`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white">
+          Strategy v{strategy.version ?? "?"} applied
+        </span>
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+          Targets count 2× · Punts do not drive ranking
+        </span>
+      </div>
+      {targets.length || puntLabels.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {targets.map((target) => (
+            <span
+              key={target.key}
+              className={`rounded-full px-2.5 py-1 text-[10px] font-black ${
+                target.state === "improves"
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                  : target.state === "declines"
+                    ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                    : "bg-white text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+              }`}
+            >
+              Target {target.label}: {target.state}
+            </span>
+          ))}
+          {puntLabels.map((label) => (
+            <span key={label} className="rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-black text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+              Punt {label}: discounted
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+          Every category is Neutral, so balanced category scoring is unchanged.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
@@ -1174,8 +1257,17 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
         <p className="mt-1 text-sm text-slate-500">The player recommendation remains independent from the ordinal pick assessment.</p>
       </div>
       <div className="p-4">
-        <OneForTwoSuggestionCard suggestion={payload} rank={1} league={league} picksAssessed={payload.package.assets.length > 0} />
-        <ManualTradeCategoryImpact changes={payload.selected_team.category_changes} />
+        <OneForTwoSuggestionCard
+          suggestion={payload}
+          rank={1}
+          league={league}
+          picksAssessed={payload.package.assets.length > 0}
+          showStrategyImpact={false}
+        />
+        <ManualTradeCategoryImpact
+          changes={payload.selected_team.category_changes}
+          strategy={payload.strategy}
+        />
         <PickValuePanel payload={payload} />
       </div>
       <MethodNote>Manual exact package · 1–2 players per side · up to two canonical picks per side · no automatic transfer · pick value never changes the recommendation tier.</MethodNote>
@@ -1183,7 +1275,13 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
   );
 }
 
-function ManualTradeCategoryImpact({ changes }: { changes: TradeCategoryChange[] }) {
+function ManualTradeCategoryImpact({
+  changes,
+  strategy,
+}: {
+  changes: TradeCategoryChange[];
+  strategy?: TradeCategoryStrategyContext;
+}) {
   const finiteDeltas = changes
     .map((change) => change.z_delta)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
@@ -1207,6 +1305,8 @@ function ManualTradeCategoryImpact({ changes }: { changes: TradeCategoryChange[]
           <span><strong className="text-slate-700 dark:text-slate-200">{stable}</strong> stable</span>
         </div>
       </div>
+
+      <StrategyImpactPanel strategy={strategy} changes={changes} />
 
       <div className="grid gap-x-6 px-4 py-2 xl:grid-cols-2">
         {changes.map((change) => (
@@ -1891,6 +1991,11 @@ function SuggestionCard({ suggestion, highlighted = false, onAnalyze }: {
         </span>
         <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Fit {formatSigned(suggestion.selected_category_score)}</span>
       </div>
+      <StrategyImpactPanel
+        strategy={suggestion.strategy}
+        changes={suggestion.selected_team.category_changes}
+        compact
+      />
       <SuggestionQualification suggestion={suggestion} />
       <div className={`mt-3 rounded-lg border p-3 ${valueVerdict.box}`}>
         <div className="flex items-start justify-between gap-3">
@@ -2191,6 +2296,10 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
     <section className="mt-6 space-y-5">
       {analysis.fallback_reason && <FallbackBanner />}
       <VerdictBanner analysis={analysis} />
+      <StrategyImpactPanel
+        strategy={analysis.strategy}
+        changes={analysis.selected_team.category_changes}
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         <ExchangePlayer title="Outgoing" player={outgoing} fallback={analysis.trade.outgoing.name} league={league} />
         <ExchangePlayer title="Incoming" player={incoming} fallback={analysis.trade.incoming.name} league={league} />
