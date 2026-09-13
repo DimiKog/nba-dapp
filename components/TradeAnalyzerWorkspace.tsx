@@ -985,11 +985,12 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
   );
 }
 
-function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false }: {
+function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false, showStrategyImpact = true }: {
   suggestion: AutomaticTradePackageSuggestion;
   rank: number;
   league: LeagueSlug;
   picksAssessed?: boolean;
+  showStrategyImpact?: boolean;
 }) {
   const legalAsProposed = suggestion.completion_status === "legal_as_proposed";
   const drops = suggestion.completion_options.drop_candidates;
@@ -1017,11 +1018,13 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = fal
         </div>
       </div>
 
-      <StrategyImpactPanel
-        strategy={suggestion.strategy}
-        changes={suggestion.selected_team.category_changes}
-        compact
-      />
+      {showStrategyImpact && (
+        <StrategyImpactPanel
+          strategy={suggestion.strategy}
+          changes={suggestion.selected_team.category_changes}
+          compact
+        />
+      )}
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.4fr)] lg:items-stretch">
         <PackageSide title="You send" players={suggestion.package.selected_team_sends} />
@@ -1254,7 +1257,13 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
         <p className="mt-1 text-sm text-slate-500">The player recommendation remains independent from the ordinal pick assessment.</p>
       </div>
       <div className="p-4">
-        <OneForTwoSuggestionCard suggestion={payload} rank={1} league={league} picksAssessed={payload.package.assets.length > 0} />
+        <OneForTwoSuggestionCard
+          suggestion={payload}
+          rank={1}
+          league={league}
+          picksAssessed={payload.package.assets.length > 0}
+          showStrategyImpact={false}
+        />
         <ManualTradeCategoryImpact
           changes={payload.selected_team.category_changes}
           strategy={payload.strategy}
