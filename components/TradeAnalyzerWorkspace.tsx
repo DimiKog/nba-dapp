@@ -26,6 +26,7 @@ import {
   type FantasyTradePartners,
   type FantasyTradePackageAnalysis,
   type TradeBasis,
+  type TradeAcquisitionContext,
   type TradeCapResult,
   type TradeCategoryChange,
   type TradeCategoryStrategyContext,
@@ -966,6 +967,7 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
         </div>
       </div>
       {payload.fallback_reason && <FallbackBanner />}
+      <AcquisitionContextPanel context={payload.acquisition_context} />
       {payload.suggestions.length ? (
         <div className="space-y-5 p-4">
           {payload.suggestions.map((suggestion, index) => (
@@ -1084,8 +1086,8 @@ function oneForOneValueVerdict(value: TradePackageProductionValue) {
     badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200",
   };
   if (value.classification === "materially_equivalent") return {
-    label: "Replacement-level comparison",
-    description: "Both players are at or below the current free-agent replacement baseline. This remains exploratory because the value model cannot distinguish a strict win-win return.",
+    label: "Roster-boundary comparison",
+    description: "Both players are at or below the production level around the league's final normal roster spots. This remains exploratory because the model cannot distinguish a strict win-win return.",
     box: "border-sky-200 bg-sky-50 dark:border-sky-900 dark:bg-sky-950/25",
     text: "text-sky-800 dark:text-sky-200",
     badge: "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200",
@@ -1106,7 +1108,7 @@ function oneForOneValueVerdict(value: TradePackageProductionValue) {
   };
   return {
     label: "Player value unavailable",
-    description: "The analyzer could not establish a trusted replacement-value comparison.",
+    description: "The analyzer could not establish a trusted roster-boundary comparison.",
     box: "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60",
     text: "text-slate-700 dark:text-slate-200",
     badge: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200",
@@ -1128,8 +1130,8 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
     }
     : value.classification === "materially_equivalent"
       ? {
-        title: "Replacement-level comparison",
-        detail: "Both packages are at or below the current replacement baseline. Keep this as context, not as a balanced recommendation.",
+        title: "Roster-boundary comparison",
+        detail: "Both packages are at or below the production level around the league's final normal roster spots. Keep this as context, not as a balanced recommendation.",
         classes: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/25 dark:text-sky-200",
       }
       : value.classification === "uneven"
@@ -1146,7 +1148,7 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
         }
         : {
           title: "Player value unavailable",
-          detail: "The analyzer could not establish a trusted replacement-value comparison, so this package cannot be called proposable.",
+          detail: "The analyzer could not establish a trusted roster-boundary comparison, so this package cannot be called proposable.",
           classes: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200",
         };
   return (
@@ -1166,11 +1168,60 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
         <ValueExchange label="Your team" value={value.selected_team} />
         <ValueExchange label="Partner team" value={value.counterparty_team} />
       </div>
+      {value.baseline_kind === "marginal_roster" && (
+        <p className="mt-3 text-[11px] font-semibold opacity-75">
+          Baseline: production around the league&apos;s marginal normal roster slot{value.baseline_impact != null ? ` (${formatValueScore(value.baseline_impact)})` : ""}. Salary, free-agent access and token cost are assessed separately.
+        </p>
+      )}
       {value.compensation_required && (
         <p className="mt-3 text-xs font-bold">
           {picksAssessed ? "Pick value is assessed separately below and does not alter this player-value result" : "Unpriced picks are not counted yet"}{gap > 0 ? ` · estimated production gap to the balanced threshold: ${formatValueScore(gap)}` : ""}.
         </p>
       )}
+    </div>
+  );
+}
+
+function AcquisitionContextPanel({ context }: { context: TradeAcquisitionContext }) {
+  const presentation = context.status === "free_agency_closed"
+    ? {
+      badge: "FA closed",
+      title: "Free agents are not available yet",
+      classes: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/25 dark:text-amber-200",
+    }
+    : context.status === "tokens_required"
+      ? {
+        badge: "Tokens required",
+        title: "Acquisition cost is separate",
+        classes: "border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-900 dark:bg-violet-950/25 dark:text-violet-200",
+      }
+      : context.status === "free_agency_open_cap_not_enforced"
+        ? {
+          badge: "FA open · cap later",
+          title: "Free agency is open before cap enforcement",
+          classes: "border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/25 dark:text-sky-200",
+        }
+        : context.status === "free_agency_open_cap_enforced"
+          ? {
+            badge: "FA open · cap active",
+            title: "Free agency and cap rules are active",
+            classes: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/25 dark:text-emerald-200",
+          }
+          : {
+            badge: "Rules unavailable",
+            title: "Acquisition context needs review",
+            classes: "border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200",
+          };
+  return (
+    <div className={`border-b px-5 py-4 ${presentation.classes}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black">{presentation.title}</p>
+          <p className="mt-1 text-xs opacity-85">{context.message}</p>
+          <p className="mt-1 text-[11px] opacity-70">Player production is measured independently against the marginal roster boundary.</p>
+        </div>
+        <span className="rounded-full bg-white/70 px-3 py-1 text-[10px] font-black uppercase tracking-wide dark:bg-slate-950/35">{presentation.badge}</span>
+      </div>
     </div>
   );
 }
@@ -1256,6 +1307,7 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
         <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Players, legality and picks evaluated together</h2>
         <p className="mt-1 text-sm text-slate-500">The player recommendation remains independent from the ordinal pick assessment.</p>
       </div>
+      <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="p-4">
         <OneForTwoSuggestionCard
           suggestion={payload}
@@ -1602,6 +1654,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
         </div>
       </div>
       {payload.fallback_reason && <FallbackBanner />}
+      <AcquisitionContextPanel context={payload.acquisition_context} />
       {gateCounts && gateCounts.eligible_after_hard_filters > 0 && (
         <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
           <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Strict qualification gates</p>
@@ -1914,9 +1967,9 @@ function gateReasonText(reason: string): string {
     counterparty_acceptance_negative: "The partner is projected to lose category utility.",
     counterparty_acceptance_blocked: "The partner is blocked by the current cap rules.",
     production_value_balanced: "Both sides retain the required production value.",
-    both_sides_at_or_below_replacement: "Both players are at or below the free-agent replacement baseline.",
-    replacement_impact_unavailable: "A trusted replacement-value baseline is unavailable.",
-    replacement_value_unavailable: "A trusted replacement-value baseline is unavailable.",
+    both_sides_at_or_below_replacement: "Both players are at or below the marginal roster production boundary.",
+    replacement_impact_unavailable: "A trusted roster-boundary baseline is unavailable.",
+    replacement_value_unavailable: "A trusted roster-boundary baseline is unavailable.",
     production_value_unknown: "Production value could not be verified.",
     two_sided_retained_value_ratio: "At least one side does not retain enough production value.",
   };
@@ -2205,7 +2258,7 @@ function pickSufficiencyPresentation(value: string) {
 
 function pickCompensationUnavailableText(reason: string): string {
   const messages: Record<string, string> = {
-    replacement_impact_unavailable: "A trusted player-value comparison is not available for this result.",
+    replacement_impact_unavailable: "A trusted roster-boundary player-value comparison is not available for this result.",
     insufficient_positive_surplus_sample: "The league does not yet have a large enough trusted value sample.",
     franchise_mapping_unavailable: "Team-to-franchise mapping is temporarily unavailable.",
     giving_team_franchise_mapping_missing: "The team that would provide compensation has no verified franchise mapping.",

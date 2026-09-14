@@ -574,6 +574,23 @@ export interface BalancedTradeSuggestion {
   strategy: TradeCategoryStrategyContext;
 }
 
+export interface TradeAcquisitionContext {
+  as_of: string;
+  status:
+    | "free_agency_closed"
+    | "free_agency_open_cap_not_enforced"
+    | "free_agency_open_cap_enforced"
+    | "tokens_required"
+    | "league_rules_unconfigured";
+  free_agent_access: "closed" | "open" | "token_bid_required" | "unknown";
+  production_value_includes_acquisition_cost: false;
+  message: string;
+  free_agency_opens_on?: string;
+  salary_cap_enforced?: boolean;
+  salary_cap_enforced_on?: string;
+  token_price_modeled?: boolean;
+}
+
 export interface FantasyBalancedTradeSuggestions {
   league: FantasyLeague;
   basis_requested: TradeBasis;
@@ -646,6 +663,7 @@ export interface FantasyBalancedTradeSuggestions {
     safe_next_steps: Array<{ key: string; message: string }>;
   };
   production_value_warning?: string | null;
+  acquisition_context: TradeAcquisitionContext;
 }
 
 export interface TradeSuggestionCapStatus {
@@ -736,6 +754,8 @@ export interface TradeTeamProductionValue {
 export interface TradePackageProductionValue {
   basis: string | null;
   basis_used?: TradeBasis;
+  baseline_kind?: "marginal_roster" | "legacy_replacement_basket" | null;
+  baseline_impact?: number | null;
   replacement_impact: number | null;
   selected_team: TradeTeamProductionValue;
   counterparty_team: TradeTeamProductionValue;
@@ -784,6 +804,7 @@ export interface AutomaticTradePackageSuggestion {
   requires_roster_action: boolean;
   recommendation_tier: "proposable" | "exploratory" | "not_recommended";
   production_value: TradePackageProductionValue;
+  acquisition_context?: TradeAcquisitionContext;
   best_completion?: TradePackageCompletionOption;
   package: {
     selected_team_sends: TradePlayerSummary[];
@@ -828,6 +849,7 @@ export interface FantasyAutomaticTradePackageSuggestions {
   basis_used: TradeBasis;
   fallback_reason: string | null;
   suggestions: AutomaticTradePackageSuggestion[];
+  acquisition_context: TradeAcquisitionContext;
   summary: {
     screened_pairs: number;
     balanced_candidates: number;
@@ -883,6 +905,7 @@ export interface ExplicitPickSideAssessment {
 }
 
 export interface FantasyTradePackageAnalysis extends AutomaticTradePackageSuggestion {
+  acquisition_context: TradeAcquisitionContext;
   package: AutomaticTradePackageSuggestion["package"] & {
     assets: ResolvedTradePickAsset[];
   };
