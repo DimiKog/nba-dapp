@@ -122,6 +122,25 @@ test("trade suggestions are restricted to the signed-in manager team", async ({ 
   expect(ownB.ok()).toBeTruthy();
 });
 
+test("player research is available only through an authenticated league membership", async ({ request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  const authenticated = await request.get(
+    `${app}/api/fantasy/ldl/players/202695/research?days=30&limit=3`,
+    { headers: { [accessHeader]: token } },
+  );
+  expect(authenticated.ok()).toBeTruthy();
+  expect(await authenticated.json()).toMatchObject({
+    player: { nba_id: 202695, name: "Research Player" },
+    coverage: { status: "available", exact_player_tag_required: true },
+    advisor_policy: { affects_trade_recommendation: false, mode: "context_only" },
+  });
+
+  const anonymous = await request.get(
+    `${app}/api/fantasy/ldl/players/202695/research?days=30&limit=3`,
+  );
+  expect(anonymous.status()).toBe(401);
+});
+
 test("anonymous visitors never receive personal navigation", async ({ page }) => {
   await page.goto(app);
   await expect(page.getByRole("link", { name: "My LDL" })).toHaveCount(0);

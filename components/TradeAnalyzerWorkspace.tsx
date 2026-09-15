@@ -8,6 +8,7 @@ import SearchablePlayerPicker, {
   type SearchablePlayerOption,
 } from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
+import TradePlayerResearchPanel from "@/components/TradePlayerResearchPanel";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
   fetchAutomaticOneForTwoSuggestions,
@@ -1316,6 +1317,12 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
           picksAssessed={payload.package.assets.length > 0}
           showStrategyImpact={false}
         />
+        <div className="mt-4">
+          <TradePlayerResearchPanel
+            league={league}
+            players={payload.package.counterparty_team_sends}
+          />
+        </div>
         <ManualTradeCategoryImpact
           changes={payload.selected_team.category_changes}
           strategy={payload.strategy}
@@ -2357,6 +2364,15 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
         <ExchangePlayer title="Outgoing" player={outgoing} fallback={analysis.trade.outgoing.name} league={league} />
         <ExchangePlayer title="Incoming" player={incoming} fallback={analysis.trade.incoming.name} league={league} />
       </div>
+      <TradePlayerResearchPanel
+        league={league}
+        players={incoming?.nba_id ? [{
+          nba_id: incoming.nba_id,
+          name: incoming.name,
+          nba_team: incoming.nba_team,
+          position: incoming.position,
+        }] : []}
+      />
       <div className="grid gap-4 lg:grid-cols-2">
         <TeamImpact result={analysis.selected_team} league={league} primary />
         <TeamImpact result={analysis.counterparty_team} league={league} />
