@@ -102,6 +102,13 @@ const server = createServer((request, response) => {
       ? send(response, 200, session)
       : send(response, 401, { error: "Unknown test identity" });
   }
+  const researchMatch = url.pathname.match(/^\/api\/nba\/players\/by-nba-id\/(\d+)\/research$/);
+  if (researchMatch) {
+    const session = sessionFor(request);
+    if (!session) return send(response, 401, { error: "Unknown test identity" });
+    const nbaId = Number(researchMatch[1]);
+    return send(response, 200, playerResearchFixture(nbaId));
+  }
   if (url.pathname === "/api/nba/scoreboard" || url.pathname === "/api/nba/news") {
     return send(response, 200, []);
   }
@@ -167,6 +174,49 @@ function leagueFixture(slug) {
     enabled: true,
     season_phase: "off_season",
     roster_rules: { minimum_players: 13, standard_maximum: 14 },
+  };
+}
+
+function playerResearchFixture(nbaId) {
+  return {
+    generated_at: "2026-09-15T12:00:00+00:00",
+    player: { player_id: 42, nba_id: nbaId, name: "Research Player", position: "G", nba_team: "Test Team" },
+    news_evidence: [{
+      provider: "espn",
+      headline: "Research Player earns a larger role",
+      description: "A sourced test-only player update.",
+      published_at: "2026-09-14T12:00:00+00:00",
+      url: "https://example.test/research-player",
+      categories: ["Research Player"],
+      player_match: { method: "exact_provider_category_tag", tag: "Research Player" },
+    }],
+    role_signal: {
+      source: "cached_game_logs",
+      season: "2025-26",
+      recent_games: 5,
+      recent_minutes: 29,
+      season_minutes: 24,
+      minutes_delta: 5,
+      latest_game_date: "2026-09-14",
+      affects_recommendation: false,
+      status: "observed_trend",
+      direction: "increasing",
+      confidence: "medium",
+      reason: "last_five_games_compared_with_season_average",
+    },
+    coverage: {
+      status: "available",
+      provider: "espn",
+      searched_days: 30,
+      exact_player_tag_required: true,
+      provider_error: null,
+      limitations: [],
+    },
+    advisor_policy: {
+      affects_trade_recommendation: false,
+      mode: "context_only",
+      reason: "research_sources_are_not_yet_calibrated_for_scoring",
+    },
   };
 }
 

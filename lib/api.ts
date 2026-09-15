@@ -96,6 +96,56 @@ export interface PlayerIntelligence {
   };
 }
 
+export interface PlayerResearchEvidence {
+  generated_at: string;
+  player: {
+    player_id: number;
+    nba_id: number;
+    name: string;
+    position: string | null;
+    nba_team: string | null;
+  };
+  news_evidence: Array<{
+    provider: string;
+    headline: string | null;
+    description: string | null;
+    published_at: string;
+    url: string;
+    categories: string[];
+    player_match: {
+      method: "exact_provider_category_tag";
+      tag: string;
+    };
+  }>;
+  role_signal: {
+    source: "cached_game_logs";
+    season: string;
+    recent_games: number;
+    recent_minutes: number | null;
+    season_minutes: number | null;
+    minutes_delta: number | null;
+    latest_game_date: string | null;
+    affects_recommendation: false;
+    status: "observed_trend" | "historical_only" | "insufficient_evidence";
+    direction: "increasing" | "decreasing" | "stable" | "unknown";
+    confidence: "medium" | "low" | "insufficient";
+    reason: string;
+  };
+  coverage: {
+    status: "available" | "no_exact_player_matches" | "provider_unavailable";
+    provider: string;
+    searched_days: number;
+    exact_player_tag_required: boolean;
+    provider_error: string | null;
+    limitations: string[];
+  };
+  advisor_policy: {
+    affects_trade_recommendation: false;
+    mode: "context_only";
+    reason: string;
+  };
+}
+
 export function photoUrl(filename: string | null, nbaId?: number | null): string | null {
   if (filename && /^https?:\/\//i.test(filename)) return filename;
   if (filename) return `${BASE}/photos/${filename}`;
@@ -131,6 +181,26 @@ export async function fetchPlayerIntelligence(
   const res = await fetch(`${BASE}${path}?window=${window}`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error("Player intelligence unavailable");
   return res.json();
+}
+
+export async function fetchPlayerResearch(
+  league: "ldl" | "bdb",
+  nbaId: number,
+  options: { days?: number; limit?: number; signal?: AbortSignal } = {},
+): Promise<PlayerResearchEvidence> {
+  const params = new URLSearchParams({
+    days: String(options.days ?? 30),
+    limit: String(options.limit ?? 3),
+  });
+  const response = await fetch(
+    `/api/fantasy/${league}/players/${nbaId}/research?${params}`,
+    { cache: "no-store", signal: options.signal },
+  );
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(payload?.error ?? "Player research unavailable", response.status);
+  }
+  return response.json();
 }
 
 // ── Fantasy ──────────────────────────────────────────────────────────────────
