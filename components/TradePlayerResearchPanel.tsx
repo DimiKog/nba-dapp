@@ -44,7 +44,7 @@ export default function TradePlayerResearchPanel({
         ))}
       </div>
       <footer className="border-t border-cyan-200 bg-white/60 px-5 py-3 text-xs text-slate-600 dark:border-cyan-900 dark:bg-slate-950/30 dark:text-slate-300">
-        <strong>Important:</strong> this evidence does not change the trade score yet. No matching article is not proof that a player&apos;s role is unchanged.
+        <strong>You make the final call:</strong> source coverage may be incomplete and reports may conflict. Review the publication, date and supporting evidence yourself. None of these links changes the app&apos;s recommendation.
       </footer>
     </section>
   );
@@ -96,6 +96,7 @@ function PlayerResearchCard({
         <div className="mt-4 space-y-4">
           <RoleSignal signal={research.role_signal} />
           <NewsEvidence research={research} />
+          <ResearchSourceLauncher player={research.player} />
         </div>
       )}
     </article>
@@ -163,6 +164,95 @@ function NewsEvidence({ research }: { research: PlayerResearchEvidence }) {
       </div>
     </div>
   );
+}
+
+type ResearchSource = {
+  name: string;
+  level: "Primary" | "Editorial" | "Discovery" | "Community";
+  description: string;
+  href: string;
+};
+
+function ResearchSourceLauncher({ player }: { player: PlayerResearchEvidence["player"] }) {
+  const sources = researchSources(player.name);
+  return (
+    <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Research across sources</p>
+          <p className="mt-1 text-xs text-slate-500">Open focused searches and judge each report in its original context.</p>
+        </div>
+        <span className="text-[10px] font-bold uppercase text-slate-400">Opens in a new tab</span>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {sources.map((source) => (
+          <a
+            key={source.name}
+            href={source.href}
+            target="_blank"
+            rel="noreferrer"
+            className="group rounded-lg border border-slate-200 p-3 transition hover:border-blue-400 hover:bg-blue-50 dark:border-slate-700 dark:hover:border-blue-700 dark:hover:bg-blue-950/20"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-black text-slate-900 group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">{source.name} ↗</span>
+              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${sourceLevelTone(source.level)}`}>{source.level}</span>
+            </div>
+            <p className="mt-1 text-[11px] leading-4 text-slate-500">{source.description}</p>
+          </a>
+        ))}
+      </div>
+      <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+        Community posts and search results are leads, not verified facts. Check who published the claim and when before relying on it.
+      </p>
+    </div>
+  );
+}
+
+function researchSources(playerName: string): ResearchSource[] {
+  const quotedPlayer = `"${playerName}"`;
+  return [
+    {
+      name: "NBA.com",
+      level: "Primary",
+      description: "Official NBA reporting, transactions and team updates.",
+      href: googleSearch(`site:nba.com ${quotedPlayer}`),
+    },
+    {
+      name: "Google News",
+      level: "Discovery",
+      description: "Recent coverage across outlets; evaluate each publisher separately.",
+      href: `https://news.google.com/search?q=${encodeURIComponent(`${quotedPlayer} NBA role minutes`)}&hl=en-US&gl=US&ceid=US%3Aen`,
+    },
+    {
+      name: "FantasyPros",
+      level: "Editorial",
+      description: "Fantasy-oriented player updates and reported impact.",
+      href: googleSearch(`site:fantasypros.com/nba ${quotedPlayer}`),
+    },
+    {
+      name: "RotoBaller",
+      level: "Editorial",
+      description: "Fantasy news with rotation, lineup and role context.",
+      href: googleSearch(`site:rotoballer.com ${quotedPlayer} NBA`),
+    },
+    {
+      name: "r/fantasybball",
+      level: "Community",
+      description: "Manager discussion and observations; treat every claim as unverified.",
+      href: `https://www.reddit.com/r/fantasybball/search/?q=${encodeURIComponent(playerName)}&restrict_sr=1&sort=new`,
+    },
+  ];
+}
+
+function googleSearch(query: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function sourceLevelTone(level: ResearchSource["level"]): string {
+  if (level === "Primary") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300";
+  if (level === "Editorial") return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
+  if (level === "Community") return "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
 }
 
 function rolePresentation(signal: PlayerResearchEvidence["role_signal"]): {
