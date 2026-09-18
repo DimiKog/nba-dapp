@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "build:e2e": "NEXT_PUBLIC_API_URL=http://127.0.0.1:3101 FANTASY_IDENTITY_API_KEY=e2e-identity-key CLOUDFLARE_ACCESS_AUD=e2e-audience CLOUDFLARE_ACCESS_TEAM_DOMAIN=http://127.0.0.1:3101 next build",
+    "build:e2e": "NEXT_PUBLIC_API_URL=http://127.0.0.1:3101 FANTASY_IDENTITY_API_KEY=e2e-identity-key FANTASY_TRADE_LEDGER_API_KEY=e2e-ledger-key CLOUDFLARE_ACCESS_AUD=e2e-audience CLOUDFLARE_ACCESS_TEAM_DOMAIN=http://127.0.0.1:3101 next build",
     "test:e2e": "node scripts/run-e2e.mjs"
   },
   "dependencies": {

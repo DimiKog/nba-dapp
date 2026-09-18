@@ -44,6 +44,8 @@ export type CompletedTradeSummary = {
   recorded_at: string;
   asset_count: number;
   external_reference: string | null;
+  roster_status: "matched_post_trade" | "sync_pending" | "not_observed";
+  roster_reconciled_at: string | null;
 };
 
 export type CompletedTradeList = {
@@ -111,6 +113,28 @@ export async function createCompletedTrade(
     }),
     body: JSON.stringify(body),
   });
+}
+
+export async function reconcileCompletedTradeRoster(
+  league: "ldl" | "bdb",
+  tradeId: string,
+  identityHeaders: HeadersInit,
+  actorSubject: string,
+): Promise<Response> {
+  const apiKey = process.env.FANTASY_TRADE_LEDGER_API_KEY?.trim();
+  if (!apiKey) {
+    return Response.json({ error: "Trade ledger write is not configured" }, { status: 503 });
+  }
+  return fetch(
+    `${BACKEND}/api/fantasy/${league}/commissioner/completed-trades/${encodeURIComponent(tradeId)}/reconcile-roster`,
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: backendHeaders(identityHeaders, {
+        "X-Commissioner-Subject": actorSubject,
+      }),
+    },
+  );
 }
 
 export async function loadCompletedTradeWorkspace(
