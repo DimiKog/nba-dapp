@@ -141,6 +141,29 @@ test("player research is available only through an authenticated league membersh
   expect(anonymous.status()).toBe(401);
 });
 
+test("commissioner can review and record a sync-pending three-for-three trade", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=ldl`);
+
+  await page.getByLabel("Franchise A").selectOption("ldl-franchise-a");
+  await page.getByLabel("Franchise B").selectOption("ldl-franchise-b");
+  const sentGroups = page.getByRole("group", { name: "Players sent" });
+  for (const name of ["Alpha Player 1 · G", "Alpha Player 2 · G", "Alpha Player 3 · G"]) {
+    await sentGroups.nth(0).getByLabel(name).check();
+  }
+  for (const name of ["Beta Player 1 · G", "Beta Player 2 · G", "Beta Player 3 · G"]) {
+    await sentGroups.nth(1).getByLabel(name).check();
+  }
+  await page.getByLabel("Fantrax rosters have not been updated yet").check();
+  await page.getByRole("button", { name: "Review trade" }).click();
+
+  await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
+  await expect(page.getByText(/Will be recorded as sync pending/)).toBeVisible();
+  await page.getByRole("button", { name: "Confirm and record" }).click();
+  await expect(page.getByText(/Trade recorded with receipt/)).toBeVisible();
+});
+
 test("anonymous visitors never receive personal navigation", async ({ page }) => {
   await page.goto(app);
   await expect(page.getByRole("link", { name: "My LDL" })).toHaveCount(0);

@@ -9,6 +9,7 @@ import type {
   CommissionerFranchise,
   CompletedTradeList,
   CompletedTradeOptions,
+  CompletedTradeSummary,
 } from "@/lib/completedTradesServer";
 
 type SideState = { tradedPlayers: number[]; picks: number[]; drops: number[] };
@@ -18,6 +19,8 @@ type FormState = {
   occurredAt: string;
   note: string;
   reference: string;
+  syncPending: boolean;
+  syncPendingReason: string;
   a: SideState;
   b: SideState;
 };
@@ -38,6 +41,8 @@ export default function CommissionerTradeLedger({
     occurredAt: localDateTimeValue(new Date()),
     note: "",
     reference: "",
+    syncPending: false,
+    syncPendingReason: "Fantrax roster update is pending",
     a: emptySide(),
     b: emptySide(),
   });
@@ -85,6 +90,8 @@ export default function CommissionerTradeLedger({
         occurredAt: localDateTimeValue(new Date()),
         note: "",
         reference: "",
+        syncPending: false,
+        syncPendingReason: "Fantrax roster update is pending",
         a: emptySide(),
         b: emptySide(),
       }));
@@ -115,7 +122,7 @@ export default function CommissionerTradeLedger({
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
           <h2 className="font-bold text-slate-950 dark:text-white">Record completed trade</h2>
-          <p className="mt-1 text-xs text-slate-500">Maximum two traded players per side. Drops complete roster legality but are not trade consideration.</p>
+          <p className="mt-1 text-xs text-slate-500">Supports full multi-player packages. Drops complete roster legality but are not trade consideration.</p>
         </div>
         <div className="grid gap-5 p-5 lg:grid-cols-2">
           <TradeSide
@@ -150,6 +157,28 @@ export default function CommissionerTradeLedger({
             Commissioner note (optional)
             <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} className={`${inputClass} mt-1 min-h-20 py-2`} />
           </label>
+          <label className="sm:col-span-2 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 normal-case tracking-normal text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+            <input
+              type="checkbox"
+              checked={form.syncPending}
+              onChange={(event) => setForm({ ...form, syncPending: event.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-bold">Fantrax rosters have not been updated yet</span>
+              <span className="mt-1 block text-xs font-medium opacity-80">Record the approved trade as sync pending, then reconcile it here after the next roster sync.</span>
+            </span>
+          </label>
+          {form.syncPending && (
+            <Field label="Why is roster verification pending?">
+              <input
+                value={form.syncPendingReason}
+                onChange={(event) => setForm({ ...form, syncPendingReason: event.target.value })}
+                className={inputClass}
+                placeholder="Fantrax roster update is pending"
+              />
+            </Field>
+          )}
         </div>
 
         {receipt && <Notice tone="success">Trade recorded with receipt {receipt}.</Notice>}
@@ -204,7 +233,7 @@ function TradeSide({ label, franchise, otherId, franchises, picks, state, onFran
             items={franchise.players.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"}` }))}
             selected={state.tradedPlayers}
             disabled={dropped}
-            maximum={2}
+            maximum={15}
             onChange={(tradedPlayers) => onState({ ...state, tradedPlayers })}
           />
           <AssetChoices
@@ -324,6 +353,11 @@ function Review({ form, options, franchiseA, franchiseB }: {
         <ReviewSide franchise={franchiseB} side={form.b} picks={options.draft_picks} />
       </div>
       <p className="mt-3 text-xs text-blue-800 dark:text-blue-200">Recorded time: {new Date(form.occurredAt).toLocaleString()} · Fantrax rosters are not modified.</p>
+      {form.syncPending && (
+        <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
+          Will be recorded as sync pending: {form.syncPendingReason}
+        </p>
+      )}
     </div>
   );
 }
@@ -342,29 +376,74 @@ function ReviewSide({ franchise, side, picks }: { franchise: CommissionerFranchi
 }
 
 function TradeHistory({ history }: { history: CompletedTradeList }) {
+  const router = useRouter();
+  const [reconciling, setReconciling] = useState<string | null>(null);
+  const [reconcileError, setReconcileError] = useState<string | null>(null);
+
+  async function reconcile(tradeId: string) {
+    setReconciling(tradeId);
+    setReconcileError(null);
+    try {
+      const response = await fetch(
+        `/api/fantasy/${history.league_slug}/commissioner/completed-trades/${tradeId}/reconcile-roster`,
+        { method: "POST" },
+      );
+      const body = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(body.error || `Reconciliation returned ${response.status}`);
+      router.refresh();
+    } catch (caught) {
+      setReconcileError(caught instanceof Error ? caught.message : "Roster reconciliation failed");
+    } finally {
+      setReconciling(null);
+    }
+  }
+
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
       <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
         <h2 className="font-bold text-slate-950 dark:text-white">Recorded trades</h2>
         <p className="text-xs text-slate-500">{history.count} canonical records</p>
       </div>
+      {reconcileError && <Notice tone="error">{reconcileError}</Notice>}
       {history.trades.length === 0 ? (
         <p className="p-8 text-center text-sm text-slate-500">No completed trades have been recorded yet.</p>
       ) : (
         <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {history.trades.map((trade) => (
-            <div key={trade.public_id} className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div key={trade.public_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-slate-950 dark:text-white">{trade.franchise_a_name} ↔ {trade.franchise_b_name}</p>
                 <p className="text-xs text-slate-500">{trade.asset_count} assets · {new Date(trade.occurred_at).toLocaleString()}</p>
               </div>
-              <code className="text-[11px] text-slate-400">{trade.public_id}</code>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <RosterStatus status={trade.roster_status} />
+                {trade.roster_status === "sync_pending" && (
+                  <button
+                    type="button"
+                    disabled={reconciling === trade.public_id}
+                    onClick={() => void reconcile(trade.public_id)}
+                    className={secondaryButton}
+                  >
+                    {reconciling === trade.public_id ? "Checking…" : "Check Fantrax sync"}
+                  </button>
+                )}
+                <code className="text-[11px] text-slate-400">{trade.public_id}</code>
+              </div>
             </div>
           ))}
         </div>
       )}
     </section>
   );
+}
+
+function RosterStatus({ status }: { status: CompletedTradeSummary["roster_status"] }) {
+  const config = {
+    matched_post_trade: ["Fantrax matched", "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"],
+    sync_pending: ["Sync pending", "bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"],
+    not_observed: ["Not observed", "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"],
+  }[status];
+  return <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${config[1]}`}>{config[0]}</span>;
 }
 
 function LeagueTabs({ active }: { active: "ldl" | "bdb" }) {
@@ -388,6 +467,7 @@ function validate(form: FormState): string | null {
   if (form.franchiseA === form.franchiseB) return "The franchises must be different";
   const occurredAt = new Date(form.occurredAt).getTime();
   if (!form.occurredAt || Number.isNaN(occurredAt) || occurredAt > Date.now()) return "Choose a completed time that is not in the future";
+  if (form.syncPending && !form.syncPendingReason.trim()) return "Explain why Fantrax roster verification is pending";
   if (form.a.tradedPlayers.length + form.a.picks.length === 0) return "Franchise A must send a player or pick";
   if (form.b.tradedPlayers.length + form.b.picks.length === 0) return "Franchise B must send a player or pick";
   return null;
@@ -396,7 +476,13 @@ function validate(form: FormState): string | null {
 function buildPayload(form: FormState, options: CompletedTradeOptions) {
   const assets: Array<Record<string, unknown>> = [];
   for (const [side, from, to] of [[form.a, form.franchiseA, form.franchiseB], [form.b, form.franchiseB, form.franchiseA]] as const) {
-    side.tradedPlayers.forEach((player_id) => assets.push({ type: "player", player_id, from_franchise_id: from, to_franchise_id: to }));
+    side.tradedPlayers.forEach((player_id) => assets.push({
+      type: "player",
+      player_id,
+      from_franchise_id: from,
+      to_franchise_id: to,
+      roster_override_reason: form.syncPending ? form.syncPendingReason.trim() : undefined,
+    }));
     side.picks.forEach((pick_id) => assets.push({ type: "draft_pick", pick_id, from_franchise_id: from, to_franchise_id: to }));
     side.drops.forEach((player_id) => assets.push({ type: "drop", player_id, from_franchise_id: from, roster_override_reason: "Commissioner-declared roster completion drop" }));
   }

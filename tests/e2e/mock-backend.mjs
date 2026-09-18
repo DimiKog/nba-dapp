@@ -122,6 +122,26 @@ const server = createServer((request, response) => {
       players: [],
     });
   }
+  const ledgerMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/commissioner\/completed-trades$/);
+  if (ledgerMatch) {
+    const league = ledgerMatch[1];
+    if (request.method === "GET") {
+      return send(response, 200, { league_slug: league, count: 0, trades: [] });
+    }
+    if (request.method === "POST") {
+      request.resume();
+      request.on("end", () => send(response, 201, {
+        public_id: "00000000-0000-0000-0000-000000000051",
+        roster_verification: { sync_pending: 6 },
+      }));
+      return;
+    }
+  }
+  const ledgerOptionsMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/commissioner\/completed-trades\/options$/);
+  if (ledgerOptionsMatch) {
+    const league = ledgerOptionsMatch[1];
+    return send(response, 200, completedTradeOptionsFixture(league));
+  }
   const performanceMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/performance$/);
   if (performanceMatch) {
     const [, league, teamId] = performanceMatch;
@@ -174,6 +194,31 @@ function leagueFixture(slug) {
     enabled: true,
     season_phase: "off_season",
     roster_rules: { minimum_players: 13, standard_maximum: 14 },
+  };
+}
+
+function completedTradeOptionsFixture(league) {
+  const franchise = (suffix, name, start) => ({
+    id: `${league}-${suffix}`,
+    name,
+    roster_captured_at: "2026-09-18T08:00:00Z",
+    unmapped_player_count: 0,
+    players: [0, 1, 2].map((offset) => ({
+      id: start + offset,
+      nba_id: 1000 + start + offset,
+      name: `${name} Player ${offset + 1}`,
+      position: "G",
+      nba_team: "TST",
+    })),
+  });
+  return {
+    league_slug: league,
+    fantasy_season: "2026-27",
+    franchises: [
+      franchise("franchise-a", "Alpha", 10),
+      franchise("franchise-b", "Beta", 20),
+    ],
+    draft_picks: [],
   };
 }
 

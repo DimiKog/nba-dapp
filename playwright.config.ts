@@ -24,7 +24,7 @@ export default defineConfig({
       stdout: "pipe",
     },
     {
-      command: "NEXT_PUBLIC_API_URL=http://127.0.0.1:3101 FANTASY_IDENTITY_API_KEY=e2e-identity-key CLOUDFLARE_ACCESS_AUD=e2e-audience CLOUDFLARE_ACCESS_TEAM_DOMAIN=http://127.0.0.1:3101 npm run start -- --port 3102",
+      command: "NEXT_PUBLIC_API_URL=http://127.0.0.1:3101 FANTASY_IDENTITY_API_KEY=e2e-identity-key FANTASY_TRADE_LEDGER_API_KEY=e2e-ledger-key CLOUDFLARE_ACCESS_AUD=e2e-audience CLOUDFLARE_ACCESS_TEAM_DOMAIN=http://127.0.0.1:3101 npm run start -- --port 3102",
       url: "http://127.0.0.1:3102",
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
