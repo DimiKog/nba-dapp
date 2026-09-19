@@ -181,9 +181,10 @@ test("commissioner can direct assets across three franchises", async ({ page, re
     await sentGroups.nth(index).getByRole("searchbox").fill(`${name} Player 1`);
     await sentGroups.nth(index).getByLabel(`${name} Player 1 · G · TST · ID ${(index + 1) * 10}`).check();
   }
-  await page.getByLabel("Alpha Player 1", { exact: true }).selectOption("ldl-franchise-b");
-  await page.getByLabel("Beta Player 1", { exact: true }).selectOption("ldl-franchise-c");
-  await page.getByLabel("Gamma Player 1", { exact: true }).selectOption("ldl-franchise-a");
+  const destinations = page.getByRole("group", { name: "Player destinations" });
+  await destinations.nth(0).getByRole("combobox").selectOption("ldl-franchise-b");
+  await destinations.nth(1).getByRole("combobox").selectOption("ldl-franchise-c");
+  await destinations.nth(2).getByRole("combobox").selectOption("ldl-franchise-a");
 
   await page.getByRole("button", { name: "Review trade" }).click();
   await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
