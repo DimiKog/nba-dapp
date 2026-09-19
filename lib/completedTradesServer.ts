@@ -30,16 +30,19 @@ export type CompletedTradeOptions = {
   league_slug: "ldl" | "bdb";
   fantasy_season: string;
   franchises: CommissionerFranchise[];
+  player_catalog: Array<Pick<CommissionerPlayer, "id" | "name" | "position" | "nba_team">>;
   draft_picks: CommissionerDraftPick[];
 };
 
 export type CompletedTradeSummary = {
   public_id: string;
   fantasy_season: string;
-  franchise_a_id: string;
-  franchise_a_name: string;
-  franchise_b_id: string;
-  franchise_b_name: string;
+  franchise_a_id: string | null;
+  franchise_a_name: string | null;
+  franchise_b_id: string | null;
+  franchise_b_name: string | null;
+  participant_count: number;
+  participants: Array<{ id: string; name: string }>;
   occurred_at: string;
   recorded_at: string;
   asset_count: number;
