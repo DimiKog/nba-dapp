@@ -12,20 +12,18 @@ import type {
   CompletedTradeSummary,
 } from "@/lib/completedTradesServer";
 
-type SideState = { tradedPlayers: number[]; picks: number[]; drops: number[] };
+type DirectedAsset = { id: number; to: string };
+type SideState = { franchiseId: string; tradedPlayers: DirectedAsset[]; picks: DirectedAsset[]; drops: number[] };
 type FormState = {
-  franchiseA: string;
-  franchiseB: string;
+  sides: SideState[];
   occurredAt: string;
   note: string;
   reference: string;
   syncPending: boolean;
   syncPendingReason: string;
-  a: SideState;
-  b: SideState;
 };
 
-const emptySide = (): SideState => ({ tradedPlayers: [], picks: [], drops: [] });
+const emptySide = (): SideState => ({ franchiseId: "", tradedPlayers: [], picks: [], drops: [] });
 
 export default function CommissionerTradeLedger({
   options,
@@ -36,30 +34,24 @@ export default function CommissionerTradeLedger({
 }) {
   const router = useRouter();
   const [form, setForm] = useState<FormState>({
-    franchiseA: "",
-    franchiseB: "",
+    sides: [emptySide(), emptySide()],
     occurredAt: localDateTimeValue(new Date()),
     note: "",
     reference: "",
     syncPending: false,
     syncPendingReason: "Fantrax roster update is pending",
-    a: emptySide(),
-    b: emptySide(),
   });
   const [reviewing, setReviewing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
-  const franchiseA = options.franchises.find((item) => item.id === form.franchiseA) ?? null;
-  const franchiseB = options.franchises.find((item) => item.id === form.franchiseB) ?? null;
   const validation = validate(form);
 
-  function selectFranchise(side: "a" | "b", value: string) {
+  function updateSide(index: number, next: SideState) {
     setForm((current) => ({
       ...current,
-      [side === "a" ? "franchiseA" : "franchiseB"]: value,
-      [side]: emptySide(),
+      sides: current.sides.map((side, at) => at === index ? next : side),
     }));
     setReviewing(false);
     setError(null);
@@ -92,8 +84,7 @@ export default function CommissionerTradeLedger({
         reference: "",
         syncPending: false,
         syncPendingReason: "Fantrax roster update is pending",
-        a: emptySide(),
-        b: emptySide(),
+        sides: current.sides.map((side) => ({ ...emptySide(), franchiseId: side.franchiseId })),
       }));
       setIdempotencyKey(crypto.randomUUID());
       router.refresh();
@@ -122,30 +113,36 @@ export default function CommissionerTradeLedger({
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
           <h2 className="font-bold text-slate-950 dark:text-white">Record completed trade</h2>
-          <p className="mt-1 text-xs text-slate-500">Supports full multi-player packages. Drops complete roster legality but are not trade consideration.</p>
+          <p className="mt-1 text-xs text-slate-500">Choose 2–5 franchises and each asset’s final destination. Historical trades use player search because today’s roster may have changed. Drops are not trade consideration.</p>
         </div>
         <div className="grid gap-5 p-5 lg:grid-cols-2">
-          <TradeSide
-            label="Franchise A"
-            franchise={franchiseA}
-            otherId={form.franchiseB}
-            franchises={options.franchises}
-            picks={options.draft_picks}
-            state={form.a}
-            onFranchise={(value) => selectFranchise("a", value)}
-            onState={(value) => { setForm((current) => ({ ...current, a: value })); setReviewing(false); }}
-          />
-          <TradeSide
-            label="Franchise B"
-            franchise={franchiseB}
-            otherId={form.franchiseA}
-            franchises={options.franchises}
-            picks={options.draft_picks}
-            state={form.b}
-            onFranchise={(value) => selectFranchise("b", value)}
-            onState={(value) => { setForm((current) => ({ ...current, b: value })); setReviewing(false); }}
-          />
+          {form.sides.map((side, index) => (
+            <TradeSide
+              key={index}
+              label={`Franchise ${index + 1}`}
+              franchise={options.franchises.find((item) => item.id === side.franchiseId) ?? null}
+              selectedFranchiseIds={form.sides.map((item) => item.franchiseId)}
+              franchises={options.franchises}
+              playerCatalog={options.player_catalog ?? []}
+              picks={options.draft_picks}
+              state={side}
+              onState={(value) => updateSide(index, value)}
+              onRemove={form.sides.length > 2 ? () => {
+                setForm((current) => ({ ...current, sides: current.sides.filter((_, at) => at !== index).map((item) => ({
+                  ...item,
+                  tradedPlayers: item.tradedPlayers.map((asset) => asset.to === side.franchiseId ? { ...asset, to: "" } : asset),
+                  picks: item.picks.map((asset) => asset.to === side.franchiseId ? { ...asset, to: "" } : asset),
+                })) }));
+                setReviewing(false);
+              } : undefined}
+            />
+          ))}
         </div>
+        {form.sides.length < 5 && (
+          <div className="px-5 pb-5">
+            <button type="button" className={secondaryButton} onClick={() => { setForm((current) => ({ ...current, sides: [...current.sides, emptySide()] })); setReviewing(false); }}>+ Add franchise</button>
+          </div>
+        )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
           <Field label="Trade completed at">
             <input type="datetime-local" value={form.occurredAt} onChange={(event) => setForm({ ...form, occurredAt: event.target.value })} className={inputClass} />
@@ -184,7 +181,7 @@ export default function CommissionerTradeLedger({
         {receipt && <Notice tone="success">Trade recorded with receipt {receipt}.</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
         {reviewing && !validation && (
-          <Review form={form} options={options} franchiseA={franchiseA!} franchiseB={franchiseB!} />
+          <Review form={form} options={options} />
         )}
         <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
           {validation && <p className="mr-auto self-center text-xs font-semibold text-slate-500">{validation}</p>}
@@ -205,43 +202,53 @@ export default function CommissionerTradeLedger({
   );
 }
 
-function TradeSide({ label, franchise, otherId, franchises, picks, state, onFranchise, onState }: {
+function TradeSide({ label, franchise, selectedFranchiseIds, franchises, playerCatalog, picks, state, onState, onRemove }: {
   label: string;
   franchise: CommissionerFranchise | null;
-  otherId: string;
+  selectedFranchiseIds: string[];
   franchises: CommissionerFranchise[];
+  playerCatalog: CompletedTradeOptions["player_catalog"];
   picks: CommissionerDraftPick[];
   state: SideState;
-  onFranchise: (value: string) => void;
   onState: (value: SideState) => void;
+  onRemove?: () => void;
 }) {
   const ownedPicks = picks.filter((pick) => pick.current_owner.id === franchise?.id);
-  const traded = new Set(state.tradedPlayers);
+  const traded = new Set(state.tradedPlayers.map((asset) => asset.id));
   const dropped = new Set(state.drops);
+  const destinations = franchises.filter((item) => selectedFranchiseIds.includes(item.id) && item.id !== franchise?.id);
+  const defaultDestination = destinations.length === 1 ? destinations[0].id : "";
+  const playerNames = new Map(playerCatalog.map((player) => [player.id, player.name]));
   return (
     <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <div className="flex items-start gap-2">
       <Field label={label}>
-        <select value={franchise?.id ?? ""} onChange={(event) => onFranchise(event.target.value)} className={inputClass}>
+        <select value={franchise?.id ?? ""} onChange={(event) => onState({ ...emptySide(), franchiseId: event.target.value })} className={inputClass}>
           <option value="">Select franchise</option>
-          {franchises.filter((item) => item.id !== otherId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          {franchises.filter((item) => item.id === franchise?.id || !selectedFranchiseIds.includes(item.id)).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </Field>
+      {onRemove && <button type="button" onClick={onRemove} className="mt-5 text-xs font-bold text-red-700 dark:text-red-300">Remove</button>}
+      </div>
       {franchise && (
         <div className="mt-4 space-y-4">
           <AssetChoices
             title="Players sent"
-            items={franchise.players.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"}` }))}
-            selected={state.tradedPlayers}
+            items={playerCatalog.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"} · ${player.nba_team || "—"} · ID ${player.id}` }))}
+            selected={state.tradedPlayers.map((asset) => asset.id)}
             disabled={dropped}
             maximum={15}
-            onChange={(tradedPlayers) => onState({ ...state, tradedPlayers })}
+            requireQuery
+            onChange={(ids) => onState({ ...state, tradedPlayers: ids.map((id) => state.tradedPlayers.find((asset) => asset.id === id) ?? { id, to: defaultDestination }) })}
           />
+          <Destinations title="Player destinations" assets={state.tradedPlayers} names={playerNames} destinations={destinations} onChange={(tradedPlayers) => onState({ ...state, tradedPlayers })} />
           <AssetChoices
             title="Draft picks sent"
             items={ownedPicks.map((pick) => ({ id: pick.id, label: `${pick.draft_year} Round ${pick.round} · ${pick.original_franchise.name}` }))}
-            selected={state.picks}
-            onChange={(selected) => onState({ ...state, picks: selected })}
+            selected={state.picks.map((asset) => asset.id)}
+            onChange={(ids) => onState({ ...state, picks: ids.map((id) => state.picks.find((asset) => asset.id === id) ?? { id, to: defaultDestination }) })}
           />
+          <Destinations title="Pick destinations" assets={state.picks} names={new Map(picks.map((pick) => [pick.id, `${pick.draft_year} R${pick.round} (${pick.original_franchise.name})`]))} destinations={destinations} onChange={(selected) => onState({ ...state, picks: selected })} />
           <AssetChoices
             title="Players dropped to complete roster"
             items={franchise.players.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"}` }))}
@@ -252,19 +259,39 @@ function TradeSide({ label, franchise, otherId, franchises, picks, state, onFran
           {franchise.unmapped_player_count > 0 && (
             <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{franchise.unmapped_player_count} roster players are unavailable because they have no internal player mapping.</p>
           )}
-          <p className="text-[11px] text-slate-400">Roster observed {formatDate(franchise.roster_captured_at)}</p>
+          <p className="text-[11px] text-slate-400">Current roster observed {formatDate(franchise.roster_captured_at)}. Historical sender ownership is checked against the completed-trade evidence; a mismatch requires a commissioner reason.</p>
         </div>
       )}
     </div>
   );
 }
 
-function AssetChoices({ title, items, selected, disabled = new Set(), maximum, onChange }: {
+function Destinations({ title, assets, names, destinations, onChange }: {
+  title: string;
+  assets: DirectedAsset[];
+  names: Map<number, string>;
+  destinations: CommissionerFranchise[];
+  onChange: (assets: DirectedAsset[]) => void;
+}) {
+  if (assets.length === 0) return null;
+  return <fieldset className="space-y-2 rounded-lg border border-blue-200 p-3 dark:border-blue-900">
+    <legend className="px-1 text-xs font-bold uppercase tracking-wide text-blue-700 dark:text-blue-300">{title}</legend>
+    {assets.map((asset) => <Field key={asset.id} label={names.get(asset.id) ?? `Asset ${asset.id}`}>
+      <select value={asset.to} onChange={(event) => onChange(assets.map((item) => item.id === asset.id ? { ...item, to: event.target.value } : item))} className={inputClass}>
+        <option value="">Choose final recipient</option>
+        {destinations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select>
+    </Field>)}
+  </fieldset>;
+}
+
+function AssetChoices({ title, items, selected, disabled = new Set(), maximum, requireQuery = false, onChange }: {
   title: string;
   items: Array<{ id: number; label: string }>;
   selected: number[];
   disabled?: Set<number>;
   maximum?: number;
+  requireQuery?: boolean;
   onChange: (selected: number[]) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -273,9 +300,9 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, o
     const needle = query.trim().toLowerCase();
     const matches = (label: string) => !needle || label.toLowerCase().includes(needle);
     const pinned = items.filter((item) => selectedSet.has(item.id));
-    const rest = items.filter((item) => !selectedSet.has(item.id) && matches(item.label));
+    const rest = items.filter((item) => !selectedSet.has(item.id) && (!requireQuery || needle.length >= 2) && matches(item.label)).slice(0, 30);
     return [...pinned, ...rest];
-  }, [items, query, selectedSet]);
+  }, [items, query, selectedSet, requireQuery]);
   const showFilter = items.length > 5;
   const hiddenByFilter = Math.max(
     items.filter((item) => !selectedSet.has(item.id)).length - visible.filter((item) => !selectedSet.has(item.id)).length,
@@ -304,7 +331,7 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, o
       <div className="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
         {items.length === 0 && <p className="px-2 py-1 text-xs text-slate-400">No eligible assets</p>}
         {items.length > 0 && visible.length === 0 && (
-          <p className="px-2 py-1 text-xs text-slate-400">No matches for “{query.trim()}”</p>
+          <p className="px-2 py-1 text-xs text-slate-400">{requireQuery && query.trim().length < 2 ? "Type at least 2 characters to search players" : `No matches for “${query.trim()}”`}</p>
         )}
         {visible.map((item) => {
           const checked = selectedSet.has(item.id);
@@ -331,7 +358,7 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, o
       {showFilter && query.trim() && (
         <p className="mt-1 text-[11px] text-slate-400">
           Showing {visible.length} of {items.length}
-          {hiddenByFilter > 0 ? ` · ${hiddenByFilter} hidden by filter` : ""}
+          {hiddenByFilter > 0 ? ` · ${hiddenByFilter} more available` : ""}
           {selected.length > 0 ? " · selected stay visible" : ""}
         </p>
       )}
@@ -339,18 +366,15 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, o
   );
 }
 
-function Review({ form, options, franchiseA, franchiseB }: {
+function Review({ form, options }: {
   form: FormState;
   options: CompletedTradeOptions;
-  franchiseA: CommissionerFranchise;
-  franchiseB: CommissionerFranchise;
 }) {
   return (
     <div className="mx-5 mb-5 rounded-xl border border-blue-300 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
       <p className="font-bold text-blue-950 dark:text-blue-100">Final review — this creates an immutable ledger entry</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <ReviewSide franchise={franchiseA} side={form.a} picks={options.draft_picks} />
-        <ReviewSide franchise={franchiseB} side={form.b} picks={options.draft_picks} />
+        {form.sides.map((side) => <ReviewSide key={side.franchiseId} franchise={options.franchises.find((item) => item.id === side.franchiseId)!} side={side} options={options} />)}
       </div>
       <p className="mt-3 text-xs text-blue-800 dark:text-blue-200">Recorded time: {new Date(form.occurredAt).toLocaleString()} · Fantrax rosters are not modified.</p>
       {form.syncPending && (
@@ -362,14 +386,15 @@ function Review({ form, options, franchiseA, franchiseB }: {
   );
 }
 
-function ReviewSide({ franchise, side, picks }: { franchise: CommissionerFranchise; side: SideState; picks: CommissionerDraftPick[] }) {
-  const names = useMemo(() => new Map(franchise.players.map((player) => [player.id, player.name])), [franchise.players]);
-  const pickNames = useMemo(() => new Map(picks.map((pick) => [pick.id, `${pick.draft_year} R${pick.round} (${pick.original_franchise.name})`])), [picks]);
+function ReviewSide({ franchise, side, options }: { franchise: CommissionerFranchise; side: SideState; options: CompletedTradeOptions }) {
+  const names = new Map((options.player_catalog ?? []).map((player) => [player.id, player.name]));
+  const pickNames = new Map(options.draft_picks.map((pick) => [pick.id, `${pick.draft_year} R${pick.round} (${pick.original_franchise.name})`]));
+  const franchiseNames = new Map(options.franchises.map((item) => [item.id, item.name]));
   return (
     <div>
       <p className="font-bold">{franchise.name} sends</p>
-      <p>{side.tradedPlayers.map((id) => names.get(id)).join(", ") || "No players"}</p>
-      <p>{side.picks.map((id) => pickNames.get(id)).join(", ") || "No picks"}</p>
+      <p>{side.tradedPlayers.map((asset) => `${names.get(asset.id) ?? asset.id} → ${franchiseNames.get(asset.to) ?? asset.to}`).join(", ") || "No players"}</p>
+      <p>{side.picks.map((asset) => `${pickNames.get(asset.id) ?? asset.id} → ${franchiseNames.get(asset.to) ?? asset.to}`).join(", ") || "No picks"}</p>
       {side.drops.length > 0 && <p className="mt-1 text-red-700 dark:text-red-300">Drops: {side.drops.map((id) => names.get(id)).join(", ")}</p>}
     </div>
   );
@@ -412,7 +437,7 @@ function TradeHistory({ history }: { history: CompletedTradeList }) {
           {history.trades.map((trade) => (
             <div key={trade.public_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-semibold text-slate-950 dark:text-white">{trade.franchise_a_name} ↔ {trade.franchise_b_name}</p>
+                <p className="font-semibold text-slate-950 dark:text-white">{trade.participants?.length ? trade.participants.map((item) => item.name).join(" · ") : `${trade.franchise_a_name} ↔ ${trade.franchise_b_name}`}</p>
                 <p className="text-xs text-slate-500">{trade.asset_count} assets · {new Date(trade.occurred_at).toLocaleString()}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -463,34 +488,41 @@ function Notice({ tone, children }: { tone: "success" | "error"; children: React
 }
 
 function validate(form: FormState): string | null {
-  if (!form.franchiseA || !form.franchiseB) return "Select two franchises";
-  if (form.franchiseA === form.franchiseB) return "The franchises must be different";
+  const ids = form.sides.map((side) => side.franchiseId);
+  if (ids.some((id) => !id)) return "Select every participating franchise";
+  if (new Set(ids).size !== ids.length) return "The franchises must be different";
   const occurredAt = new Date(form.occurredAt).getTime();
   if (!form.occurredAt || Number.isNaN(occurredAt) || occurredAt > Date.now()) return "Choose a completed time that is not in the future";
   if (form.syncPending && !form.syncPendingReason.trim()) return "Explain why Fantrax roster verification is pending";
-  if (form.a.tradedPlayers.length + form.a.picks.length === 0) return "Franchise A must send a player or pick";
-  if (form.b.tradedPlayers.length + form.b.picks.length === 0) return "Franchise B must send a player or pick";
+  const sentPlayers = form.sides.flatMap((side) => side.tradedPlayers.map((asset) => asset.id));
+  const sentPicks = form.sides.flatMap((side) => side.picks.map((asset) => asset.id));
+  const drops = form.sides.flatMap((side) => side.drops);
+  if (new Set(sentPlayers).size !== sentPlayers.length || new Set(sentPicks).size !== sentPicks.length || new Set(drops).size !== drops.length || sentPlayers.some((id) => drops.includes(id))) return "An asset can appear only once in the trade";
+  for (const side of form.sides) {
+    if (side.tradedPlayers.length + side.picks.length === 0) return "Every franchise must send a player or pick";
+    if (side.tradedPlayers.some((asset) => !asset.to || asset.to === side.franchiseId || !ids.includes(asset.to)) || side.picks.some((asset) => !asset.to || asset.to === side.franchiseId || !ids.includes(asset.to))) return "Choose a valid final recipient for every asset";
+    if (!form.sides.some((other) => [...other.tradedPlayers, ...other.picks].some((asset) => asset.to === side.franchiseId))) return "Every franchise must receive an asset";
+  }
   return null;
 }
 
 function buildPayload(form: FormState, options: CompletedTradeOptions) {
   const assets: Array<Record<string, unknown>> = [];
-  for (const [side, from, to] of [[form.a, form.franchiseA, form.franchiseB], [form.b, form.franchiseB, form.franchiseA]] as const) {
-    side.tradedPlayers.forEach((player_id) => assets.push({
+  for (const side of form.sides) {
+    side.tradedPlayers.forEach(({ id: player_id, to }) => assets.push({
       type: "player",
       player_id,
-      from_franchise_id: from,
+      from_franchise_id: side.franchiseId,
       to_franchise_id: to,
       roster_override_reason: form.syncPending ? form.syncPendingReason.trim() : undefined,
     }));
-    side.picks.forEach((pick_id) => assets.push({ type: "draft_pick", pick_id, from_franchise_id: from, to_franchise_id: to }));
-    side.drops.forEach((player_id) => assets.push({ type: "drop", player_id, from_franchise_id: from, roster_override_reason: "Commissioner-declared roster completion drop" }));
+    side.picks.forEach(({ id: pick_id, to }) => assets.push({ type: "draft_pick", pick_id, from_franchise_id: side.franchiseId, to_franchise_id: to }));
+    side.drops.forEach((player_id) => assets.push({ type: "drop", player_id, from_franchise_id: side.franchiseId, roster_override_reason: "Commissioner-declared roster completion drop" }));
   }
   return {
     fantasy_season: options.fantasy_season,
     occurred_at: new Date(form.occurredAt).toISOString(),
-    franchise_a_id: form.franchiseA,
-    franchise_b_id: form.franchiseB,
+    franchise_ids: form.sides.map((side) => side.franchiseId),
     assets,
     commissioner_note: form.note || undefined,
     external_reference: form.reference || undefined,
