@@ -146,14 +146,16 @@ test("commissioner can review and record a sync-pending three-for-three trade", 
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/commissioner/trades?league=ldl`);
 
-  await page.getByLabel("Franchise A").selectOption("ldl-franchise-a");
-  await page.getByLabel("Franchise B").selectOption("ldl-franchise-b");
+  await page.getByLabel("Franchise 1").selectOption("ldl-franchise-a");
+  await page.getByLabel("Franchise 2").selectOption("ldl-franchise-b");
   const sentGroups = page.getByRole("group", { name: "Players sent" });
-  for (const name of ["Alpha Player 1 · G", "Alpha Player 2 · G", "Alpha Player 3 · G"]) {
-    await sentGroups.nth(0).getByLabel(name).check();
+  await sentGroups.nth(0).getByRole("searchbox").fill("Alpha Player");
+  await sentGroups.nth(1).getByRole("searchbox").fill("Beta Player");
+  for (const [index, name] of ["Alpha Player 1", "Alpha Player 2", "Alpha Player 3"].entries()) {
+    await sentGroups.nth(0).getByLabel(`${name} · G · TST · ID ${10 + index}`).check();
   }
-  for (const name of ["Beta Player 1 · G", "Beta Player 2 · G", "Beta Player 3 · G"]) {
-    await sentGroups.nth(1).getByLabel(name).check();
+  for (const [index, name] of ["Beta Player 1", "Beta Player 2", "Beta Player 3"].entries()) {
+    await sentGroups.nth(1).getByLabel(`${name} · G · TST · ID ${20 + index}`).check();
   }
   await page.getByLabel("Fantrax rosters have not been updated yet").check();
   await page.getByRole("button", { name: "Review trade" }).click();
@@ -161,6 +163,39 @@ test("commissioner can review and record a sync-pending three-for-three trade", 
   await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
   await expect(page.getByText(/Will be recorded as sync pending/)).toBeVisible();
   await page.getByRole("button", { name: "Confirm and record" }).click();
+  await expect(page.getByText(/Trade recorded with receipt/)).toBeVisible();
+});
+
+test("commissioner can direct assets across three franchises", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=ldl`);
+
+  await page.getByRole("button", { name: "+ Add franchise" }).click();
+  await page.getByLabel("Franchise 1").selectOption("ldl-franchise-a");
+  await page.getByLabel("Franchise 2").selectOption("ldl-franchise-b");
+  await page.getByLabel("Franchise 3").selectOption("ldl-franchise-c");
+
+  const sentGroups = page.getByRole("group", { name: "Players sent" });
+  for (const [index, name] of ["Alpha", "Beta", "Gamma"].entries()) {
+    await sentGroups.nth(index).getByRole("searchbox").fill(`${name} Player 1`);
+    await sentGroups.nth(index).getByLabel(`${name} Player 1 · G · TST · ID ${(index + 1) * 10}`).check();
+  }
+  await page.getByLabel("Alpha Player 1", { exact: true }).selectOption("ldl-franchise-b");
+  await page.getByLabel("Beta Player 1", { exact: true }).selectOption("ldl-franchise-c");
+  await page.getByLabel("Gamma Player 1", { exact: true }).selectOption("ldl-franchise-a");
+
+  await page.getByRole("button", { name: "Review trade" }).click();
+  await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
+  const submitted = page.waitForRequest((incoming) => incoming.method() === "POST" && incoming.url().endsWith("/commissioner/completed-trades"));
+  await page.getByRole("button", { name: "Confirm and record" }).click();
+  const payload = (await submitted).postDataJSON();
+  expect(payload.franchise_ids).toEqual(["ldl-franchise-a", "ldl-franchise-b", "ldl-franchise-c"]);
+  expect(payload.assets).toEqual([
+    { type: "player", player_id: 10, from_franchise_id: "ldl-franchise-a", to_franchise_id: "ldl-franchise-b" },
+    { type: "player", player_id: 20, from_franchise_id: "ldl-franchise-b", to_franchise_id: "ldl-franchise-c" },
+    { type: "player", player_id: 30, from_franchise_id: "ldl-franchise-c", to_franchise_id: "ldl-franchise-a" },
+  ]);
   await expect(page.getByText(/Trade recorded with receipt/)).toBeVisible();
 });
 

@@ -211,13 +211,16 @@ function completedTradeOptionsFixture(league) {
       nba_team: "TST",
     })),
   });
+  const franchises = [
+    franchise("franchise-a", "Alpha", 10),
+    franchise("franchise-b", "Beta", 20),
+    franchise("franchise-c", "Gamma", 30),
+  ];
   return {
     league_slug: league,
     fantasy_season: "2026-27",
-    franchises: [
-      franchise("franchise-a", "Alpha", 10),
-      franchise("franchise-b", "Beta", 20),
-    ],
+    franchises,
+    player_catalog: franchises.flatMap((item) => item.players),
     draft_picks: [],
   };
 }
