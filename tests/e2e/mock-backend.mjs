@@ -216,11 +216,18 @@ function completedTradeOptionsFixture(league) {
     franchise("franchise-b", "Beta", 20),
     franchise("franchise-c", "Gamma", 30),
   ];
+  franchises[0].historical_player_ids = [10, 11, 12, 13];
+  franchises[1].historical_player_ids = [20, 21, 22];
+  franchises[2].historical_player_ids = [30, 31, 32];
   return {
     league_slug: league,
     fantasy_season: "2026-27",
     franchises,
-    player_catalog: franchises.flatMap((item) => item.players),
+    player_catalog: [
+      ...franchises.flatMap((item) => item.players),
+      { id: 13, nba_id: 1013, name: "Alpha Former Player", position: "G", nba_team: "TST" },
+      { id: 99, nba_id: 1099, name: "Unrelated Player", position: "G", nba_team: "TST" },
+    ],
     draft_picks: [],
   };
 }
