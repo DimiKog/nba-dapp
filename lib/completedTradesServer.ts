@@ -16,6 +16,7 @@ export type CommissionerFranchise = {
   roster_captured_at: string | null;
   unmapped_player_count: number;
   players: CommissionerPlayer[];
+  historical_player_ids?: number[];
 };
 
 export type CommissionerDraftPick = {

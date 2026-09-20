@@ -157,7 +157,7 @@ test("commissioner can review and record a sync-pending three-for-three trade", 
   for (const [index, name] of ["Beta Player 1", "Beta Player 2", "Beta Player 3"].entries()) {
     await sentGroups.nth(1).getByLabel(`${name} · G · TST · ID ${20 + index}`).check();
   }
-  await page.getByLabel("Fantrax rosters have not been updated yet").check();
+  await page.getByLabel("Latest stored roster snapshot has not caught up").check();
   await page.getByRole("button", { name: "Review trade" }).click();
 
   await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
@@ -198,6 +198,29 @@ test("commissioner can direct assets across three franchises", async ({ page, re
     { type: "player", player_id: 30, from_franchise_id: "ldl-franchise-c", to_franchise_id: "ldl-franchise-a" },
   ]);
   await expect(page.getByText(/Trade recorded with receipt/)).toBeVisible();
+});
+
+test("player search is scoped to the sender's roster history and reset clears the draft", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=ldl`);
+
+  await page.getByLabel("Franchise 1").selectOption("ldl-franchise-a");
+  await page.getByLabel("Franchise 2").selectOption("ldl-franchise-b");
+  const sent = page.getByRole("group", { name: "Players sent" }).nth(0);
+  await sent.getByRole("searchbox").fill("Beta Player");
+  await expect(sent.getByText(/Beta Player 1/)).toHaveCount(0);
+  await sent.getByRole("searchbox").fill("Unrelated Player");
+  await expect(sent.getByText(/Unrelated Player/)).toHaveCount(0);
+  await sent.getByRole("searchbox").fill("Alpha Former Player");
+  await expect(sent.getByLabel(/Alpha Former Player.*Earlier roster/)).toBeVisible();
+  await sent.getByLabel(/Alpha Former Player.*Earlier roster/).check();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Reset form" }).click();
+  await expect(page.getByLabel("Franchise 1")).toHaveValue("");
+  await expect(page.getByLabel("Franchise 2")).toHaveValue("");
+  await expect(page.getByRole("group", { name: "Players sent" })).toHaveCount(0);
 });
 
 test("anonymous visitors never receive personal navigation", async ({ page }) => {

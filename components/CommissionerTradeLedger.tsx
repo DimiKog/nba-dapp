@@ -24,6 +24,14 @@ type FormState = {
 };
 
 const emptySide = (): SideState => ({ franchiseId: "", tradedPlayers: [], picks: [], drops: [] });
+const emptyForm = (): FormState => ({
+  sides: [emptySide(), emptySide()],
+  occurredAt: localDateTimeValue(new Date()),
+  note: "",
+  reference: "",
+  syncPending: false,
+  syncPendingReason: "Stored roster snapshot has not caught up",
+});
 
 export default function CommissionerTradeLedger({
   options,
@@ -33,20 +41,23 @@ export default function CommissionerTradeLedger({
   history: CompletedTradeList;
 }) {
   const router = useRouter();
-  const [form, setForm] = useState<FormState>({
-    sides: [emptySide(), emptySide()],
-    occurredAt: localDateTimeValue(new Date()),
-    note: "",
-    reference: "",
-    syncPending: false,
-    syncPendingReason: "Fantrax roster update is pending",
-  });
+  const [form, setForm] = useState<FormState>(emptyForm);
   const [reviewing, setReviewing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const validation = validate(form);
+
+  function resetForm() {
+    if (!window.confirm("Discard the unrecorded trade and reset the form?")) return;
+    setForm(emptyForm());
+    setReviewing(false);
+    setSubmitting(false);
+    setError(null);
+    setReceipt(null);
+    setIdempotencyKey(crypto.randomUUID());
+  }
 
   function updateSide(index: number, next: SideState) {
     setForm((current) => ({
@@ -83,7 +94,7 @@ export default function CommissionerTradeLedger({
         note: "",
         reference: "",
         syncPending: false,
-        syncPendingReason: "Fantrax roster update is pending",
+        syncPendingReason: "Stored roster snapshot has not caught up",
         sides: current.sides.map((side) => ({ ...emptySide(), franchiseId: side.franchiseId })),
       }));
       setIdempotencyKey(crypto.randomUUID());
@@ -113,7 +124,7 @@ export default function CommissionerTradeLedger({
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
           <h2 className="font-bold text-slate-950 dark:text-white">Record completed trade</h2>
-          <p className="mt-1 text-xs text-slate-500">Choose 2–5 franchises and each asset’s final destination. Historical trades use player search because today’s roster may have changed. Drops are not trade consideration.</p>
+          <p className="mt-1 text-xs text-slate-500">Choose 2–5 franchises and each asset’s final destination. Player search is limited to people observed on the selected team’s roster this season, including players who have since moved. Drops are not trade consideration.</p>
         </div>
         <div className="grid gap-5 p-5 lg:grid-cols-2">
           {form.sides.map((side, index) => (
@@ -145,34 +156,34 @@ export default function CommissionerTradeLedger({
         )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
           <Field label="Trade completed at">
-            <input type="datetime-local" value={form.occurredAt} onChange={(event) => setForm({ ...form, occurredAt: event.target.value })} className={inputClass} />
+            <input type="datetime-local" value={form.occurredAt} onChange={(event) => { setForm({ ...form, occurredAt: event.target.value }); setReviewing(false); }} className={inputClass} />
           </Field>
           <Field label="External reference (optional)">
-            <input value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })} className={inputClass} placeholder="Fantrax or sheet reference" />
+            <input value={form.reference} onChange={(event) => { setForm({ ...form, reference: event.target.value }); setReviewing(false); }} className={inputClass} placeholder="Fantrax or sheet reference" />
           </Field>
           <label className="sm:col-span-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             Commissioner note (optional)
-            <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} className={`${inputClass} mt-1 min-h-20 py-2`} />
+            <textarea value={form.note} onChange={(event) => { setForm({ ...form, note: event.target.value }); setReviewing(false); }} className={`${inputClass} mt-1 min-h-20 py-2`} />
           </label>
           <label className="sm:col-span-2 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 normal-case tracking-normal text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
             <input
               type="checkbox"
               checked={form.syncPending}
-              onChange={(event) => setForm({ ...form, syncPending: event.target.checked })}
+              onChange={(event) => { setForm({ ...form, syncPending: event.target.checked }); setReviewing(false); }}
               className="mt-1"
             />
             <span>
-              <span className="block text-sm font-bold">Fantrax rosters have not been updated yet</span>
-              <span className="mt-1 block text-xs font-medium opacity-80">Record the approved trade as sync pending, then reconcile it here after the next roster sync.</span>
+              <span className="block text-sm font-bold">Latest stored roster snapshot has not caught up</span>
+              <span className="mt-1 block text-xs font-medium opacity-80">Use only when the app still observes players on their sending team. This does not bypass the pre-trade sender check.</span>
             </span>
           </label>
           {form.syncPending && (
             <Field label="Why is roster verification pending?">
               <input
                 value={form.syncPendingReason}
-                onChange={(event) => setForm({ ...form, syncPendingReason: event.target.value })}
+                onChange={(event) => { setForm({ ...form, syncPendingReason: event.target.value }); setReviewing(false); }}
                 className={inputClass}
-                placeholder="Fantrax roster update is pending"
+                placeholder="Why is the stored snapshot still showing the sending team?"
               />
             </Field>
           )}
@@ -183,8 +194,9 @@ export default function CommissionerTradeLedger({
         {reviewing && !validation && (
           <Review form={form} options={options} />
         )}
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
+        <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
           {validation && <p className="mr-auto self-center text-xs font-semibold text-slate-500">{validation}</p>}
+          <button type="button" onClick={resetForm} disabled={submitting} className={`${secondaryButton} mr-auto`}>Reset form</button>
           {reviewing && <button type="button" onClick={() => setReviewing(false)} className={secondaryButton}>Edit</button>}
           <button
             type="button"
@@ -219,6 +231,11 @@ function TradeSide({ label, franchise, selectedFranchiseIds, franchises, playerC
   const destinations = franchises.filter((item) => selectedFranchiseIds.includes(item.id) && item.id !== franchise?.id);
   const defaultDestination = destinations.length === 1 ? destinations[0].id : "";
   const playerNames = new Map(playerCatalog.map((player) => [player.id, player.name]));
+  const currentPlayerIds = new Set(franchise?.players.map((player) => player.id) ?? []);
+  const eligiblePlayerIds = new Set([...(franchise?.historical_player_ids ?? []), ...currentPlayerIds]);
+  const eligiblePlayers = playerCatalog
+    .filter((player) => eligiblePlayerIds.has(player.id))
+    .sort((a, b) => Number(currentPlayerIds.has(b.id)) - Number(currentPlayerIds.has(a.id)) || a.name.localeCompare(b.name));
   return (
     <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-start gap-2">
@@ -233,14 +250,16 @@ function TradeSide({ label, franchise, selectedFranchiseIds, franchises, playerC
       {franchise && (
         <div className="mt-4 space-y-4">
           <AssetChoices
+            key={franchise.id}
             title="Players sent"
-            items={playerCatalog.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"} · ${player.nba_team || "—"} · ID ${player.id}` }))}
+            items={eligiblePlayers.map((player) => ({ id: player.id, label: `${player.name} · ${player.position || "—"} · ${player.nba_team || "—"} · ID ${player.id}`, context: currentPlayerIds.has(player.id) ? "Current roster" : "Earlier roster" }))}
             selected={state.tradedPlayers.map((asset) => asset.id)}
             disabled={dropped}
             maximum={15}
             requireQuery
             onChange={(ids) => onState({ ...state, tradedPlayers: ids.map((id) => state.tradedPlayers.find((asset) => asset.id === id) ?? { id, to: defaultDestination }) })}
           />
+          <p className="text-[11px] text-slate-500">Only players observed on {franchise.name} this season are selectable. The server checks the roster snapshot before the trade time.</p>
           <Destinations title="Player destinations" assets={state.tradedPlayers} names={playerNames} destinations={destinations} onChange={(tradedPlayers) => onState({ ...state, tradedPlayers })} />
           <AssetChoices
             title="Draft picks sent"
@@ -259,7 +278,7 @@ function TradeSide({ label, franchise, selectedFranchiseIds, franchises, playerC
           {franchise.unmapped_player_count > 0 && (
             <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">{franchise.unmapped_player_count} roster players are unavailable because they have no internal player mapping.</p>
           )}
-          <p className="text-[11px] text-slate-400">Current roster observed {formatDate(franchise.roster_captured_at)}. Historical sender ownership is checked against the completed-trade evidence; a mismatch requires a commissioner reason.</p>
+          <p className="text-[11px] text-slate-400">Current roster observed {formatDate(franchise.roster_captured_at)}. A player without pre-trade sender evidence cannot be recorded.</p>
         </div>
       )}
     </div>
@@ -287,7 +306,7 @@ function Destinations({ title, assets, names, destinations, onChange }: {
 
 function AssetChoices({ title, items, selected, disabled = new Set(), maximum, requireQuery = false, onChange }: {
   title: string;
-  items: Array<{ id: number; label: string }>;
+  items: Array<{ id: number; label: string; context?: string }>;
   selected: number[];
   disabled?: Set<number>;
   maximum?: number;
@@ -303,7 +322,7 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, r
     const rest = items.filter((item) => !selectedSet.has(item.id) && (!requireQuery || needle.length >= 2) && matches(item.label)).slice(0, 30);
     return [...pinned, ...rest];
   }, [items, query, selectedSet, requireQuery]);
-  const showFilter = items.length > 5;
+  const showFilter = requireQuery || items.length > 5;
   const hiddenByFilter = Math.max(
     items.filter((item) => !selectedSet.has(item.id)).length - visible.filter((item) => !selectedSet.has(item.id)).length,
     0,
@@ -351,6 +370,7 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, r
                 onChange={() => onChange(checked ? selected.filter((id) => id !== item.id) : [...selected, item.id])}
               />
               <span className="min-w-0 truncate">{item.label}</span>
+              {item.context && <span className="ml-auto shrink-0 text-[10px] font-semibold text-slate-500">{item.context}</span>}
             </label>
           );
         })}
