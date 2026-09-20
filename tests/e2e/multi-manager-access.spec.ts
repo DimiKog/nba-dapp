@@ -270,6 +270,14 @@ test("final review separates original pick team from sender and highlights the t
   await expect(page.getByRole("button", { name: "Confirm and record" })).toBeEnabled();
 });
 
+test("BδB uses an announcement date rather than a poll approval label", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=bdb`);
+  await expect(page.getByLabel("Announced on Discord")).toHaveAttribute("type", "date");
+  await expect(page.getByText("Use the trade announcement date. No time is needed.")).toBeVisible();
+});
+
 test("anonymous visitors never receive personal navigation", async ({ page }) => {
   await page.goto(app);
   await expect(page.getByRole("link", { name: "My LDL" })).toHaveCount(0);

@@ -169,9 +169,9 @@ export default function CommissionerTradeLedger({
           </div>
         )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
-          <Field label="Approved on (Discord poll)">
+          <Field label={options.league_slug === "ldl" ? "Approved on (Discord poll)" : "Announced on Discord"}>
             <input id="trade-approved-on" type="date" value={form.approvedOn} onChange={(event) => { setForm({ ...form, approvedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
-            <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">Use the date the poll approved the trade. No time is needed.</span>
+            <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">{options.league_slug === "ldl" ? "Use the date the poll approved the trade." : "Use the trade announcement date."} No time is needed.</span>
           </Field>
           <Field label="Applied in Fantrax on (optional)">
             <input type="date" value={form.fantraxAppliedOn} onChange={(event) => { setForm({ ...form, fantraxAppliedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
@@ -445,7 +445,7 @@ function Review({ form, options, acknowledged, onAcknowledge, onEditDate }: {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide">Approved by poll on</p>
+          <p className="text-xs font-bold uppercase tracking-wide">{options.league_slug === "ldl" ? "Approved by poll on" : "Announced on Discord"}</p>
           <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.approvedOn}</p>
           <p className="mt-1 text-xs">Applied in Fantrax: {form.fantraxAppliedOn || "date not supplied"}. The ledger recording time is saved automatically and is not the trade approval time.</p>
         </div>
@@ -537,7 +537,7 @@ function TradeHistory({ history }: { history: CompletedTradeList }) {
             <div key={trade.public_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-slate-950 dark:text-white">{trade.participants?.length ? trade.participants.map((item) => item.name).join(" · ") : `${trade.franchise_a_name} ↔ ${trade.franchise_b_name}`}</p>
-                <p className="text-xs text-slate-500">{trade.asset_count} assets · {trade.date_precision === "day" && trade.approved_on ? `Approved ${trade.approved_on}` : `Legacy trade time ${new Date(trade.occurred_at).toLocaleString()}`}{trade.fantrax_applied_on ? ` · Fantrax ${trade.fantrax_applied_on}` : ""}</p>
+                <p className="text-xs text-slate-500">{trade.asset_count} assets · {trade.date_precision === "day" && trade.approved_on ? `${history.league_slug === "ldl" ? "Approved" : "Announced"} ${trade.approved_on}` : `Legacy trade time ${new Date(trade.occurred_at).toLocaleString()}`}{trade.fantrax_applied_on ? ` · Fantrax ${trade.fantrax_applied_on}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <RosterStatus status={trade.roster_status} />
@@ -590,7 +590,7 @@ function validate(form: FormState): string | null {
   const ids = form.sides.map((side) => side.franchiseId);
   if (ids.some((id) => !id)) return "Select every participating franchise";
   if (new Set(ids).size !== ids.length) return "The franchises must be different";
-  if (!validPastDate(form.approvedOn)) return "Choose a valid poll approval date that is not in the future";
+  if (!validPastDate(form.approvedOn)) return "Choose a valid trade confirmation date that is not in the future";
   if (form.fantraxAppliedOn && !validPastDate(form.fantraxAppliedOn)) return "Choose a valid Fantrax date that is not in the future";
   if (form.syncPending && !form.syncPendingReason.trim()) return "Explain why Fantrax roster verification is pending";
   const sentPlayers = form.sides.flatMap((side) => side.tradedPlayers.map((asset) => asset.id));
