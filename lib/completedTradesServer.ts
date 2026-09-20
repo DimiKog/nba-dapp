@@ -45,7 +45,7 @@ export type CompletedTradeSummary = {
   participant_count: number;
   participants: Array<{ id: string; name: string }>;
   occurred_at: string;
-  approved_on: string | null;
+  confirmed_on: string | null;
   fantrax_applied_on: string | null;
   date_precision: "day" | "timestamp";
   recorded_at: string;

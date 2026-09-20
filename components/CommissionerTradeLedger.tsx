@@ -16,7 +16,7 @@ type DirectedAsset = { id: number; to: string };
 type SideState = { franchiseId: string; tradedPlayers: DirectedAsset[]; picks: DirectedAsset[]; drops: number[] };
 type FormState = {
   sides: SideState[];
-  approvedOn: string;
+  confirmedOn: string;
   fantraxAppliedOn: string;
   note: string;
   reference: string;
@@ -31,7 +31,7 @@ type TradeAsset =
 const emptySide = (): SideState => ({ franchiseId: "", tradedPlayers: [], picks: [], drops: [] });
 const emptyForm = (): FormState => ({
   sides: [emptySide(), emptySide()],
-  approvedOn: athensToday(),
+  confirmedOn: athensToday(),
   fantraxAppliedOn: "",
   note: "",
   reference: "",
@@ -100,7 +100,7 @@ export default function CommissionerTradeLedger({
       setReviewAcknowledged(false);
       setForm((current) => ({
         ...current,
-        approvedOn: athensToday(),
+        confirmedOn: athensToday(),
         fantraxAppliedOn: "",
         note: "",
         reference: "",
@@ -170,7 +170,7 @@ export default function CommissionerTradeLedger({
         )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
           <Field label={options.league_slug === "ldl" ? "Approved on (Discord poll)" : "Announced on Discord"}>
-            <input id="trade-approved-on" type="date" value={form.approvedOn} onChange={(event) => { setForm({ ...form, approvedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
+            <input id="trade-confirmed-on" type="date" value={form.confirmedOn} onChange={(event) => { setForm({ ...form, confirmedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
             <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">{options.league_slug === "ldl" ? "Use the date the poll approved the trade." : "Use the trade announcement date."} No time is needed.</span>
           </Field>
           <Field label="Applied in Fantrax on (optional)">
@@ -218,7 +218,7 @@ export default function CommissionerTradeLedger({
             onAcknowledge={setReviewAcknowledged}
             onEditDate={() => {
               setReviewing(false);
-              document.getElementById("trade-approved-on")?.focus();
+              document.getElementById("trade-confirmed-on")?.focus();
             }}
           />
         )}
@@ -446,7 +446,7 @@ function Review({ form, options, acknowledged, onAcknowledge, onEditDate }: {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide">{options.league_slug === "ldl" ? "Approved by poll on" : "Announced on Discord"}</p>
-          <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.approvedOn}</p>
+          <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.confirmedOn}</p>
           <p className="mt-1 text-xs">Applied in Fantrax: {form.fantraxAppliedOn || "date not supplied"}. The ledger recording time is saved automatically and is not the trade approval time.</p>
         </div>
         <button type="button" onClick={onEditDate} className="rounded-lg border border-amber-500 px-3 py-2 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40">Change date</button>
@@ -537,7 +537,7 @@ function TradeHistory({ history }: { history: CompletedTradeList }) {
             <div key={trade.public_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-slate-950 dark:text-white">{trade.participants?.length ? trade.participants.map((item) => item.name).join(" · ") : `${trade.franchise_a_name} ↔ ${trade.franchise_b_name}`}</p>
-                <p className="text-xs text-slate-500">{trade.asset_count} assets · {trade.date_precision === "day" && trade.approved_on ? `${history.league_slug === "ldl" ? "Approved" : "Announced"} ${trade.approved_on}` : `Legacy trade time ${new Date(trade.occurred_at).toLocaleString()}`}{trade.fantrax_applied_on ? ` · Fantrax ${trade.fantrax_applied_on}` : ""}</p>
+                <p className="text-xs text-slate-500">{trade.asset_count} assets · {trade.date_precision === "day" && trade.confirmed_on ? `${history.league_slug === "ldl" ? "Approved" : "Announced"} ${trade.confirmed_on}` : `Legacy trade time ${new Date(trade.occurred_at).toLocaleString()}`}{trade.fantrax_applied_on ? ` · Fantrax ${trade.fantrax_applied_on}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <RosterStatus status={trade.roster_status} />
@@ -590,7 +590,7 @@ function validate(form: FormState): string | null {
   const ids = form.sides.map((side) => side.franchiseId);
   if (ids.some((id) => !id)) return "Select every participating franchise";
   if (new Set(ids).size !== ids.length) return "The franchises must be different";
-  if (!validPastDate(form.approvedOn)) return "Choose a valid trade confirmation date that is not in the future";
+  if (!validPastDate(form.confirmedOn)) return "Choose a valid trade confirmation date that is not in the future";
   if (form.fantraxAppliedOn && !validPastDate(form.fantraxAppliedOn)) return "Choose a valid Fantrax date that is not in the future";
   if (form.syncPending && !form.syncPendingReason.trim()) return "Explain why Fantrax roster verification is pending";
   const sentPlayers = form.sides.flatMap((side) => side.tradedPlayers.map((asset) => asset.id));
@@ -620,7 +620,7 @@ function buildPayload(form: FormState, options: CompletedTradeOptions) {
   }
   return {
     fantasy_season: options.fantasy_season,
-    approved_on: form.approvedOn,
+    confirmed_on: form.confirmedOn,
     fantrax_applied_on: form.fantraxAppliedOn || undefined,
     franchise_ids: form.sides.map((side) => side.franchiseId),
     assets,
