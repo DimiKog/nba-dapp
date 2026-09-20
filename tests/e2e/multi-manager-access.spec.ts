@@ -145,6 +145,7 @@ test("commissioner can review and record a sync-pending three-for-three trade", 
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/commissioner/trades?league=ldl`);
+  await expect(page.getByRole("heading", { name: "Record completed trade" }).locator("../..").getByRole("button", { name: "Reset form" })).toBeVisible();
 
   await page.getByLabel("Franchise 1").selectOption("ldl-franchise-a");
   await page.getByLabel("Franchise 2").selectOption("ldl-franchise-b");
@@ -160,8 +161,10 @@ test("commissioner can review and record a sync-pending three-for-three trade", 
   await page.getByLabel("Latest stored roster snapshot has not caught up").check();
   await page.getByRole("button", { name: "Review trade" }).click();
 
-  await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
-  await expect(page.getByText(/Will be recorded as sync pending/)).toBeVisible();
+  await expect(page.getByText("Check every transfer before recording")).toBeVisible();
+  await expect(page.getByText(/Stored roster verification will be pending/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Confirm and record" })).toBeDisabled();
+  await page.getByLabel("I checked the trade date, every asset, and each destination against the source announcement.").check();
   await page.getByRole("button", { name: "Confirm and record" }).click();
   await expect(page.getByText(/Trade recorded with receipt/)).toBeVisible();
 });
@@ -187,7 +190,16 @@ test("commissioner can direct assets across three franchises", async ({ page, re
   await destinations.nth(2).getByRole("combobox").selectOption("ldl-franchise-a");
 
   await page.getByRole("button", { name: "Review trade" }).click();
-  await expect(page.getByText("Final review — this creates an immutable ledger entry")).toBeVisible();
+  await expect(page.getByText("Check every transfer before recording")).toBeVisible();
+  const transferRows = page.getByRole("list", { name: "Trade transfers" }).getByRole("listitem");
+  await expect(transferRows).toHaveCount(3);
+  await expect(transferRows.nth(0)).toContainText("Alpha Player 1");
+  await expect(transferRows.nth(0)).toContainText("→ Beta");
+  await expect(transferRows.nth(1)).toContainText("Beta Player 1");
+  await expect(transferRows.nth(1)).toContainText("→ Gamma");
+  await expect(transferRows.nth(2)).toContainText("Gamma Player 1");
+  await expect(transferRows.nth(2)).toContainText("→ Alpha");
+  await page.getByLabel("I checked the trade date, every asset, and each destination against the source announcement.").check();
   const submitted = page.waitForRequest((incoming) => incoming.method() === "POST" && incoming.url().endsWith("/commissioner/completed-trades"));
   await page.getByRole("button", { name: "Confirm and record" }).click();
   const payload = (await submitted).postDataJSON();
@@ -221,6 +233,39 @@ test("player search is scoped to the sender's roster history and reset clears th
   await expect(page.getByLabel("Franchise 1")).toHaveValue("");
   await expect(page.getByLabel("Franchise 2")).toHaveValue("");
   await expect(page.getByRole("group", { name: "Players sent" })).toHaveCount(0);
+});
+
+test("final review separates original pick team from sender and highlights the trade date", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=ldl`);
+
+  await page.getByLabel("Franchise 1").selectOption("ldl-franchise-a");
+  await page.getByLabel("Franchise 2").selectOption("ldl-franchise-b");
+  const sentGroups = page.getByRole("group", { name: "Players sent" });
+  await sentGroups.nth(0).getByRole("searchbox").fill("Alpha Player 1");
+  await sentGroups.nth(0).getByLabel("Alpha Player 1 · G · TST · ID 10").check();
+  await sentGroups.nth(1).getByRole("searchbox").fill("Beta Player 1");
+  await sentGroups.nth(1).getByLabel("Beta Player 1 · G · TST · ID 20").check();
+  await page.getByRole("group", { name: "Draft picks sent" }).nth(0).getByLabel("2028 Round 2 · Gamma").check();
+  await page.getByLabel("Trade completed at").fill("2026-09-17T14:30");
+  await page.getByRole("button", { name: "Review trade" }).click();
+
+  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-17 · 14:30");
+  const transfers = page.getByRole("list", { name: "Trade transfers" }).getByRole("listitem");
+  await expect(transfers).toHaveCount(3);
+  await expect(transfers.nth(1)).toContainText("Alpha");
+  await expect(transfers.nth(1)).toContainText("2028 Round 2 (originally Gamma)");
+  await expect(transfers.nth(1)).toContainText("→ Beta");
+  await expect(page.getByRole("button", { name: "Confirm and record" })).toBeDisabled();
+
+  await page.getByRole("button", { name: "Change date" }).click();
+  await expect(page.getByText("Check every transfer before recording")).toHaveCount(0);
+  await page.getByLabel("Trade completed at").fill("2026-09-18T09:00");
+  await page.getByRole("button", { name: "Review trade" }).click();
+  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-18 · 09:00");
+  await page.getByLabel("I checked the trade date, every asset, and each destination against the source announcement.").check();
+  await expect(page.getByRole("button", { name: "Confirm and record" })).toBeEnabled();
 });
 
 test("anonymous visitors never receive personal navigation", async ({ page }) => {

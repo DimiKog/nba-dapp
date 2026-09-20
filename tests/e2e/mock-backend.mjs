@@ -228,7 +228,13 @@ function completedTradeOptionsFixture(league) {
       { id: 13, nba_id: 1013, name: "Alpha Former Player", position: "G", nba_team: "TST" },
       { id: 99, nba_id: 1099, name: "Unrelated Player", position: "G", nba_team: "TST" },
     ],
-    draft_picks: [],
+    draft_picks: [{
+      id: 701,
+      draft_year: 2028,
+      round: 2,
+      original_franchise: { id: `${league}-franchise-c`, name: "Gamma" },
+      current_owner: { id: `${league}-franchise-a`, name: "Alpha" },
+    }],
   };
 }
 
