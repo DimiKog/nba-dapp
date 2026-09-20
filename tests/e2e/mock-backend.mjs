@@ -43,7 +43,7 @@ const sessions = {
     user: { id: 1, email: "manager-a@example.test", display_name: "Alice Example" },
     memberships: [
       membership("ldl", "ldl-franchise-a", "Manager A LDL", "ldl-team-a", true),
-      membership("bdb", "bdb-franchise-a", "Manager A BDB", "bdb-team-a", false),
+      membership("bdb", "bdb-franchise-a", "Manager A BDB", "bdb-team-a", true),
     ],
   },
   "manager-b-subject": {
