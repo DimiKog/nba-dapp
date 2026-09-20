@@ -211,7 +211,7 @@ test("player search is scoped to the sender's roster history and reset clears th
   await sent.getByRole("searchbox").fill("Beta Player");
   await expect(sent.getByText(/Beta Player 1/)).toHaveCount(0);
   await sent.getByRole("searchbox").fill("Unrelated Player");
-  await expect(sent.getByText(/Unrelated Player/)).toHaveCount(0);
+  await expect(sent.getByRole("checkbox", { name: /Unrelated Player/ })).toHaveCount(0);
   await sent.getByRole("searchbox").fill("Alpha Former Player");
   await expect(sent.getByLabel(/Alpha Former Player.*Earlier roster/)).toBeVisible();
   await sent.getByLabel(/Alpha Former Player.*Earlier roster/).check();
