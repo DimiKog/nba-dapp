@@ -16,7 +16,8 @@ type DirectedAsset = { id: number; to: string };
 type SideState = { franchiseId: string; tradedPlayers: DirectedAsset[]; picks: DirectedAsset[]; drops: number[] };
 type FormState = {
   sides: SideState[];
-  occurredAt: string;
+  approvedOn: string;
+  fantraxAppliedOn: string;
   note: string;
   reference: string;
   syncPending: boolean;
@@ -30,7 +31,8 @@ type TradeAsset =
 const emptySide = (): SideState => ({ franchiseId: "", tradedPlayers: [], picks: [], drops: [] });
 const emptyForm = (): FormState => ({
   sides: [emptySide(), emptySide()],
-  occurredAt: localDateTimeValue(new Date()),
+  approvedOn: athensToday(),
+  fantraxAppliedOn: "",
   note: "",
   reference: "",
   syncPending: false,
@@ -98,7 +100,8 @@ export default function CommissionerTradeLedger({
       setReviewAcknowledged(false);
       setForm((current) => ({
         ...current,
-        occurredAt: localDateTimeValue(new Date()),
+        approvedOn: athensToday(),
+        fantraxAppliedOn: "",
         note: "",
         reference: "",
         syncPending: false,
@@ -166,8 +169,13 @@ export default function CommissionerTradeLedger({
           </div>
         )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
-          <Field label="Trade completed at">
-            <input id="trade-completed-at" type="datetime-local" value={form.occurredAt} onChange={(event) => { setForm({ ...form, occurredAt: event.target.value }); setReviewing(false); }} className={inputClass} />
+          <Field label="Approved on (Discord poll)">
+            <input id="trade-approved-on" type="date" value={form.approvedOn} onChange={(event) => { setForm({ ...form, approvedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
+            <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">Use the date the poll approved the trade. No time is needed.</span>
+          </Field>
+          <Field label="Applied in Fantrax on (optional)">
+            <input type="date" value={form.fantraxAppliedOn} onChange={(event) => { setForm({ ...form, fantraxAppliedOn: event.target.value }); setReviewing(false); }} className={inputClass} />
+            <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-slate-500">Leave blank if you do not know when the roster change appeared. This may differ from the approval date.</span>
           </Field>
           <Field label="External reference (optional)">
             <input value={form.reference} onChange={(event) => { setForm({ ...form, reference: event.target.value }); setReviewing(false); }} className={inputClass} placeholder="Fantrax or sheet reference" />
@@ -210,7 +218,7 @@ export default function CommissionerTradeLedger({
             onAcknowledge={setReviewAcknowledged}
             onEditDate={() => {
               setReviewing(false);
-              document.getElementById("trade-completed-at")?.focus();
+              document.getElementById("trade-approved-on")?.focus();
             }}
           />
         )}
@@ -437,9 +445,9 @@ function Review({ form, options, acknowledged, onAcknowledge, onEditDate }: {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide">When did the trade actually happen? · Local time</p>
-          <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.occurredAt.replace("T", " · ")}</p>
-          <p className="mt-1 text-xs">The form starts with the current time. For an older trade, correct this date before recording.</p>
+          <p className="text-xs font-bold uppercase tracking-wide">Approved by poll on</p>
+          <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.approvedOn}</p>
+          <p className="mt-1 text-xs">Applied in Fantrax: {form.fantraxAppliedOn || "date not supplied"}. The ledger recording time is saved automatically and is not the trade approval time.</p>
         </div>
         <button type="button" onClick={onEditDate} className="rounded-lg border border-amber-500 px-3 py-2 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40">Change date</button>
       </div>
@@ -529,7 +537,7 @@ function TradeHistory({ history }: { history: CompletedTradeList }) {
             <div key={trade.public_id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="font-semibold text-slate-950 dark:text-white">{trade.participants?.length ? trade.participants.map((item) => item.name).join(" · ") : `${trade.franchise_a_name} ↔ ${trade.franchise_b_name}`}</p>
-                <p className="text-xs text-slate-500">{trade.asset_count} assets · {new Date(trade.occurred_at).toLocaleString()}</p>
+                <p className="text-xs text-slate-500">{trade.asset_count} assets · {trade.date_precision === "day" && trade.approved_on ? `Approved ${trade.approved_on}` : `Legacy trade time ${new Date(trade.occurred_at).toLocaleString()}`}{trade.fantrax_applied_on ? ` · Fantrax ${trade.fantrax_applied_on}` : ""}</p>
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <RosterStatus status={trade.roster_status} />
@@ -582,8 +590,8 @@ function validate(form: FormState): string | null {
   const ids = form.sides.map((side) => side.franchiseId);
   if (ids.some((id) => !id)) return "Select every participating franchise";
   if (new Set(ids).size !== ids.length) return "The franchises must be different";
-  const occurredAt = new Date(form.occurredAt).getTime();
-  if (!form.occurredAt || Number.isNaN(occurredAt) || occurredAt > Date.now()) return "Choose a completed time that is not in the future";
+  if (!validPastDate(form.approvedOn)) return "Choose a valid poll approval date that is not in the future";
+  if (form.fantraxAppliedOn && !validPastDate(form.fantraxAppliedOn)) return "Choose a valid Fantrax date that is not in the future";
   if (form.syncPending && !form.syncPendingReason.trim()) return "Explain why Fantrax roster verification is pending";
   const sentPlayers = form.sides.flatMap((side) => side.tradedPlayers.map((asset) => asset.id));
   const sentPicks = form.sides.flatMap((side) => side.picks.map((asset) => asset.id));
@@ -612,7 +620,8 @@ function buildPayload(form: FormState, options: CompletedTradeOptions) {
   }
   return {
     fantasy_season: options.fantasy_season,
-    occurred_at: new Date(form.occurredAt).toISOString(),
+    approved_on: form.approvedOn,
+    fantrax_applied_on: form.fantraxAppliedOn || undefined,
     franchise_ids: form.sides.map((side) => side.franchiseId),
     assets,
     commissioner_note: form.note || undefined,
@@ -620,9 +629,18 @@ function buildPayload(form: FormState, options: CompletedTradeOptions) {
   };
 }
 
-function localDateTimeValue(date: Date): string {
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+function athensToday(): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Athens", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (name: string) => parts.find((item) => item.type === name)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function validPastDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value && value <= athensToday();
 }
 
 function formatDate(value: string | null) {
