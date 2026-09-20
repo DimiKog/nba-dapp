@@ -22,6 +22,10 @@ type FormState = {
   syncPending: boolean;
   syncPendingReason: string;
 };
+type TradeAsset =
+  | { type: "player"; player_id: number; from_franchise_id: string; to_franchise_id: string; roster_override_reason?: string }
+  | { type: "draft_pick"; pick_id: number; from_franchise_id: string; to_franchise_id: string }
+  | { type: "drop"; player_id: number; from_franchise_id: string; roster_override_reason: string };
 
 const emptySide = (): SideState => ({ franchiseId: "", tradedPlayers: [], picks: [], drops: [] });
 const emptyForm = (): FormState => ({
@@ -43,6 +47,7 @@ export default function CommissionerTradeLedger({
   const router = useRouter();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [reviewing, setReviewing] = useState(false);
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
@@ -53,6 +58,7 @@ export default function CommissionerTradeLedger({
     if (!window.confirm("Discard the unrecorded trade and reset the form?")) return;
     setForm(emptyForm());
     setReviewing(false);
+    setReviewAcknowledged(false);
     setSubmitting(false);
     setError(null);
     setReceipt(null);
@@ -69,6 +75,7 @@ export default function CommissionerTradeLedger({
   }
 
   async function submit() {
+    if (!reviewing || !reviewAcknowledged) return;
     if (validation) return setError(validation);
     setSubmitting(true);
     setError(null);
@@ -88,6 +95,7 @@ export default function CommissionerTradeLedger({
       if (!response.ok) throw new Error(body.error || `Trade ledger returned ${response.status}`);
       setReceipt(body.public_id ?? "Recorded");
       setReviewing(false);
+      setReviewAcknowledged(false);
       setForm((current) => ({
         ...current,
         occurredAt: localDateTimeValue(new Date()),
@@ -122,9 +130,12 @@ export default function CommissionerTradeLedger({
       <LeagueTabs active={options.league_slug} />
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-          <h2 className="font-bold text-slate-950 dark:text-white">Record completed trade</h2>
-          <p className="mt-1 text-xs text-slate-500">Choose 2–5 franchises and each asset’s final destination. Player search is limited to people observed on the selected team’s roster this season, including players who have since moved. Drops are not trade consideration.</p>
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-slate-700">
+          <div>
+            <h2 className="font-bold text-slate-950 dark:text-white">Record completed trade</h2>
+            <p className="mt-1 text-xs text-slate-500">Choose 2–5 franchises and each asset’s final destination. Player search is limited to people observed on the selected team’s roster this season, including players who have since moved. Drops are not trade consideration.</p>
+          </div>
+          <button type="button" onClick={resetForm} disabled={submitting} className={`${secondaryButton} shrink-0 self-start`}>Reset form</button>
         </div>
         <div className="grid gap-5 p-5 lg:grid-cols-2">
           {form.sides.map((side, index) => (
@@ -156,7 +167,7 @@ export default function CommissionerTradeLedger({
         )}
         <div className="grid gap-4 border-t border-slate-200 bg-slate-50 p-5 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-950/30">
           <Field label="Trade completed at">
-            <input type="datetime-local" value={form.occurredAt} onChange={(event) => { setForm({ ...form, occurredAt: event.target.value }); setReviewing(false); }} className={inputClass} />
+            <input id="trade-completed-at" type="datetime-local" value={form.occurredAt} onChange={(event) => { setForm({ ...form, occurredAt: event.target.value }); setReviewing(false); }} className={inputClass} />
           </Field>
           <Field label="External reference (optional)">
             <input value={form.reference} onChange={(event) => { setForm({ ...form, reference: event.target.value }); setReviewing(false); }} className={inputClass} placeholder="Fantrax or sheet reference" />
@@ -192,16 +203,31 @@ export default function CommissionerTradeLedger({
         {receipt && <Notice tone="success">Trade recorded with receipt {receipt}.</Notice>}
         {error && <Notice tone="error">{error}</Notice>}
         {reviewing && !validation && (
-          <Review form={form} options={options} />
+          <Review
+            form={form}
+            options={options}
+            acknowledged={reviewAcknowledged}
+            onAcknowledge={setReviewAcknowledged}
+            onEditDate={() => {
+              setReviewing(false);
+              document.getElementById("trade-completed-at")?.focus();
+            }}
+          />
         )}
         <div className="flex flex-wrap justify-end gap-3 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
           {validation && <p className="mr-auto self-center text-xs font-semibold text-slate-500">{validation}</p>}
-          <button type="button" onClick={resetForm} disabled={submitting} className={`${secondaryButton} mr-auto`}>Reset form</button>
           {reviewing && <button type="button" onClick={() => setReviewing(false)} className={secondaryButton}>Edit</button>}
           <button
             type="button"
-            disabled={Boolean(validation) || submitting}
-            onClick={() => reviewing ? void submit() : setReviewing(true)}
+            disabled={Boolean(validation) || submitting || (reviewing && !reviewAcknowledged)}
+            onClick={() => {
+              if (reviewing) void submit();
+              else {
+                setReviewAcknowledged(false);
+                setReviewing(true);
+                window.setTimeout(() => document.getElementById("trade-final-review")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+              }
+            }}
             className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting ? "Recording…" : reviewing ? "Confirm and record" : "Review trade"}
@@ -386,37 +412,82 @@ function AssetChoices({ title, items, selected, disabled = new Set(), maximum, r
   );
 }
 
-function Review({ form, options }: {
+function Review({ form, options, acknowledged, onAcknowledge, onEditDate }: {
   form: FormState;
   options: CompletedTradeOptions;
+  acknowledged: boolean;
+  onAcknowledge: (value: boolean) => void;
+  onEditDate: () => void;
 }) {
+  // The review reads the same asset list that submit() sends to the backend.
+  const assets = buildPayload(form, options).assets;
+  const transfers = assets.filter((asset) => asset.type !== "drop");
+  const drops = assets.filter((asset) => asset.type === "drop");
+  const franchiseNames = new Map(options.franchises.map((item) => [item.id, item.name]));
+  const playerNames = new Map((options.player_catalog ?? []).map((player) => [player.id, player.name]));
+  const pickNames = new Map(options.draft_picks.map((pick) => [pick.id, `${pick.draft_year} Round ${pick.round} (originally ${pick.original_franchise.name})`]));
+
   return (
-    <div className="mx-5 mb-5 rounded-xl border border-blue-300 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
-      <p className="font-bold text-blue-950 dark:text-blue-100">Final review — this creates an immutable ledger entry</p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        {form.sides.map((side) => <ReviewSide key={side.franchiseId} franchise={options.franchises.find((item) => item.id === side.franchiseId)!} side={side} options={options} />)}
+    <section id="trade-final-review" aria-label="Final trade review" className="mx-5 mb-5 space-y-4 rounded-xl border-2 border-blue-400 bg-blue-50 p-4 text-sm dark:border-blue-700 dark:bg-blue-950/30">
+      <div>
+        <p className="text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300">Final review · {form.sides.length} teams · {transfers.length} transfers</p>
+        <h3 className="mt-1 text-lg font-bold text-blue-950 dark:text-blue-100">Check every transfer before recording</h3>
+        <p className="mt-1 text-xs text-blue-900 dark:text-blue-200">This creates a permanent ledger entry and cannot be edited afterward. Fantrax rosters are not changed.</p>
       </div>
-      <p className="mt-3 text-xs text-blue-800 dark:text-blue-200">Recorded time: {new Date(form.occurredAt).toLocaleString()} · Fantrax rosters are not modified.</p>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide">When did the trade actually happen? · Local time</p>
+          <p data-testid="review-trade-date" className="mt-1 text-lg font-bold tabular-nums">{form.occurredAt.replace("T", " · ")}</p>
+          <p className="mt-1 text-xs">The form starts with the current time. For an older trade, correct this date before recording.</p>
+        </div>
+        <button type="button" onClick={onEditDate} className="rounded-lg border border-amber-500 px-3 py-2 text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/40">Change date</button>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-blue-200 bg-white dark:border-blue-800 dark:bg-slate-900">
+        <div className="hidden grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] gap-3 bg-blue-100 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-blue-900 sm:grid dark:bg-blue-950/60 dark:text-blue-200">
+          <span>From</span><span>Player or pick</span><span>To</span>
+        </div>
+        <ol aria-label="Trade transfers" className="divide-y divide-blue-100 dark:divide-blue-900">
+          {transfers.map((asset) => (
+            <li key={`${asset.type}-${asset.type === "player" ? asset.player_id : asset.pick_id}`} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1fr)] sm:items-center sm:gap-3">
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-500 sm:hidden">From</span>
+                <span className="font-semibold text-slate-900 dark:text-white">{franchiseNames.get(asset.from_franchise_id) ?? asset.from_franchise_id}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-500">{asset.type === "player" ? "Player" : "Draft pick"}</span>
+                <span className="font-semibold text-slate-950 dark:text-white">{asset.type === "player" ? playerNames.get(asset.player_id) ?? `Player ${asset.player_id}` : pickNames.get(asset.pick_id) ?? `Pick ${asset.pick_id}`}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase text-slate-500 sm:hidden">To</span>
+                <span className="font-bold text-blue-700 dark:text-blue-300">→ {franchiseNames.get(asset.to_franchise_id) ?? asset.to_franchise_id}</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {drops.length > 0 && (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 dark:border-rose-900 dark:bg-rose-950/30">
+          <p className="font-bold text-rose-900 dark:text-rose-200">Roster drops · not sent to another team</p>
+          <ul className="mt-1 space-y-1 text-xs text-rose-900 dark:text-rose-200">
+            {drops.map((asset) => <li key={`drop-${asset.player_id}`}>{franchiseNames.get(asset.from_franchise_id) ?? asset.from_franchise_id} drops {playerNames.get(asset.player_id) ?? `Player ${asset.player_id}`}</li>)}
+          </ul>
+        </div>
+      )}
       {form.syncPending && (
-        <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
-          Will be recorded as sync pending: {form.syncPendingReason}
+        <p className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900 dark:bg-amber-950/60 dark:text-amber-100">
+          Stored roster verification will be pending: {form.syncPendingReason}
         </p>
       )}
-    </div>
-  );
-}
 
-function ReviewSide({ franchise, side, options }: { franchise: CommissionerFranchise; side: SideState; options: CompletedTradeOptions }) {
-  const names = new Map((options.player_catalog ?? []).map((player) => [player.id, player.name]));
-  const pickNames = new Map(options.draft_picks.map((pick) => [pick.id, `${pick.draft_year} R${pick.round} (${pick.original_franchise.name})`]));
-  const franchiseNames = new Map(options.franchises.map((item) => [item.id, item.name]));
-  return (
-    <div>
-      <p className="font-bold">{franchise.name} sends</p>
-      <p>{side.tradedPlayers.map((asset) => `${names.get(asset.id) ?? asset.id} → ${franchiseNames.get(asset.to) ?? asset.to}`).join(", ") || "No players"}</p>
-      <p>{side.picks.map((asset) => `${pickNames.get(asset.id) ?? asset.id} → ${franchiseNames.get(asset.to) ?? asset.to}`).join(", ") || "No picks"}</p>
-      {side.drops.length > 0 && <p className="mt-1 text-red-700 dark:text-red-300">Drops: {side.drops.map((id) => names.get(id)).join(", ")}</p>}
-    </div>
+      <label className="flex items-start gap-3 rounded-lg border border-blue-300 bg-white p-3 font-semibold text-blue-950 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-100">
+        <input type="checkbox" checked={acknowledged} onChange={(event) => onAcknowledge(event.target.checked)} className="mt-1" />
+        <span>I checked the trade date, every asset, and each destination against the source announcement.</span>
+      </label>
+      <p className="text-xs text-blue-800 dark:text-blue-200">Confirm and record becomes available only after this check.</p>
+    </section>
   );
 }
 
@@ -527,7 +598,7 @@ function validate(form: FormState): string | null {
 }
 
 function buildPayload(form: FormState, options: CompletedTradeOptions) {
-  const assets: Array<Record<string, unknown>> = [];
+  const assets: TradeAsset[] = [];
   for (const side of form.sides) {
     side.tradedPlayers.forEach(({ id: player_id, to }) => assets.push({
       type: "player",
