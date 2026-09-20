@@ -248,10 +248,12 @@ test("final review separates original pick team from sender and highlights the t
   await sentGroups.nth(1).getByRole("searchbox").fill("Beta Player 1");
   await sentGroups.nth(1).getByLabel("Beta Player 1 · G · TST · ID 20").check();
   await page.getByRole("group", { name: "Draft picks sent" }).nth(0).getByLabel("2028 Round 2 · Gamma").check();
-  await page.getByLabel("Trade completed at").fill("2026-09-17T14:30");
+  await page.getByLabel("Approved on (Discord poll)").fill("2026-09-17");
+  await page.getByLabel("Applied in Fantrax on (optional)").fill("2026-09-18");
   await page.getByRole("button", { name: "Review trade" }).click();
 
-  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-17 · 14:30");
+  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-17");
+  await expect(page.getByText(/Applied in Fantrax: 2026-09-18/)).toBeVisible();
   const transfers = page.getByRole("list", { name: "Trade transfers" }).getByRole("listitem");
   await expect(transfers).toHaveCount(3);
   await expect(transfers.nth(1)).toContainText("Alpha");
@@ -261,11 +263,19 @@ test("final review separates original pick team from sender and highlights the t
 
   await page.getByRole("button", { name: "Change date" }).click();
   await expect(page.getByText("Check every transfer before recording")).toHaveCount(0);
-  await page.getByLabel("Trade completed at").fill("2026-09-18T09:00");
+  await page.getByLabel("Approved on (Discord poll)").fill("2026-09-18");
   await page.getByRole("button", { name: "Review trade" }).click();
-  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-18 · 09:00");
+  await expect(page.getByTestId("review-trade-date")).toHaveText("2026-09-18");
   await page.getByLabel("I checked the trade date, every asset, and each destination against the source announcement.").check();
   await expect(page.getByRole("button", { name: "Confirm and record" })).toBeEnabled();
+});
+
+test("BδB uses an announcement date rather than a poll approval label", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/commissioner/trades?league=bdb`);
+  await expect(page.getByLabel("Announced on Discord")).toHaveAttribute("type", "date");
+  await expect(page.getByText("Use the trade announcement date. No time is needed.")).toBeVisible();
 });
 
 test("anonymous visitors never receive personal navigation", async ({ page }) => {
