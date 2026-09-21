@@ -5,6 +5,7 @@ import {
   fetchPlayerResearch,
   type PlayerResearchEvidence,
 } from "@/lib/api";
+import TradeDecisionBrief from "@/components/TradeDecisionBrief";
 
 type ResearchPlayer = {
   nba_id: number;
@@ -97,6 +98,15 @@ function PlayerResearchCard({
           <RoleSignal signal={research.role_signal} />
           <NewsEvidence research={research} />
           <ResearchSourceLauncher player={research.player} />
+        </div>
+      )}
+      {(research || error) && (
+        <div className="mt-4">
+          <TradeDecisionBrief
+            league={league}
+            player={player}
+            research={research}
+          />
         </div>
       )}
     </article>
