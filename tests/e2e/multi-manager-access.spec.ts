@@ -122,6 +122,64 @@ test("trade suggestions are restricted to the signed-in manager team", async ({ 
   expect(ownB.ok()).toBeTruthy();
 });
 
+test("pick-for-player advisor submits a canonical pick without an outgoing player", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.route("**/api/fantasy/ldl/draft-assets?eligibility=eligible", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({
+      league_slug: "ldl",
+      rule_set: { fantasy_season: "2026-27", version: 1, activated_at: "2026-09-01" },
+      count: 1,
+      assets: [{
+        id: 42,
+        league_slug: "ldl",
+        draft_year: 2027,
+        round: 1,
+        original_franchise: { id: "ldl-franchise-a", name: "Manager A LDL" },
+        current_owner: { id: "ldl-franchise-a", name: "Manager A LDL", fantrax_team_external_id: "ldl-team-a" },
+        ownership_state: "owned",
+        status: "active",
+        optimistic_version: 1,
+        eligibility: { mode: "enabled", eligible: true, reason: "", opens_at: null, closes_at: null, evaluated_at: "2026-09-27" },
+        conditional_obligations: [],
+        valuation: { status: "shadow", affects_recommendations: false, compensation_band: { conservative: "useful", optimistic: "strong" } },
+      }],
+    }),
+  }));
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a/trade?mode=analyze`);
+  await page.getByRole("combobox", { name: "Trade partner" }).fill("xrtc");
+  await page.getByRole("option", { name: "xrtc" }).click();
+  await page.getByRole("combobox", { name: "You receive" }).fill("xrtc Player 1");
+  await page.getByRole("option", { name: /^xrtc Player 1 G/ }).click();
+  const analyze = page.getByRole("button", { name: "Analyze trade" }).last();
+  await expect(analyze).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await expect(analyze).toBeEnabled();
+
+  const submitted = page.waitForRequest((incoming) => incoming.method() === "POST" && incoming.url().endsWith("/trade-package-analysis"));
+  await analyze.click();
+  const payload = (await submitted).postDataJSON();
+  expect(payload.selected_team_sends).toEqual([]);
+  expect(payload.counterparty_team_sends).toEqual([11000]);
+  expect(payload.assets).toEqual([{ type: "draft_pick", pick_id: 42, from_team: "selected_team" }]);
+  await expect(page.getByText("Mock package analysis reached backend")).toBeVisible();
+
+  const noPick = await request.post(`${app}/api/fantasy/ldl/trade-package-analysis`, {
+    headers: { [accessHeader]: token },
+    data: { ...payload, assets: [] },
+  });
+  expect(noPick.status()).toBe(400);
+  expect(await noPick.json()).toEqual({ error: "Invalid manual trade-package request" });
+
+  const otherManagerTeam = await request.post(`${app}/api/fantasy/ldl/trade-package-analysis`, {
+    headers: { [accessHeader]: token },
+    data: { ...payload, selected_team_id: "ldl-team-c" },
+  });
+  expect(otherManagerTeam.status()).toBe(403);
+});
+
 test("player research is available only through an authenticated league membership", async ({ request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   const authenticated = await request.get(

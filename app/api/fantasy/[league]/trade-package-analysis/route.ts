@@ -19,9 +19,9 @@ function validTeamId(value: unknown): value is string {
   return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value);
 }
 
-function validPlayerIds(value: unknown): value is number[] {
+function validPlayerIds(value: unknown, allowEmpty = false): value is number[] {
   return Array.isArray(value)
-    && value.length >= 1
+    && value.length >= (allowEmpty ? 0 : 1)
     && value.length <= 2
     && value.every((id) => Number.isInteger(id) && id > 0)
     && new Set(value).size === value.length;
@@ -61,12 +61,13 @@ export async function POST(
   const body = await request.json().catch(() => null) as PackageRequest | null;
   const drops = body?.drops as { selected_team?: unknown; counterparty_team?: unknown } | null;
   const windowDays = Number(body?.window_days ?? 14);
+  const pickForPlayer = Array.isArray(body?.selected_team_sends) && body.selected_team_sends.length === 0;
   if (
     !body
     || !validTeamId(body.selected_team_id)
     || !validTeamId(body.counterparty_team_id)
     || body.selected_team_id === body.counterparty_team_id
-    || !validPlayerIds(body.selected_team_sends)
+    || !validPlayerIds(body.selected_team_sends, pickForPlayer)
     || !validPlayerIds(body.counterparty_team_sends)
     || !drops || typeof drops !== "object" || Array.isArray(drops)
     || !validDrop(drops.selected_team) || !validDrop(drops.counterparty_team)
@@ -74,6 +75,14 @@ export async function POST(
     || (body.basis !== "season" && body.basis !== "window")
     || !Number.isInteger(windowDays) || windowDays < 1 || windowDays > 30
     || !validAssets(body.assets)
+    || (pickForPlayer && (
+      !Array.isArray(body.counterparty_team_sends)
+      || body.counterparty_team_sends.length !== 1
+      || !Array.isArray(body.assets)
+      || body.assets.length === 0
+      || body.assets.some((asset: PickAsset) => asset.from_team !== "selected_team")
+      || drops.counterparty_team != null
+    ))
   ) {
     return Response.json({ error: "Invalid manual trade-package request" }, { status: 400 });
   }
