@@ -143,6 +143,7 @@ export default function TradeAnalyzerWorkspace({
     [counterpartyTeamId, draftAssets],
   );
   const hasRecentGames = leaguePlayers.some((player) => player.window_stats.games > 0);
+  const pickForPlayer = mode === "analyze" && !outgoing;
 
   useEffect(() => {
     let cancelled = false;
@@ -211,6 +212,12 @@ export default function TradeAnalyzerWorkspace({
     setError(null);
     if (outgoingTwo === value) setOutgoingTwo("");
     if (selectedDrop === value) setSelectedDrop("");
+    if (!value) {
+      setOutgoingTwo("");
+      setIncomingTwo("");
+      setCounterpartyDrop("");
+      setCounterpartyPicks([]);
+    }
     syncUrl({ outgoing: value });
     if (mode === "suggestions" && value) {
       void loadSuggestions(value, basis);
@@ -300,7 +307,8 @@ export default function TradeAnalyzerWorkspace({
   }
 
   async function runAnalysis() {
-    if (!outgoing || (mode === "analyze" && !incoming)) return;
+    if (mode !== "analyze" && !outgoing) return;
+    if (mode === "analyze" && (!incoming || (!outgoing && !selectedPicks.length))) return;
     const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
@@ -323,7 +331,9 @@ export default function TradeAnalyzerWorkspace({
         }
       } else {
         if (!counterpartyTeamId) throw new Error("Select a counterparty player first.");
-        const selectedIds = [Number(outgoing), ...(outgoingTwo ? [Number(outgoingTwo)] : [])];
+        const selectedIds = outgoing
+          ? [Number(outgoing), ...(outgoingTwo ? [Number(outgoingTwo)] : [])]
+          : [];
         const counterpartyIds = [Number(incoming), ...(incomingTwo ? [Number(incomingTwo)] : [])];
         const payload = await fetchTradePackageAnalysis(league, {
           selected_team_id: teamId,
@@ -470,12 +480,13 @@ export default function TradeAnalyzerWorkspace({
 
         <div className="grid gap-4 p-4 lg:grid-cols-2">
           <PlayerSelector
-            label="You give"
-            helper={`Players on ${teamName}`}
+            label={mode === "analyze" ? "You give · player optional" : "You give"}
+            helper={mode === "analyze" ? `Players on ${teamName}, or leave empty to send picks only` : `Players on ${teamName}`}
             value={outgoing}
             players={selectableOwn}
             onChange={changeOutgoing}
             selected={outgoingPlayer}
+            emptyMessage={mode === "analyze" ? "No player selected. You can send eligible picks instead." : undefined}
           />
           {mode === "analyze" ? (
             <CounterpartyPlayerSelector
@@ -517,7 +528,7 @@ export default function TradeAnalyzerWorkspace({
           />
         )}
 
-        {mode === "analyze" && outgoing && incoming && (
+        {mode === "analyze" && incoming && (
           <ExactPackageBuilder
             ownPlayers={selectableOwn}
             counterpartyPlayers={incomingPlayers}
@@ -567,7 +578,7 @@ export default function TradeAnalyzerWorkspace({
           <button
             type="button"
             onClick={runAnalysis}
-            disabled={loading || !outgoing || (mode === "analyze" && !incoming)}
+            disabled={loading || (mode !== "analyze" && !outgoing) || (mode === "analyze" && (!incoming || (pickForPlayer && !selectedPicks.length)))}
             className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
           >
             {loading
@@ -679,11 +690,16 @@ function ExactPackageBuilder({
     <div className="border-t border-slate-200 bg-blue-50/35 p-4 dark:border-slate-700 dark:bg-blue-950/10">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Exact package builder</p>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Add an optional second player, up to two canonical picks per side, and a roster-completion drop.</p>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+          {outgoing
+            ? "Add an optional second player, up to two canonical picks per side, and a roster-completion drop."
+            : "Select one or two of your eligible picks for the chosen player. If a roster slot is needed, choose a drop explicitly."}
+        </p>
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <PackageInputs
           title="Your team"
+          allowSecondPlayer={Boolean(outgoing)}
           secondPlayers={ownAvailable}
           secondValue={outgoingTwo}
           dropPlayers={ownDropCandidates}
@@ -694,30 +710,38 @@ function ExactPackageBuilder({
           onDrop={onSelectedDrop}
           onPicks={onSelectedPicks}
         />
-        <PackageInputs
-          title="Partner team"
-          secondPlayers={counterpartyAvailable}
-          secondValue={incomingTwo}
-          dropPlayers={counterpartyDropCandidates}
-          dropValue={counterpartyDrop}
-          picks={counterpartyTeamPicks}
-          selectedPicks={counterpartyPicks}
-          onSecond={onIncomingTwo}
-          onDrop={onCounterpartyDrop}
-          onPicks={onCounterpartyPicks}
-        />
+        {outgoing ? (
+          <PackageInputs
+            title="Partner team"
+            secondPlayers={counterpartyAvailable}
+            secondValue={incomingTwo}
+            dropPlayers={counterpartyDropCandidates}
+            dropValue={counterpartyDrop}
+            picks={counterpartyTeamPicks}
+            selectedPicks={counterpartyPicks}
+            onSecond={onIncomingTwo}
+            onDrop={onCounterpartyDrop}
+            onPicks={onCounterpartyPicks}
+          />
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            <h3 className="font-black text-slate-950 dark:text-white">Partner team</h3>
+            <p className="mt-2">Sends the selected player. This pick-for-player view does not add another player or pick from the partner.</p>
+          </div>
+        )}
       </div>
-      {draftAssetsError && <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">Picks unavailable: {draftAssetsError}. Player-only analysis remains available.</p>}
+      {draftAssetsError && <p className="mt-3 text-xs font-semibold text-amber-700 dark:text-amber-300">Picks unavailable: {draftAssetsError}. {outgoing ? "Player-only analysis remains available." : "Pick-for-player analysis needs eligible canonical picks."}</p>}
       <p className="mt-3 text-xs text-slate-500">Only eligible, unencumbered picks mapped to the canonical current owner are shown. Nothing is transferred automatically.</p>
     </div>
   );
 }
 
 function PackageInputs({
-  title, secondPlayers, secondValue, dropPlayers, dropValue, picks, selectedPicks,
+  title, allowSecondPlayer = true, secondPlayers, secondValue, dropPlayers, dropValue, picks, selectedPicks,
   onSecond, onDrop, onPicks,
 }: {
   title: string;
+  allowSecondPlayer?: boolean;
   secondPlayers: FantasyPlayerPerformance[];
   secondValue: string;
   dropPlayers: FantasyPlayerPerformance[];
@@ -736,15 +760,17 @@ function PackageInputs({
     <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
       <h3 className="font-black text-slate-950 dark:text-white">{title}</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <CompactPlayerSelect
-          label="Second player (optional)"
-          value={secondValue}
-          players={secondPlayers}
-          onChange={(value) => {
-            if (dropValue === value) onDrop("");
-            onSecond(value);
-          }}
-        />
+        {allowSecondPlayer && (
+          <CompactPlayerSelect
+            label="Second player (optional)"
+            value={secondValue}
+            players={secondPlayers}
+            onChange={(value) => {
+              if (dropValue === value) onDrop("");
+              onSecond(value);
+            }}
+          />
+        )}
         <CompactPlayerSelect label="Drop after trade (optional)" value={dropValue} players={dropPlayers} onChange={onDrop} />
       </div>
       <div className="mt-4">
@@ -817,13 +843,14 @@ function ModeButton({ active, disabled, onClick, children }: { active: boolean; 
   );
 }
 
-function PlayerSelector({ label, helper, value, players, selected, grouped = false, onChange }: {
+function PlayerSelector({ label, helper, value, players, selected, grouped = false, emptyMessage, onChange }: {
   label: string;
   helper: string;
   value: string;
   players: FantasyPlayerPerformance[];
   selected: FantasyPlayerPerformance | null;
   grouped?: boolean;
+  emptyMessage?: string;
   onChange: (value: string) => void;
 }) {
   const options = useMemo(
@@ -840,7 +867,7 @@ function PlayerSelector({ label, helper, value, players, selected, grouped = fal
         options={options}
         onChange={onChange}
       />
-      {selected ? <SelectedPlayer player={selected} /> : <p className="mt-4 rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400 dark:bg-slate-800/60">No player selected</p>}
+      {selected ? <SelectedPlayer player={selected} /> : <p className="mt-4 rounded-lg bg-slate-50 px-3 py-4 text-center text-sm text-slate-400 dark:bg-slate-800/60">{emptyMessage ?? "No player selected"}</p>}
     </div>
   );
 }
@@ -943,7 +970,7 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
       counts[effectivePackageTier(suggestion)] += 1;
       return counts;
     },
-    { proposable: 0, exploratory: 0, not_recommended: 0 },
+    { proposable: 0, exploratory: 0, not_recommended: 0, not_assessed: 0 },
   );
   const majorValueGaps = payload.suggestions.filter((suggestion) => (
     effectiveProductionValue(suggestion).classification === "severely_uneven"
@@ -1301,6 +1328,9 @@ function StrategyImpactPanel({
 }
 
 function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
+  if (payload.analysis_scope === "pick_for_player_context") {
+    return <PickForPlayerResult payload={payload} league={league} />;
+  }
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
       <div className="border-b border-blue-100 p-5 dark:border-blue-900/60">
@@ -1330,6 +1360,78 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
         <PickValuePanel payload={payload} />
       </div>
       <MethodNote>Manual exact package · 1–2 players per side · up to two canonical picks per side · no automatic transfer · pick value never changes the recommendation tier.</MethodNote>
+    </section>
+  );
+}
+
+function PickForPlayerResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
+  const player = payload.package.counterparty_team_sends[0];
+  const sentPicks = payload.package.assets.filter((asset) => asset.from_team === "selected_team");
+  const selectedRoster = payload.selected_team.roster_slots;
+  const partnerRoster = payload.counterparty_team.roster_slots;
+  const completionOptions = [
+    ...payload.completion_options.drop_candidates,
+    ...payload.completion_options.expanded_packages,
+  ];
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
+      <div className="border-b border-blue-100 p-5 dark:border-blue-900/60">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Pick-for-player decision brief</p>
+        <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">What changes if you trade these picks for {player?.name ?? "this player"}?</h2>
+        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Salary, categories and roster slots are simulated for both teams. Pick value is an indicative range, not a combined fairness score or trade recommendation.</p>
+      </div>
+      <AcquisitionContextPanel context={payload.acquisition_context} />
+      <div className="space-y-4 p-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">You send</p>
+            {sentPicks.map((pick) => (
+              <p key={pick.pick_id} className="mt-2 font-bold text-slate-900 dark:text-white">
+                {pick.draft_year} Round {pick.round} · originally {pick.original_franchise?.name ?? "unknown"}
+              </p>
+            ))}
+            {payload.package.drops.selected_team && <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">Roster completion: drop {payload.package.drops.selected_team.name} (not sent to the partner).</p>}
+          </div>
+          <PackageSide title="You receive" players={payload.package.counterparty_team_sends} />
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <PackageMetric label="Your cap" value={capResultLabel(payload.selected_team.payroll.current_cap_result)} tone={payload.selected_team.cap_legality.eligible ? "positive" : "danger"} />
+          <PackageMetric label="Partner cap" value={capResultLabel(payload.counterparty_team.payroll.current_cap_result)} tone={payload.counterparty_team.cap_legality.eligible ? "positive" : "danger"} />
+          <PackageMetric label="Roster status" value={payload.completion_status === "legal_as_proposed" ? "Legal as entered" : payload.completion_status === "legal_with_drop" ? "Legal with your drop" : "Needs review or completion"} tone={payload.completion_status === "legal_as_proposed" || payload.completion_status === "legal_with_drop" ? "positive" : "danger"} />
+        </div>
+        <p className="text-xs text-slate-500">Roster slots: you {selectedRoster.before} → {selectedRoster.after}; partner {partnerRoster.before} → {partnerRoster.after}. A proposed drop is only simulated, never applied automatically.</p>
+        {payload.completion_status !== "legal_as_proposed" && payload.completion_status !== "legal_with_drop" && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
+            <h3 className="font-black text-amber-900 dark:text-amber-200">Review how to complete the roster</h3>
+            <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">The package is not confirmed legal as entered. Review the roster and cap result before proposing it.</p>
+            {completionOptions.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {completionOptions.map((option) => (
+                  <p key={`${option.type}-${option.player.nba_id}`} className="rounded-lg bg-white p-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    {option.type === "drop" ? `Drop ${option.player.name} after the trade` : `Add ${option.player.name} to the trade (no longer pick-only)`} · {option.completion_status.replaceAll("_", " ")}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <PayrollComparison selected={payload.selected_team} counterparty={payload.counterparty_team} />
+        <TradePlayerResearchPanel league={league} players={payload.package.counterparty_team_sends} />
+        <ManualTradeCategoryImpact changes={payload.selected_team.category_changes} strategy={payload.strategy} />
+        <details className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+          <summary className="cursor-pointer font-black text-slate-900 dark:text-white">Partner category impact</summary>
+          <p className="mt-2 text-xs text-slate-500">These changes reflect the player leaving the partner. The pick&apos;s future value does not affect current-season category rankings.</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            {payload.counterparty_team.category_changes.map((change) => (
+              <p key={change.key} className="rounded-lg bg-slate-50 p-2 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <strong>{change.label}</strong> · #{formatRank(change.before.league_rank)} → #{formatRank(change.after.league_rank)} · {change.z_delta == null ? "—" : `${formatSigned(change.z_delta)}z`}
+              </p>
+            ))}
+          </div>
+        </details>
+        <PickValuePanel payload={payload} contextOnly />
+      </div>
+      <MethodNote>Decision support only · one incoming player for one or two canonical picks · no automatic transfer or drop · no overall trade-value grade.</MethodNote>
     </section>
   );
 }
@@ -1429,7 +1531,7 @@ function CategoryImpactBar({ change, scaleCeiling }: {
   );
 }
 
-function PickValuePanel({ payload }: { payload: FantasyTradePackageAnalysis }) {
+function PickValuePanel({ payload, contextOnly = false }: { payload: FantasyTradePackageAnalysis; contextOnly?: boolean }) {
   const assets = payload.package.assets;
   const pickValue = payload.pick_value;
   return (
@@ -1443,16 +1545,18 @@ function PickValuePanel({ payload }: { payload: FantasyTradePackageAnalysis }) {
       </div>
       {assets.length > 0 && pickValue && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <PickSideAssessment title="Your team receives" side={pickValue.selected_team} />
-          <PickSideAssessment title="Partner receives" side={pickValue.counterparty_team} />
+          <PickSideAssessment title="Your team receives" side={pickValue.selected_team} showSufficiency={!contextOnly} />
+          <PickSideAssessment title="Partner receives" side={pickValue.counterparty_team} showSufficiency={!contextOnly} />
         </div>
       )}
-      <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">Picks are read from the canonical ledger and checked against their mapped current owner. This analysis neither transfers them nor silently turns an exploratory player package into a proposable one.</p>
+      <p className="mt-3 text-xs text-slate-600 dark:text-slate-300">{contextOnly
+        ? "Picks are verified against their canonical current owner. Their range is only context: it does not prove the player-for-pick exchange is fair, and no asset is transferred."
+        : "Picks are read from the canonical ledger and checked against their mapped current owner. This analysis neither transfers them nor silently turns an exploratory player package into a proposable one."}</p>
     </div>
   );
 }
 
-function PickSideAssessment({ title, side }: { title: string; side: NonNullable<FantasyTradePackageAnalysis["pick_value"]>["selected_team"] }) {
+function PickSideAssessment({ title, side, showSufficiency = true }: { title: string; side: NonNullable<FantasyTradePackageAnalysis["pick_value"]>["selected_team"]; showSufficiency?: boolean }) {
   const band = side.combined_valuation?.compensation_band;
   const sufficiency = side.assessment?.sufficiency;
   return (
@@ -1461,7 +1565,7 @@ function PickSideAssessment({ title, side }: { title: string; side: NonNullable<
       <p className="mt-1 font-black text-slate-950 dark:text-white">
         {band ? (band.conservative === band.optimistic ? band.conservative : `${band.conservative} → ${band.optimistic}`).replaceAll("_", " ") : "No valued pick received"}
       </p>
-      {sufficiency && <p className="mt-1 text-xs font-semibold text-violet-700 dark:text-violet-300">{sufficiency.replaceAll("_", " ")}</p>}
+      {showSufficiency && sufficiency && <p className="mt-1 text-xs font-semibold text-violet-700 dark:text-violet-300">{sufficiency.replaceAll("_", " ")}</p>}
       {side.incoming_assets.map((asset) => (
         <p key={asset.pick_id} className="mt-2 text-xs text-slate-500">{asset.draft_year} Round {asset.round} · originally {asset.original_franchise?.name ?? "unknown"}</p>
       ))}

@@ -150,6 +150,27 @@ const server = createServer((request, response) => {
     const incomplete = teamId === "bdb-team-b";
     return send(response, 200, rosterPerformanceFixture(league, membership, incomplete));
   }
+  const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players$/);
+  if (playersMatch) {
+    const league = playersMatch[1];
+    const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
+      sessions[subject].memberships.find((item) => item.league_slug === league)
+    ));
+    const players = members.flatMap((member, teamIndex) => (
+      rosterPerformanceFixture(league, member, false).players.map((item) => ({
+        ...item,
+        nba_id: item.nba_id + teamIndex * 1000,
+        name: `${member.franchise_name} Player ${item.nba_id - 9999}`,
+        fantasy_team: {
+          id: member.fantrax_team_id,
+          name: member.franchise_name,
+          logo: null,
+          owner: null,
+        },
+      }))
+    ));
+    return send(response, 200, { league: leagueFixture(league), players });
+  }
   const profileMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/category-profile$/);
   if (profileMatch) {
     const [, league, teamId] = profileMatch;
@@ -178,6 +199,13 @@ const server = createServer((request, response) => {
         suggestions: [],
       });
     });
+    return;
+  }
+  if (/^\/api\/fantasy\/(ldl|bdb)\/trade-package-analysis$/.test(url.pathname)) {
+    request.resume();
+    request.on("end", () => send(response, 400, {
+      error: "Mock package analysis reached backend",
+    }));
     return;
   }
 

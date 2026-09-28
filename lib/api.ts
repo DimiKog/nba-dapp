@@ -471,7 +471,7 @@ export interface FantasyTradeAnalysis {
   strategy_applied: boolean;
   strategy: TradeCategoryStrategyContext;
   verdict: {
-    key: "likely_improvement" | "mixed" | "likely_decline" | "not_cap_compliant" | "insufficient_data";
+    key: "likely_improvement" | "mixed" | "likely_decline" | "not_cap_compliant" | "insufficient_data" | "pick_for_player_context_only";
     headline: string;
     confidence: "high" | "low";
     reasons: Array<{ category: string; transition: string; z_delta: number | null; rank_delta: number | null }>;
@@ -845,7 +845,7 @@ export interface TradePackageCompletionOption {
   completion_status: TradePackageCompletionStatus;
   player: TradePlayerSummary;
   team: "selected_team" | "counterparty_team";
-  recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  recommendation_tier: "proposable" | "exploratory" | "not_recommended" | "not_assessed";
   production_value: TradePackageProductionValue;
   marginal_value_lost: number | null;
   selected_category_score: TradePackageCategoryScore;
@@ -872,7 +872,7 @@ export interface AutomaticTradePackageSuggestion {
   season_phase: FantasySeasonPhase;
   completion_status: TradePackageCompletionStatus;
   requires_roster_action: boolean;
-  recommendation_tier: "proposable" | "exploratory" | "not_recommended";
+  recommendation_tier: "proposable" | "exploratory" | "not_recommended" | "not_assessed";
   production_value: TradePackageProductionValue;
   acquisition_context?: TradeAcquisitionContext;
   best_completion?: TradePackageCompletionOption;
@@ -975,8 +975,10 @@ export interface ExplicitPickSideAssessment {
 }
 
 export interface FantasyTradePackageAnalysis extends AutomaticTradePackageSuggestion {
+  analysis_scope: "player_package" | "pick_for_player_context";
+  player_value_recommendation_applied: boolean;
   acquisition_context: TradeAcquisitionContext;
-  package: AutomaticTradePackageSuggestion["package"] & {
+  package: Omit<AutomaticTradePackageSuggestion["package"], "assets"> & {
     assets: ResolvedTradePickAsset[];
   };
   pick_value?: {
