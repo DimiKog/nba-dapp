@@ -361,6 +361,58 @@ export default function TradeAnalyzerWorkspace({
     }
   }
 
+  async function analyzeExpandedPickPackage(
+    original: FantasyTradePackageAnalysis,
+    option: TradePackageCompletionOption,
+  ) {
+    if (
+      original.analysis_scope !== "pick_for_player_context"
+      || option.type !== "expanded_package"
+      || option.team !== "selected_team"
+      || option.completion_status !== "legal_as_expanded_package"
+      || !partnerTeam
+    ) return;
+    const incomingId = original.package.counterparty_team_sends[0]?.nba_id;
+    const picks = original.package.assets.filter((asset) => asset.from_team === "selected_team");
+    if (!incomingId || !picks.length) return;
+
+    const requestId = ++requestSequence.current;
+    const outgoingId = String(option.player.nba_id);
+    setOutgoing(outgoingId);
+    setOutgoingTwo("");
+    setIncomingTwo("");
+    setSelectedDrop("");
+    setCounterpartyDrop("");
+    setSelectedPicks(picks.map((pick) => pick.pick_id));
+    setCounterpartyPicks([]);
+    setPackageAnalysis(null);
+    setError(null);
+    setLoading(true);
+    syncUrl({ outgoing: outgoingId });
+    try {
+      const result = await fetchTradePackageAnalysis(league, {
+        selected_team_id: teamId,
+        counterparty_team_id: partnerTeam,
+        selected_team_sends: [option.player.nba_id],
+        counterparty_team_sends: [incomingId],
+        drops: { selected_team: null, counterparty_team: null },
+        assets: picks.map((pick) => ({
+          type: "draft_pick",
+          pick_id: pick.pick_id,
+          from_team: "selected_team",
+        })),
+        basis,
+      });
+      if (requestSequence.current === requestId) setPackageAnalysis(result);
+    } catch (caught) {
+      if (requestSequence.current === requestId) {
+        setError(caught instanceof Error ? caught.message : "The completed trade could not be analyzed.");
+      }
+    } finally {
+      if (requestSequence.current === requestId) setLoading(false);
+    }
+  }
+
   async function analyzeSuggestion(
     suggestion: BalancedTradeSuggestion,
     repairContext: PackageRepairContext | null = null,
@@ -601,7 +653,7 @@ export default function TradeAnalyzerWorkspace({
         />
       )}
       {packageSuggestions && <OneForTwoSuggestionsResult payload={packageSuggestions} />}
-      {packageAnalysis && <ExactPackageResult payload={packageAnalysis} league={league} />}
+      {packageAnalysis && <ExactPackageResult payload={packageAnalysis} league={league} onAnalyzeExpandedPickPackage={analyzeExpandedPickPackage} />}
     </>
   );
 }
@@ -1327,9 +1379,13 @@ function StrategyImpactPanel({
   );
 }
 
-function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
+function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
+  payload: FantasyTradePackageAnalysis;
+  league: LeagueSlug;
+  onAnalyzeExpandedPickPackage: (original: FantasyTradePackageAnalysis, option: TradePackageCompletionOption) => void;
+}) {
   if (payload.analysis_scope === "pick_for_player_context") {
-    return <PickForPlayerResult payload={payload} league={league} />;
+    return <PickForPlayerResult payload={payload} league={league} onAnalyzeExpandedPickPackage={onAnalyzeExpandedPickPackage} />;
   }
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
@@ -1364,7 +1420,11 @@ function ExactPackageResult({ payload, league }: { payload: FantasyTradePackageA
   );
 }
 
-function PickForPlayerResult({ payload, league }: { payload: FantasyTradePackageAnalysis; league: LeagueSlug }) {
+function PickForPlayerResult({ payload, league, onAnalyzeExpandedPickPackage }: {
+  payload: FantasyTradePackageAnalysis;
+  league: LeagueSlug;
+  onAnalyzeExpandedPickPackage: (original: FantasyTradePackageAnalysis, option: TradePackageCompletionOption) => void;
+}) {
   const player = payload.package.counterparty_team_sends[0];
   const sentPicks = payload.package.assets.filter((asset) => asset.from_team === "selected_team");
   const selectedRoster = payload.selected_team.roster_slots;
@@ -1382,6 +1442,11 @@ function PickForPlayerResult({ payload, league }: { payload: FantasyTradePackage
       </div>
       <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="space-y-4 p-4">
+        {payload.completion_status !== "legal_as_proposed" && payload.completion_status !== "legal_with_drop" && (
+          <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            Provisional analysis: salary and categories below show the pick-only trade as entered, before any roster-completion move. They are not the final completed-trade result.
+          </p>
+        )}
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">You send</p>
@@ -1407,9 +1472,14 @@ function PickForPlayerResult({ payload, league }: { payload: FantasyTradePackage
             {completionOptions.length > 0 && (
               <div className="mt-3 space-y-2">
                 {completionOptions.map((option) => (
-                  <p key={`${option.type}-${option.player.nba_id}`} className="rounded-lg bg-white p-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                    {option.type === "drop" ? `Drop ${option.player.name} after the trade` : `Add ${option.player.name} to the trade (no longer pick-only)`} · {option.completion_status.replaceAll("_", " ")}
-                  </p>
+                  <div key={`${option.type}-${option.player.nba_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-2 text-sm text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                    <span>{option.type === "drop" ? `Drop ${option.player.name} after the trade` : `Add ${option.player.name} to the trade (no longer pick-only)`} · {option.completion_status.replaceAll("_", " ")}</span>
+                    {option.type === "expanded_package" && option.team === "selected_team" && option.completion_status === "legal_as_expanded_package" && (
+                      <button type="button" onClick={() => onAnalyzeExpandedPickPackage(payload, option)} className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700">
+                        Recalculate completed trade
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -1461,9 +1531,9 @@ function ManualTradeCategoryImpact({
           <p className="mt-1 text-xs text-slate-500">Rank shows your position among league teams; the bar shows the relative strength change.</p>
         </div>
         <div className="flex flex-wrap gap-3 text-xs font-bold text-slate-500">
-          <span><strong className="text-emerald-600 dark:text-emerald-400">{improving}</strong> improve</span>
-          <span><strong className="text-red-600 dark:text-red-400">{declining}</strong> decline</span>
-          <span><strong className="text-slate-700 dark:text-slate-200">{stable}</strong> stable</span>
+          <span><strong className="text-emerald-600 dark:text-emerald-400">{improving}</strong> meaningful gains</span>
+          <span><strong className="text-red-600 dark:text-red-400">{declining}</strong> meaningful declines</span>
+          <span><strong className="text-slate-700 dark:text-slate-200">{stable}</strong> without meaningful change</span>
         </div>
       </div>
 
@@ -1476,7 +1546,7 @@ function ManualTradeCategoryImpact({
       </div>
 
       <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-        <p><strong>How to read it:</strong> positive means your team improves relative to the league; negative means it declines. It is not a percentage or a probability.</p>
+        <p><strong>How to read it:</strong> positive means your team improves relative to the league; negative means it declines. Small changes remain visible even when they do not count as meaningful gains or declines. This is not a percentage or probability.</p>
         <details className="mt-2">
           <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">What does the z-score change mean? See an example</summary>
           <div className="mt-2 space-y-1 rounded-lg bg-white p-3 dark:bg-slate-900">

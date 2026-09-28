@@ -125,6 +125,20 @@ test("trade suggestions are restricted to the signed-in manager team", async ({ 
 test("pick-for-player advisor submits a canonical pick without an outgoing player", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  const availablePick = {
+    id: 42,
+    league_slug: "ldl",
+    draft_year: 2027,
+    round: 1,
+    original_franchise: { id: "ldl-franchise-a", name: "Manager A LDL" },
+    current_owner: { id: "ldl-franchise-a", name: "Manager A LDL", fantrax_team_external_id: "ldl-team-a" },
+    ownership_state: "owned",
+    status: "active",
+    optimistic_version: 1,
+    eligibility: { mode: "enabled", eligible: true, reason: "", opens_at: null, closes_at: null, evaluated_at: "2026-09-27" },
+    conditional_obligations: [],
+    valuation: { status: "shadow", affects_recommendations: false, compensation_band: { conservative: "useful", optimistic: "strong" } },
+  };
   await page.route("**/api/fantasy/ldl/draft-assets?eligibility=eligible", (route) => route.fulfill({
     status: 200,
     contentType: "application/json",
@@ -132,22 +146,46 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
       league_slug: "ldl",
       rule_set: { fantasy_season: "2026-27", version: 1, activated_at: "2026-09-01" },
       count: 1,
-      assets: [{
-        id: 42,
-        league_slug: "ldl",
-        draft_year: 2027,
-        round: 1,
-        original_franchise: { id: "ldl-franchise-a", name: "Manager A LDL" },
-        current_owner: { id: "ldl-franchise-a", name: "Manager A LDL", fantrax_team_external_id: "ldl-team-a" },
-        ownership_state: "owned",
-        status: "active",
-        optimistic_version: 1,
-        eligibility: { mode: "enabled", eligible: true, reason: "", opens_at: null, closes_at: null, evaluated_at: "2026-09-27" },
-        conditional_obligations: [],
-        valuation: { status: "shadow", affects_recommendations: false, compensation_band: { conservative: "useful", optimistic: "strong" } },
-      }],
+      assets: [availablePick],
     }),
   }));
+  const resolvedPick = { ...availablePick, pick_id: 42, type: "draft_pick", from_team: "selected_team", to_team: "counterparty_team" };
+  const incomingPlayer = { nba_id: 11000, name: "xrtc Player 1", nba_team: "TST", position: "G", salaries: { "2026-27": 1 } };
+  const completionPlayer = { nba_id: 10001, name: "Manager A LDL Player 2", nba_team: "TST", position: "G", salaries: { "2026-27": 1 } };
+  const teamResult = (id: string, name: string, before: number, after: number) => ({
+    team: { id, name, logo: null, owner: null },
+    cap_legality: { eligible: true },
+    roster_slots: { before, after },
+    payroll: { current_cap_result: "remains_under", seasons: [] },
+    category_changes: [{
+      key: "fg_pct", label: "FG%", before: { league_rank: 5 }, after: { league_rank: 5 },
+      z_delta: 0.1, transition: "unchanged",
+    }],
+  });
+  let firstAnalysis = true;
+  await page.route("**/api/fantasy/ldl/trade-package-analysis", (route) => {
+    if (!firstAnalysis) return route.continue();
+    firstAnalysis = false;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        analysis_scope: "pick_for_player_context",
+        completion_status: "illegal",
+        acquisition_context: { status: "free_agency_open_cap_not_enforced", message: "Offseason context" },
+        package: { selected_team_sends: [], counterparty_team_sends: [incomingPlayer], drops: { selected_team: null, counterparty_team: null }, assets: [resolvedPick] },
+        selected_team: teamResult("ldl-team-a", "Manager A LDL", 14, 15),
+        counterparty_team: teamResult("ldl-team-b", "xrtc", 13, 12),
+        completion_options: { drop_candidates: [], expanded_packages: [{
+          type: "expanded_package", team: "selected_team", completion_status: "legal_as_expanded_package", player: completionPlayer,
+        }] },
+        pick_value: {
+          selected_team: { incoming_assets: [], combined_valuation: null, assessment: null },
+          counterparty_team: { incoming_assets: [resolvedPick], combined_valuation: { compensation_band: { conservative: "useful", optimistic: "strong" } }, assessment: null },
+        },
+      }),
+    });
+  });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a/trade?mode=analyze`);
   await page.getByRole("combobox", { name: "Trade partner" }).fill("xrtc");
   await page.getByRole("option", { name: "xrtc" }).click();
@@ -164,6 +202,16 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   expect(payload.selected_team_sends).toEqual([]);
   expect(payload.counterparty_team_sends).toEqual([11000]);
   expect(payload.assets).toEqual([{ type: "draft_pick", pick_id: 42, from_team: "selected_team" }]);
+  await expect(page.getByText(/Provisional analysis: salary and categories/)).toBeVisible();
+  await expect(page.getByText("1 without meaningful change")).toBeVisible();
+  const completedRequest = page.waitForRequest((outgoing) => outgoing.method() === "POST" && outgoing.url().endsWith("/trade-package-analysis") && (outgoing.postDataJSON() as { selected_team_sends: number[] }).selected_team_sends.length > 0);
+  await page.getByRole("button", { name: "Recalculate completed trade" }).click();
+  expect((await completedRequest).postDataJSON()).toMatchObject({
+    selected_team_sends: [10001],
+    counterparty_team_sends: [11000],
+    drops: { selected_team: null, counterparty_team: null },
+    assets: [{ type: "draft_pick", pick_id: 42, from_team: "selected_team" }],
+  });
   await expect(page.getByText("Mock package analysis reached backend")).toBeVisible();
 
   const noPick = await request.post(`${app}/api/fantasy/ldl/trade-package-analysis`, {
