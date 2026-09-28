@@ -1067,10 +1067,11 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
   );
 }
 
-function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = false, showStrategyImpact = true }: {
+function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksAssessed = false, showStrategyImpact = true }: {
   suggestion: AutomaticTradePackageSuggestion;
   rank: number;
   league: LeagueSlug;
+  assets?: FantasyTradePackageAnalysis["package"]["assets"];
   picksAssessed?: boolean;
   showStrategyImpact?: boolean;
 }) {
@@ -1092,7 +1093,8 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = fal
             <p className="text-xs text-slate-500">Fit {formatSigned(suggestion.selected_team.category_score.score)} · partner {suggestion.counterparty_team.acceptance.status}</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {picksAssessed && <span className="text-xs font-bold text-slate-500 dark:text-slate-400">Player-value assessment · picks excluded</span>}
           <TierBadge tier={effectiveTier} />
           <span className={`rounded-full px-3 py-1.5 text-xs font-black ${legalAsProposed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : hasCompletion ? "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" : "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"}`}>
             {legalAsProposed ? "Legal as proposed" : hasCompletion ? "Completion required" : "No legal completion"}
@@ -1109,9 +1111,9 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, picksAssessed = fal
       )}
 
       <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.4fr)] lg:items-stretch">
-        <PackageSide title="You send" players={suggestion.package.selected_team_sends} />
+        <PackageSide title="You send" players={suggestion.package.selected_team_sends} picks={assets.filter((asset) => asset.from_team === "selected_team")} />
         <div className="flex items-center justify-center text-xl font-black text-slate-300">⇄</div>
-        <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} />
+        <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} picks={assets.filter((asset) => asset.from_team === "counterparty_team")} />
       </div>
 
       <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
@@ -1235,7 +1237,7 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
     <div className={`mx-4 mb-4 rounded-xl border p-4 ${presentation.classes}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.16em]">Production-value check{usesCompletion ? " · best legal completion" : ""}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em]">Production-value check{usesCompletion ? " · best legal completion" : ""}{picksAssessed ? " · picks excluded" : ""}</p>
           <h4 className="mt-1 font-black">{presentation.title}</h4>
           <p className="mt-1 max-w-3xl text-sm opacity-90">{presentation.detail}</p>
         </div>
@@ -1391,8 +1393,8 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
     <section className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm dark:border-blue-900 dark:bg-slate-900">
       <div className="border-b border-blue-100 p-5 dark:border-blue-900/60">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Exact package result</p>
-        <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Players, legality and picks evaluated together</h2>
-        <p className="mt-1 text-sm text-slate-500">The player recommendation remains independent from the ordinal pick assessment.</p>
+        <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Exact trade package</h2>
+        <p className="mt-1 text-sm text-slate-500">Roster, cap and categories reflect the full package. Player value and pick value are assessed separately.</p>
       </div>
       <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="p-4">
@@ -1400,6 +1402,7 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
           suggestion={payload}
           rank={1}
           league={league}
+          assets={payload.package.assets}
           picksAssessed={payload.package.assets.length > 0}
           showStrategyImpact={false}
         />
@@ -1660,12 +1663,21 @@ function retainedValuePercent(value: number | null): number | null {
   return value == null ? null : Math.round(value * 100);
 }
 
-function PackageSide({ title, players }: { title: string; players: TradePlayerSummary[] }) {
+function PackageSide({ title, players, picks = [] }: {
+  title: string;
+  players: TradePlayerSummary[];
+  picks?: FantasyTradePackageAnalysis["package"]["assets"];
+}) {
   return (
     <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
       <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">{title}</p>
       <div className="mt-2 space-y-2">
         {players.map((player) => <PackagePlayer key={player.nba_id} player={player} />)}
+        {picks.map((pick) => (
+          <div key={pick.pick_id} className="rounded-lg bg-violet-50 p-2.5 text-sm font-bold text-violet-900 dark:bg-violet-950/30 dark:text-violet-200">
+            Draft pick · {pick.draft_year} Round {pick.round} · originally {pick.original_franchise?.name ?? "unknown"}
+          </div>
+        ))}
       </div>
     </div>
   );
