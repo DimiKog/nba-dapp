@@ -1817,13 +1817,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
   const orderedSuggestions = useMemo(() => interleaveTeamSuggestions(filteredTeams), [filteredTeams]);
   const matchingCount = orderedSuggestions.length;
   const shownCount = Math.min(visibleLimit, matchingCount);
-  const shownSuggestions = new Set(orderedSuggestions.slice(0, shownCount));
-  const displayedTeams = filteredTeams
-    .map((group) => ({
-      ...group,
-      suggestions: group.suggestions.filter((suggestion) => shownSuggestions.has(suggestion)),
-    }))
-    .filter((group) => group.suggestions.length > 0);
+  const displayedSuggestions = orderedSuggestions.slice(0, shownCount);
   const filtersActive = recommendationFilter !== "all" || pickFilter !== "all" || capFilter !== "all";
   const gateCounts = payload.diagnostics.strict_gate_counts;
   const closestAlternatives = payload.closest_alternatives;
@@ -1957,36 +1951,24 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
           <p className="mt-3 text-[10px] text-slate-400">Filters apply only to the cards returned by the backend; they do not change the market scan, ranking, or recommendation tier.</p>
         </div>
       )}
-      {payload.teams.length && displayedTeams.length ? (
-        <div className="space-y-5 p-4">
-          {displayedTeams.map((group) => (
-            <div key={group.team.id}>
-              <div className="mb-3 flex items-center gap-3">
-                <TeamLogo league={payload.league.slug} logo={group.team.logo} name={group.team.name} size={38} />
-                <div>
-                  <h3 className="font-black text-slate-950 dark:text-white">{group.team.name}</h3>
-                  <p className="text-xs text-slate-500">
-                    {group.suggestions.length} of {group.counts.returned} suggested returns shown
-                  </p>
-                </div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {group.suggestions.map((suggestion) => (
-                  <SuggestionCard
-                    key={`${group.team.id}-${suggestion.trade.incoming.nba_id}`}
-                    suggestion={suggestion}
-                    highlighted={highlightedCandidate === suggestionCandidateKey(
-                      suggestion.trade.counterparty_team_id,
-                      suggestion.trade.incoming.nba_id,
-                    )}
-                    onAnalyze={() => onAnalyze(suggestion)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+      {payload.teams.length && displayedSuggestions.length ? (
+        <div className="p-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {displayedSuggestions.map((suggestion) => (
+              <SuggestionCard
+                key={`${suggestion.trade.counterparty_team_id}-${suggestion.trade.incoming.nba_id}`}
+                league={payload.league.slug}
+                suggestion={suggestion}
+                highlighted={highlightedCandidate === suggestionCandidateKey(
+                  suggestion.trade.counterparty_team_id,
+                  suggestion.trade.incoming.nba_id,
+                )}
+                onAnalyze={() => onAnalyze(suggestion)}
+              />
+            ))}
+          </div>
           {shownCount < matchingCount && (
-            <div className="border-t border-slate-200 pt-5 text-center dark:border-slate-700">
+            <div className="mt-5 border-t border-slate-200 pt-5 text-center dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => { setVisibleLimit((limit) => limit + 5); setHighlightedCandidate(null); }}
@@ -2242,7 +2224,8 @@ function SuggestionQualification({ suggestion }: { suggestion: BalancedTradeSugg
   );
 }
 
-function SuggestionCard({ suggestion, highlighted = false, onAnalyze }: {
+function SuggestionCard({ league, suggestion, highlighted = false, onAnalyze }: {
+  league: string;
   suggestion: BalancedTradeSuggestion;
   highlighted?: boolean;
   onAnalyze: () => void;
@@ -2263,11 +2246,16 @@ function SuggestionCard({ suggestion, highlighted = false, onAnalyze }: {
     suggestion.trade.counterparty_team_id,
     suggestion.trade.incoming.nba_id,
   );
+  const partner = suggestion.counterparty_team.team;
   return (
     <article
       id={`trade-suggestion-${candidateKey}`}
       className={`flex min-w-0 scroll-mt-24 flex-col rounded-xl border p-4 transition-shadow ${highlighted ? "ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900" : ""} ${proposable ? "border-emerald-200 dark:border-emerald-900" : "border-amber-200 dark:border-amber-900"}`}
     >
+      <div className="mb-3 flex min-w-0 items-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
+        <TeamLogo league={league} logo={partner.logo} name={partner.name} size={24} />
+        <span className="truncate text-xs font-bold text-slate-600 dark:text-slate-300">{partner.name}</span>
+      </div>
       <div className="flex items-start gap-3">
         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
           {photo ? <Image src={photo} alt={incoming.name} fill className="object-cover" unoptimized /> : null}
