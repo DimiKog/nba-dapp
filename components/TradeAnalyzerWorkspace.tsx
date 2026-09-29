@@ -1764,6 +1764,18 @@ function OneForTwoEmptyState({ payload }: { payload: FantasyAutomaticTradePackag
   );
 }
 
+function interleaveTeamSuggestions(teams: FantasyBalancedTradeSuggestions["teams"]): BalancedTradeSuggestion[] {
+  const ordered: BalancedTradeSuggestion[] = [];
+  const longestTeamList = Math.max(0, ...teams.map((group) => group.suggestions.length));
+  for (let rank = 0; rank < longestTeamList; rank += 1) {
+    for (const group of teams) {
+      const suggestion = group.suggestions[rank];
+      if (suggestion) ordered.push(suggestion);
+    }
+  }
+  return ordered;
+}
+
 function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
   payload: FantasyBalancedTradeSuggestions;
   onAnalyze: (suggestion: BalancedTradeSuggestion) => void;
@@ -1776,6 +1788,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
   const [pickFilter, setPickFilter] = useState<PickGuidanceFilter>("all");
   const [capFilter, setCapFilter] = useState<CapStatusFilter>("all");
   const [highlightedCandidate, setHighlightedCandidate] = useState<string | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(5);
   const returnedSuggestions = useMemo(
     () => payload.teams.flatMap((group) => group.suggestions),
     [payload.teams],
@@ -1801,29 +1814,50 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
       .filter((group) => group.suggestions.length > 0),
     [capFilter, payload.teams, pickFilter, recommendationFilter],
   );
-  const visibleCount = filteredTeams.reduce((count, group) => count + group.suggestions.length, 0);
+  const orderedSuggestions = useMemo(() => interleaveTeamSuggestions(filteredTeams), [filteredTeams]);
+  const matchingCount = orderedSuggestions.length;
+  const shownCount = Math.min(visibleLimit, matchingCount);
+  const shownSuggestions = new Set(orderedSuggestions.slice(0, shownCount));
+  const displayedTeams = filteredTeams
+    .map((group) => ({
+      ...group,
+      suggestions: group.suggestions.filter((suggestion) => shownSuggestions.has(suggestion)),
+    }))
+    .filter((group) => group.suggestions.length > 0);
   const filtersActive = recommendationFilter !== "all" || pickFilter !== "all" || capFilter !== "all";
   const gateCounts = payload.diagnostics.strict_gate_counts;
   const closestAlternatives = payload.closest_alternatives;
+
+  useEffect(() => {
+    if (!highlightedCandidate) return;
+    document.getElementById(`trade-suggestion-${highlightedCandidate}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [highlightedCandidate, visibleLimit, recommendationFilter, pickFilter, capFilter]);
+
+  function resetVisibleSuggestions() {
+    setVisibleLimit(5);
+    setHighlightedCandidate(null);
+  }
 
   function focusAlternative(counterpartyTeamId: string, incomingNbaId: number | null) {
     const key = suggestionCandidateKey(counterpartyTeamId, incomingNbaId);
     setRecommendationFilter("all");
     setPickFilter("all");
     setCapFilter("all");
+    const candidateIndex = interleaveTeamSuggestions(payload.teams).findIndex((suggestion) => (
+      suggestionCandidateKey(suggestion.trade.counterparty_team_id, suggestion.trade.incoming.nba_id) === key
+    ));
+    if (candidateIndex >= 0) setVisibleLimit(Math.max(5, candidateIndex + 1));
     setHighlightedCandidate(key);
-    requestAnimationFrame(() => {
-      document.getElementById(`trade-suggestion-${key}`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    });
   }
 
   function clearFilters() {
     setRecommendationFilter("all");
     setPickFilter("all");
     setCapFilter("all");
+    resetVisibleSuggestions();
   }
 
   return (
@@ -1834,12 +1868,12 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Balanced trade market</p>
             <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Returns for {payload.outgoing.name}</h2>
             <p className="mt-1 text-sm text-slate-500">
-              {payload.counts.returned} suggestions shown · {payload.teams.length} teams · {basisLabel(payload.basis_used)}
+              {payload.counts.returned} suggestions returned · {payload.teams.length} teams · {basisLabel(payload.basis_used)}
             </p>
           </div>
           <div className="text-right">
             <div className="flex flex-wrap justify-end gap-2 text-xs font-bold">
-              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} strict win-win matches</span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">{payload.counts.proposable} pass all model checks</span>
               <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-700 dark:bg-amber-950 dark:text-amber-300">{payload.counts.exploratory} exploratory candidates</span>
             </div>
             <p className="mt-1 text-[10px] text-slate-400">Candidate counts cover the full market scan; cards show the top returned results.</p>
@@ -1850,7 +1884,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
       <AcquisitionContextPanel context={payload.acquisition_context} />
       {gateCounts && gateCounts.eligible_after_hard_filters > 0 && (
         <div className="border-b border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-950/30">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Strict qualification gates</p>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Model qualification checks</p>
           <p className="mt-1 text-xs text-slate-500">Each count is measured independently across {gateCounts.eligible_after_hard_filters} cap-legal pairs.</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             <GateCount label="Helps or preserves your categories" passed={gateCounts.selected_team_category_fit} total={gateCounts.eligible_after_hard_filters} />
@@ -1858,6 +1892,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
             <GateCount label="Production value is balanced" passed={gateCounts.production_value_balance} total={gateCounts.eligible_after_hard_filters} />
             <GateCount label="Passes all three" passed={gateCounts.all_strict_gates} total={gateCounts.eligible_after_hard_filters} emphasized />
           </div>
+          <p className="mt-2 text-[11px] text-slate-500">Passing these checks is not a trade recommendation or a prediction that the other manager will accept.</p>
         </div>
       )}
       {payload.counts.proposable === 0 && closestAlternatives && closestAlternatives.returned > 0 && (
@@ -1875,7 +1910,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
             <div>
               <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-600 dark:text-slate-300">Filter returned suggestions</p>
               <p className="mt-1 text-xs text-slate-500">
-                {visibleCount} of {returnedSuggestions.length} returned suggestion{returnedSuggestions.length === 1 ? "" : "s"} shown
+                Showing {shownCount} of {matchingCount} matching suggestions · {returnedSuggestions.length} returned in total
               </p>
             </div>
             {filtersActive && (
@@ -1888,17 +1923,17 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
             <SuggestionFilterGroup
               label="Recommendation"
               value={recommendationFilter}
-              onChange={setRecommendationFilter}
+              onChange={(value) => { setRecommendationFilter(value); resetVisibleSuggestions(); }}
               options={[
                 { value: "all", label: "All", count: returnedSuggestions.length },
-                { value: "proposable", label: "Strict win-win", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "proposable").length },
+                { value: "proposable", label: "Passes model checks", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "proposable").length },
                 { value: "exploratory", label: "Exploratory", count: returnedSuggestions.filter((suggestion) => suggestion.suggestion_tier === "exploratory").length },
               ]}
             />
             <SuggestionFilterGroup
               label="Pick guidance"
               value={pickFilter}
-              onChange={setPickFilter}
+              onChange={(value) => { setPickFilter(value); resetVisibleSuggestions(); }}
               options={[
                 { value: "all", label: "All", count: returnedSuggestions.length },
                 { value: "receive", label: "You receive", count: pickCounts.receive ?? 0 },
@@ -1910,7 +1945,7 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
             <SuggestionFilterGroup
               label="Your cap status"
               value={capFilter}
-              onChange={setCapFilter}
+              onChange={(value) => { setCapFilter(value); resetVisibleSuggestions(); }}
               options={[
                 { value: "all", label: "All", count: returnedSuggestions.length },
                 { value: "compliant", label: "Compliant now", count: capCounts.compliant ?? 0 },
@@ -1922,16 +1957,16 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
           <p className="mt-3 text-[10px] text-slate-400">Filters apply only to the cards returned by the backend; they do not change the market scan, ranking, or recommendation tier.</p>
         </div>
       )}
-      {payload.teams.length && filteredTeams.length ? (
+      {payload.teams.length && displayedTeams.length ? (
         <div className="space-y-5 p-4">
-          {filteredTeams.map((group) => (
+          {displayedTeams.map((group) => (
             <div key={group.team.id}>
               <div className="mb-3 flex items-center gap-3">
                 <TeamLogo league={payload.league.slug} logo={group.team.logo} name={group.team.name} size={38} />
                 <div>
                   <h3 className="font-black text-slate-950 dark:text-white">{group.team.name}</h3>
                   <p className="text-xs text-slate-500">
-                    {filtersActive ? `${group.suggestions.length} of ${group.counts.returned} suggestions shown` : `${group.counts.returned} suggested returns`}
+                    {group.suggestions.length} of {group.counts.returned} suggested returns shown
                   </p>
                 </div>
               </div>
@@ -1950,6 +1985,18 @@ function BalancedSuggestionsResult({ payload, onAnalyze, onBuildPackage }: {
               </div>
             </div>
           ))}
+          {shownCount < matchingCount && (
+            <div className="border-t border-slate-200 pt-5 text-center dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => { setVisibleLimit((limit) => limit + 5); setHighlightedCandidate(null); }}
+                className="rounded-xl border border-blue-400 px-5 py-2.5 text-sm font-black text-blue-700 hover:bg-blue-50 dark:border-blue-500 dark:text-blue-300 dark:hover:bg-blue-950/40"
+              >
+                Show next {Math.min(5, matchingCount - shownCount)} suggestions
+              </button>
+              <p className="mt-2 text-xs text-slate-500">One suggestion per team first; the rest remain available here.</p>
+            </div>
+          )}
         </div>
       ) : payload.teams.length ? (
         <div className="m-4 rounded-xl border border-dashed border-slate-300 p-6 text-center dark:border-slate-700">
@@ -2233,7 +2280,7 @@ function SuggestionCard({ suggestion, highlighted = false, onAnalyze }: {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${proposable ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>
-          {proposable ? "Strict win-win" : "Exploratory"}
+          {proposable ? "Passes model checks" : "Exploratory"}
         </span>
         <span className="text-xs font-bold text-blue-700 dark:text-blue-300">Fit {formatSigned(suggestion.selected_category_score)}</span>
       </div>
