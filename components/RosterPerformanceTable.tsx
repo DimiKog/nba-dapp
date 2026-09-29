@@ -13,18 +13,11 @@ import {
 
 type View = "window" | "latest" | "season";
 
-const CATEGORIES = [
-  ["FG%", "fg_pct"],
-  ["3PTM", "three_pm"],
-  ["FT%", "ft_pct"],
-  ["PTS", "points"],
-  ["OREB", "oreb"],
-  ["DREB", "dreb"],
-  ["AST", "assists"],
-  ["STL", "steals"],
-  ["BLK", "blocks"],
-  ["TO", "turnovers"],
-  ["A/TO", "assist_turnover"],
+const CATEGORY_GROUPS = [
+  { label: "Shooting", stats: [["FG%", "fg_pct"], ["FT%", "ft_pct"], ["3PTM", "three_pm"]] },
+  { label: "Rebounding", stats: [["OREB", "oreb"], ["DREB", "dreb"]] },
+  { label: "Playmaking", stats: [["AST", "assists"], ["TO", "turnovers"], ["A/TO", "assist_turnover"]] },
+  { label: "Defense", stats: [["STL", "steals"], ["BLK", "blocks"]] },
 ] as const;
 
 const SECTIONS = [
@@ -108,7 +101,16 @@ function tenureBadge(player: FantasyPlayerPerformance) {
   if (tenure.franchise_player) {
     return { label: `Franchise · ${tenureYear(player)}`, classes: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" };
   }
-  return { label: tenureYear(player) ?? "Tenure unavailable", classes: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300" };
+  const yearClasses: Record<number, string> = {
+    1: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    2: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
+    3: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+    4: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
+  };
+  return {
+    label: tenureYear(player) ?? "Tenure unavailable",
+    classes: (tenure.exact ? yearClasses[tenure.year] : null) ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200",
+  };
 }
 
 export default function RosterPerformanceTable({
@@ -172,13 +174,13 @@ export default function RosterPerformanceTable({
                         type="button"
                         aria-pressed={isSelected}
                         onClick={() => selectPlayer(key)}
-                        className={`flex w-full items-center gap-3 border-b border-slate-100 px-3 py-3 text-left transition-colors last:border-b-0 dark:border-slate-800 ${
+                        className={`flex w-full items-center gap-3 border-b border-l-4 border-b-slate-100 px-3 py-3.5 text-left transition-colors last:border-b-0 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500 dark:border-b-slate-800 ${
                           isSelected
-                            ? "bg-blue-50 ring-1 ring-inset ring-blue-300 dark:bg-blue-950/40 dark:ring-blue-700"
-                            : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                            ? "border-l-blue-500 bg-blue-50/80 dark:bg-blue-950/40"
+                            : "border-l-transparent hover:bg-slate-50 dark:hover:bg-slate-800/70"
                         }`}
                       >
-                        <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-200 ring-2 ring-white dark:bg-slate-700 dark:ring-slate-800">
                           {photo ? (
                             <Image src={photo} alt="" fill className="object-cover" unoptimized />
                           ) : (
@@ -186,23 +188,23 @@ export default function RosterPerformanceTable({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
                             <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{player.name}</span>
                             {player.injury && <InjuryFlag />}
+                            {tenure && (
+                              <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${tenure.classes}`}>
+                                {tenure.label}
+                              </span>
+                            )}
                           </span>
-                          <span className="block truncate text-xs text-slate-500">
+                          <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-400">
                             {player.nba_team_short || "N/A"} · {player.position}
                           </span>
-                          {tenure && (
-                            <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tenure.classes}`}>
-                              {tenure.label}
-                            </span>
-                          )}
-                          <span className="mt-0.5 block truncate text-xs font-medium text-slate-600 dark:text-slate-400">
+                          <span className="mt-1 block truncate text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
                             {summary(player, view)}
                           </span>
                         </span>
-                        <span className="text-slate-400" aria-hidden="true">›</span>
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-lg ${isSelected ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200" : "text-slate-400"}`} aria-hidden="true">›</span>
                       </button>
                     );
                   })}
@@ -216,9 +218,9 @@ export default function RosterPerformanceTable({
           id="player-performance-detail"
           className="scroll-mt-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900 lg:sticky lg:top-20"
         >
-          <div className="border-b border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50 p-5 dark:border-slate-700 dark:from-slate-900 dark:to-blue-950/40">
-            <div className="flex items-start gap-4">
-              <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-slate-200 shadow-sm dark:bg-slate-700">
+          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 p-5 dark:border-slate-700 dark:from-slate-900 dark:to-blue-950/30">
+            <div className="flex items-center gap-4">
+              <div className="relative h-18 w-18 shrink-0 overflow-hidden rounded-2xl bg-slate-200 shadow-sm dark:bg-slate-700">
                 {selectedPhoto ? (
                   <Image src={selectedPhoto} alt={selected.name} fill className="object-cover" priority unoptimized />
                 ) : (
@@ -226,126 +228,149 @@ export default function RosterPerformanceTable({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">{selected.name}</h2>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Roster player</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${statusClasses(selected.status)}`}>
                     {selected.status}
                   </span>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">{selected.name}</h2>
+                </div>
                 <p className="mt-1 text-sm text-slate-500">
                   {selected.nba_team_short || selected.nba_team || "N/A"} · {selected.position}
                 </p>
-                <p className="mt-2 text-sm font-semibold text-blue-700 dark:text-blue-400">
-                  {selected.salary_2026_27 ?? "Salary unavailable"}
-                </p>
                 {selected.player_id && (
-                  <Link href={`/players/${selected.player_id}?league=${league}&from=roster`} className="mt-2 inline-block text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                  <Link href={`/players/${selected.player_id}?league=${league}&from=roster`} className="mt-1 inline-block text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
                     Full intelligence →
                   </Link>
                 )}
               </div>
             </div>
-
-            {selected.injury && (
-              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900 dark:bg-red-950/40">
-                <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">Injury alert</p>
-                <p className="mt-0.5 text-sm font-medium text-red-800 dark:text-red-300">
-                  {selected.injury.body_part ? `${selected.injury.body_part} · ` : ""}{selected.injury.detail}
-                </p>
-              </div>
-            )}
-
-            {league === "ldl" && <TenureDetail player={selected} />}
-
-            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {SALARY_SEASONS.map((season) => (
-                <div key={season} className="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-2 dark:border-slate-700 dark:bg-slate-900/60">
-                  <p className="text-[10px] font-semibold text-slate-500">{season}</p>
-                  <p className="mt-0.5 truncate text-xs font-bold tabular-nums text-slate-800 dark:text-slate-200">
-                    {selected.salaries?.[season] ?? (season === "2026-27" ? selected.salary_2026_27 : null) ?? "—"}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
 
-          <div className="p-5">
-            <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-              {([
-                ["window", `Last ${performance.window.days} days`],
-                ["latest", "Latest game"],
-                ["season", "Season average"],
-              ] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setView(key)}
-                  className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors sm:text-xs ${
-                    view === key
-                      ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+          {selected.injury && (
+            <div className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900 dark:bg-red-950/40">
+              <p className="text-xs font-bold uppercase tracking-wide text-red-600 dark:text-red-400">Injury alert</p>
+              <p className="mt-0.5 text-sm font-medium text-red-800 dark:text-red-300">
+                {selected.injury.body_part ? `${selected.injury.body_part} · ` : ""}{selected.injury.detail}
+              </p>
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-[minmax(160px,0.78fr)_minmax(0,1.6fr)]">
+            <div className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-950/20 sm:border-r sm:border-b-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">2026–27 salary</p>
+              <p className="mt-1 break-all text-lg font-black tabular-nums text-slate-900 dark:text-white">{selected.salary_2026_27 ?? "—"}</p>
+              {league === "ldl" && <TenureDetail player={selected} />}
+              <div className="mt-5 border-t border-slate-200 pt-3 dark:border-slate-700">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Contract by season</p>
+                <dl className="space-y-2">
+                  {SALARY_SEASONS.map((season) => (
+                    <div key={season} className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs">
+                      <dt className="text-slate-500 dark:text-slate-400">{season}</dt>
+                      <dd className="font-semibold tabular-nums text-slate-800 dark:text-slate-200">
+                        {selected.salaries?.[season] ?? (season === "2026-27" ? selected.salary_2026_27 : null) ?? "—"}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
             </div>
 
-            {view === "latest" && selected.latest_game && (
-              <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800">
-                <span className="font-medium text-slate-700 dark:text-slate-300">
-                  {selected.latest_game.date} · {selected.latest_game.is_home ? "vs" : "@"} {selected.latest_game.opponent}
-                </span>
-                <span className="text-slate-500">{selected.latest_game.minutes ?? "—"} min</span>
+            <div className="min-w-0 p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Player production</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{selectedStats?.games ?? 0} games</p>
               </div>
-            )}
-
-            {view === "window" && selectedStats?.games === 0 ? (
-              <div className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-700">
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No games in this window</p>
-                <button type="button" onClick={() => setView("season")} className="mt-2 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
-                  Show season averages
-                </button>
-              </div>
-            ) : (
-              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {CATEGORIES.map(([label, key]) => (
-                  <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-800">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                    <p className="mt-1 text-lg font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                      {formatStat(key, selectedStats?.[key], view)}
-                    </p>
-                  </div>
+              <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                {([
+                  ["window", `Last ${performance.window.days} days`],
+                  ["latest", "Latest game"],
+                  ["season", "Season average"],
+                ] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setView(key)}
+                    className={`rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors sm:text-xs ${
+                      view === key
+                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
+                        : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                    }`}
+                  >
+                    {label}
+                  </button>
                 ))}
               </div>
-            )}
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fantasy impact</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {selected.impact_rank ? `#${selected.impact_rank} on your roster` : "Available when the window has games"}
-                </p>
-                {selected.category_strengths.length > 0 && (
-                  <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-                    Strengths: {selected.category_strengths.join(", ")}
+              {view === "latest" && selected.latest_game && (
+                <div className="mt-4 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">
+                    {selected.latest_game.date} · {selected.latest_game.is_home ? "vs" : "@"} {selected.latest_game.opponent}
+                  </span>
+                  <span className="text-slate-500">{selected.latest_game.minutes ?? "—"} min</span>
+                </div>
+              )}
+
+              {view === "window" && selectedStats?.games === 0 ? (
+                <div className="mt-4 rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center dark:border-slate-700">
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300">No games in this window</p>
+                  <button type="button" onClick={() => setView("season")} className="mt-2 text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+                    Show season averages
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/40">
+                    <span className="text-3xl font-black tabular-nums text-slate-900 dark:text-white">{formatStat("points", selectedStats?.points, view)}</span>
+                    <span className="ml-2 text-sm font-semibold text-blue-700 dark:text-blue-300">PTS</span>
+                  </div>
+                  <div className="mt-4 grid gap-x-4 gap-y-5 xl:grid-cols-2">
+                    {CATEGORY_GROUPS.map((group) => (
+                      <section key={group.label}>
+                        <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{group.label}</h3>
+                        <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200 px-3 dark:divide-slate-800 dark:border-slate-700">
+                          {group.stats.map(([label, key]) => (
+                            <div key={key} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+                              <dt className="font-medium text-slate-600 dark:text-slate-400">{label}</dt>
+                              <dd className="font-bold tabular-nums text-slate-900 dark:text-slate-100">{formatStat(key, selectedStats?.[key], view)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 grid gap-3 xl:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Fantasy impact</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {selected.impact_rank ? `#${selected.impact_rank} on your roster` : "Available when the window has games"}
                   </p>
-                )}
+                  {selected.category_strengths.length > 0 && (
+                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      Strengths: {selected.category_strengths.join(", ")}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Sample</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
+                    {view === "latest"
+                      ? selected.latest_game ? "1 game" : "No latest game"
+                      : `${selectedStats?.games ?? 0} games`}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{performance.window.season} season</p>
+                </div>
               </div>
-              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Sample</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  {view === "latest"
-                    ? selected.latest_game ? "1 game" : "No latest game"
-                    : `${selectedStats?.games ?? 0} games`}
-                </p>
-                <p className="mt-1 text-xs text-slate-500">{performance.window.season} season</p>
-              </div>
-            </div>
 
-            <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800">
-              {freshnessLabel(selected.freshness.stats)}
-            </p>
+              <p className="mt-5 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800">
+                {freshnessLabel(selected.freshness.stats)}
+              </p>
+            </div>
           </div>
         </aside>
       </div>
