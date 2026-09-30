@@ -54,6 +54,7 @@ const sessions = {
     ],
   },
 };
+const privateTradeOutlooks = new Map();
 
 function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   return {
@@ -101,6 +102,35 @@ const server = createServer((request, response) => {
     return session
       ? send(response, 200, session)
       : send(response, 401, { error: "Unknown test identity" });
+  }
+  const outlookMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/my-trade-outlook$/);
+  if (outlookMatch) {
+    const session = sessionFor(request);
+    const [, league, nbaId] = outlookMatch;
+    if (!session?.memberships.some((item) => item.league_slug === league)) {
+      return send(response, 403, { error: "Membership required" });
+    }
+    const key = `${session.user.id}:${league}:${nbaId}`;
+    if (request.method === "GET") return send(response, 200, { brief: privateTradeOutlooks.get(key) ?? null });
+    if (request.method === "DELETE") {
+      privateTradeOutlooks.delete(key);
+      return send(response, 200, { brief: null });
+    }
+    if (request.method === "PUT") {
+      let rawBody = "";
+      request.on("data", (chunk) => { rawBody += chunk; });
+      request.on("end", () => {
+        const body = JSON.parse(rawBody || "{}");
+        const brief = {
+          assessment: body.assessment, availability: body.availability,
+          upside: body.upside, note: body.note, sourceUrl: body.sourceUrl,
+          sourceDate: body.sourceDate, savedAt: "2026-09-30T12:00:00Z",
+        };
+        privateTradeOutlooks.set(key, brief);
+        send(response, 200, { brief });
+      });
+      return;
+    }
   }
   const researchMatch = url.pathname.match(/^\/api\/nba\/players\/by-nba-id\/(\d+)\/research$/);
   if (researchMatch) {

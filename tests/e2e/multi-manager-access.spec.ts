@@ -37,6 +37,27 @@ test("each manager receives only their own memberships", async ({ request }) => 
     .toEqual(["ldl-team-b", "bdb-team-b"]);
 });
 
+test("private trade outlook is isolated per account", async ({ request }) => {
+  const [tokenA, tokenB] = await Promise.all([
+    tokenFor(request, "manager-a-subject"), tokenFor(request, "manager-b-subject"),
+  ]);
+  const path = `${app}/api/fantasy/ldl/players/1631212/my-trade-outlook`;
+  const body = {
+    assessment: "positive", availability: "moderate", upside: "steady",
+    note: "Private manager A note", sourceUrl: "https://example.com/player",
+    sourceDate: "2026-09-28",
+  };
+  expect((await request.get(path, { headers: { [accessHeader]: tokenB } })).status()).toBe(200);
+  const saved = await request.put(path, { headers: { [accessHeader]: tokenA }, data: body });
+  expect(saved.ok()).toBeTruthy();
+  expect((await saved.json()).brief.note).toBe(body.note);
+  expect((await (await request.get(path, { headers: { [accessHeader]: tokenB } })).json()).brief).toBeNull();
+  expect((await (await request.get(path, { headers: { [accessHeader]: tokenA } })).json()).brief.note).toBe(body.note);
+  expect((await request.get(path)).status()).toBe(401);
+  expect((await request.delete(path, { headers: { [accessHeader]: tokenA } })).ok()).toBeTruthy();
+  expect((await (await request.get(path, { headers: { [accessHeader]: tokenA } })).json()).brief).toBeNull();
+});
+
 test("membership-aware navigation differs by manager role", async ({ page, request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),
@@ -124,6 +145,7 @@ test("trade suggestions are restricted to the signed-in manager team", async ({ 
 
 test("pick-for-player advisor submits a canonical pick without an outgoing player", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
+  await request.delete(`${app}/api/fantasy/ldl/players/11000/my-trade-outlook`, { headers: { [accessHeader]: token } });
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   const availablePick = {
     id: 42,
@@ -238,7 +260,10 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   await expect(page.getByText("Draft pick · 2027 Round 1 · originally Manager A LDL")).toBeVisible();
   await expect(page.getByText("Player-value assessment · picks excluded")).toBeVisible();
   await expect(page.getByText("Passes model checks", { exact: true })).toBeVisible();
-  await expect(page.getByText("xrtc Player 1: outlook not reviewed")).toBeVisible();
+  const comparison = page.getByRole("region", { name: "Model and private assessment for xrtc Player 1" });
+  await expect(comparison.getByText("Model · category impact")).toBeVisible();
+  await expect(comparison.getByText("My assessment · xrtc Player 1")).toBeVisible();
+  await expect(comparison.getByText("Not assessed")).toBeVisible();
   const categorySummary = page.getByText("What changes in your categories?");
   const otherChecks = page.getByText("Other checks", { exact: true });
   const researchSummary = page.getByText("Review player outlook and sources");
@@ -256,7 +281,6 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   await expect(categoryPanel.getByText("FG%", { exact: true })).toBeVisible();
   await otherChecks.click();
   await expect(page.getByText("Partner team impact")).toBeVisible();
-  await expect(page.getByText(/xrtc Player 1: role, availability and upside have not been reviewed/)).toBeVisible();
   await expect(page.getByText("Your read on xrtc Player 1")).not.toBeVisible();
   await page.getByText("Review player outlook and sources").click();
   await expect(page.getByText("Your read on xrtc Player 1")).toBeVisible();
@@ -267,9 +291,9 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   await page.getByLabel("Availability risk").selectOption("high");
   await page.getByLabel("Future upside").selectOption("steady");
   await page.getByRole("button", { name: "Save brief" }).click();
-  await expect(page.getByText("xrtc Player 1: outlook needs review")).toBeVisible();
-  await expect(page.getByText(/xrtc Player 1: role concern · availability risk high · upside steady/)).toBeVisible();
-  await expect(page.getByText("Review this player before deciding; the saved profile never changes the model tier.")).toBeVisible();
+  await expect(comparison.getByText("Concern", { exact: true })).toBeVisible();
+  await expect(comparison.getByText("Availability: high · upside: steady")).toBeVisible();
+  await expect(page.getByText("Private to your account.")).toBeVisible();
   await expect(page.getByText("Passes model checks", { exact: true })).toBeVisible();
 
   const noPick = await request.post(`${app}/api/fantasy/ldl/trade-package-analysis`, {
