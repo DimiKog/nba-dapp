@@ -4,9 +4,13 @@ import { useEffect, useState } from "react";
 import type { PlayerResearchEvidence } from "@/lib/api";
 
 type ManagerAssessment = "unresolved" | "positive" | "neutral" | "concern";
+type AvailabilityRisk = "unresolved" | "low" | "moderate" | "high";
+type Upside = "unresolved" | "limited" | "steady" | "high";
 
 type DecisionBrief = {
   assessment: ManagerAssessment;
+  availability: AvailabilityRisk;
+  upside: Upside;
   note: string;
   sourceUrl: string;
   sourceDate: string;
@@ -20,11 +24,69 @@ type ResearchPlayer = {
 
 const EMPTY_DECISION_BRIEF: DecisionBrief = {
   assessment: "unresolved",
+  availability: "unresolved",
+  upside: "unresolved",
   note: "",
   sourceUrl: "",
   sourceDate: "",
   savedAt: null,
 };
+
+const PROFILE_UPDATED_EVENT = "trade-advisor-profile-updated";
+
+function profileStorageKey(league: "ldl" | "bdb", nbaId: number): string {
+  return `trade-advisor-decision-brief:v1:${league}:${nbaId}`;
+}
+
+export function TradeProfileSignal({
+  league,
+  player,
+}: {
+  league: "ldl" | "bdb";
+  player: ResearchPlayer;
+}) {
+  const storageKey = profileStorageKey(league, player.nba_id);
+  const [saved, setSaved] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
+
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const value = window.localStorage.getItem(storageKey);
+        setSaved(value ? parseDecisionBrief(value) : EMPTY_DECISION_BRIEF);
+      } catch {
+        setSaved(EMPTY_DECISION_BRIEF);
+      }
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === storageKey) refresh();
+    };
+    refresh();
+    window.addEventListener(PROFILE_UPDATED_EVENT, refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(PROFILE_UPDATED_EVENT, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [storageKey]);
+
+  const hasProfile = Boolean(saved.savedAt);
+  const needsReview = !hasProfile || saved.assessment === "concern" || saved.assessment === "unresolved" || saved.availability !== "low" || saved.upside === "unresolved";
+  return (
+    <div className={`mx-4 mb-4 rounded-xl border px-4 py-3 text-sm ${needsReview
+      ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-200"
+      : "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/25 dark:text-blue-200"}`}>
+      <p className="font-black">Model checks passed separately from player outlook</p>
+      <p className="mt-1">
+        {hasProfile
+          ? `${player.name}: role ${assessmentLabel(saved.assessment).toLowerCase()} · availability risk ${saved.availability} · upside ${saved.upside}.`
+          : `${player.name}: role, availability and upside have not been reviewed. A green model result is not a complete trade recommendation.`}
+      </p>
+      {needsReview && <p className="mt-1 font-semibold">Review this player before deciding; the saved profile never changes the model tier.</p>}
+      {hasProfile && saved.note && <p className="mt-1 line-clamp-2 text-xs">Your note: {saved.note}</p>}
+      {hasProfile && <p className="mt-1 text-[11px] opacity-75">Saved {formatDateTime(saved.savedAt!)} · only in this browser</p>}
+    </div>
+  );
+}
 
 export default function TradeDecisionBrief({
   league,
@@ -35,7 +97,7 @@ export default function TradeDecisionBrief({
   player: ResearchPlayer;
   research: PlayerResearchEvidence | null;
 }) {
-  const storageKey = `trade-advisor-decision-brief:v1:${league}:${player.nba_id}`;
+  const storageKey = profileStorageKey(league, player.nba_id);
   const [brief, setBrief] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
   const [savedBrief, setSavedBrief] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
   const [loaded, setLoaded] = useState(false);
@@ -71,6 +133,7 @@ export default function TradeDecisionBrief({
     const next = { ...brief, savedAt: new Date().toISOString() };
     try {
       window.localStorage.setItem(storageKey, JSON.stringify(next));
+      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
       setBrief(next);
       setSavedBrief(next);
       setStorageError(false);
@@ -82,6 +145,7 @@ export default function TradeDecisionBrief({
   function clearBrief() {
     try {
       window.localStorage.removeItem(storageKey);
+      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
       setBrief(EMPTY_DECISION_BRIEF);
       setSavedBrief(EMPTY_DECISION_BRIEF);
       setStorageError(false);
@@ -97,7 +161,7 @@ export default function TradeDecisionBrief({
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-indigo-700 dark:text-indigo-300">Manager decision brief</p>
             <h4 className="mt-1 text-base font-black text-slate-950 dark:text-white">Your read on {player.name}</h4>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Record what you learned about role and minutes before deciding.</p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Your dated judgment, kept separate from the model result.</p>
           </div>
           <span className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${assessmentTone(brief.assessment)}`}>
             {assessmentLabel(brief.assessment)}
@@ -132,14 +196,35 @@ export default function TradeDecisionBrief({
           </div>
         </fieldset>
 
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+            Availability risk
+            <select value={brief.availability} onChange={(event) => updateBrief({ availability: event.target.value as AvailabilityRisk })} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+              <option value="unresolved">Not assessed</option>
+              <option value="low">Low</option>
+              <option value="moderate">Moderate</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label className="block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
+            Future upside
+            <select value={brief.upside} onChange={(event) => updateBrief({ upside: event.target.value as Upside })} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+              <option value="unresolved">Not assessed</option>
+              <option value="limited">Limited</option>
+              <option value="steady">Steady</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+        </div>
+
         <label className="block text-xs font-black uppercase tracking-[0.12em] text-slate-500">
-          Role / minutes note
+          Why you expect this role, risk or upside
           <textarea
             value={brief.note}
             onChange={(event) => updateBrief({ note: event.target.value })}
             rows={3}
             maxLength={1000}
-            placeholder="Example: Expected to start after the roster move; coach quote still needed."
+            placeholder="Example: Expected to gain minutes; injury history still needs checking."
             className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:focus:ring-indigo-950"
           />
         </label>
@@ -283,6 +368,8 @@ function parseDecisionBrief(value: string): DecisionBrief {
       : "unresolved";
     return {
       assessment,
+      availability: (["unresolved", "low", "moderate", "high"] as AvailabilityRisk[]).includes(parsed.availability as AvailabilityRisk) ? parsed.availability as AvailabilityRisk : "unresolved",
+      upside: (["unresolved", "limited", "steady", "high"] as Upside[]).includes(parsed.upside as Upside) ? parsed.upside as Upside : "unresolved",
       note: typeof parsed.note === "string" ? parsed.note.slice(0, 1000) : "",
       sourceUrl: typeof parsed.sourceUrl === "string" && (parsed.sourceUrl === "" || isSafeHttpUrl(parsed.sourceUrl)) ? parsed.sourceUrl : "",
       sourceDate: typeof parsed.sourceDate === "string" ? parsed.sourceDate : "",

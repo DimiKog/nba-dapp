@@ -170,16 +170,16 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
       body: JSON.stringify({
         analysis_scope: "player_package",
         completion_status: "legal_as_proposed",
-        recommendation_tier: "not_recommended",
+        recommendation_tier: "proposable",
         acquisition_context: { status: "free_agency_open_cap_not_enforced", message: "Offseason context" },
         package: { selected_team_sends: [completionPlayer], counterparty_team_sends: [incomingPlayer], drops: { selected_team: null, counterparty_team: null }, assets: [resolvedPick] },
         selected_team: { ...teamResult("ldl-team-a", "Manager A LDL", 14, 14), category_score: { score: 0 } },
         counterparty_team: { ...teamResult("ldl-team-b", "xrtc", 13, 13), acceptance: { status: "positive", reason: "Partner benefits" } },
         completion_options: { drop_candidates: [], expanded_packages: [] },
         production_value: {
-          classification: "severely_uneven", compensation_required: true,
-          selected_team: { sent: 1, received: 0, retained_ratio: 0, value_gap_to_balanced: 0.8 },
-          counterparty_team: { sent: 0, received: 1, retained_ratio: null, value_gap_to_balanced: 0 },
+          classification: "balanced", compensation_required: false,
+          selected_team: { sent: 1, received: 1, retained_ratio: 1, value_gap_to_balanced: 0 },
+          counterparty_team: { sent: 1, received: 1, retained_ratio: 1, value_gap_to_balanced: 0 },
         },
         pick_value: {
           selected_team: { incoming_assets: [], combined_valuation: null, assessment: null },
@@ -237,6 +237,31 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   await expect(page.getByRole("heading", { name: "Exact trade package" })).toBeVisible();
   await expect(page.getByText("Draft pick · 2027 Round 1 · originally Manager A LDL")).toBeVisible();
   await expect(page.getByText("Player-value assessment · picks excluded")).toBeVisible();
+  await expect(page.getByText("Passes model checks", { exact: true })).toBeVisible();
+  await expect(page.getByText(/xrtc Player 1: role, availability and upside have not been reviewed/)).toBeVisible();
+  const categorySummary = page.getByText("What changes in your categories?");
+  const researchSummary = page.getByText("Review player outlook and sources");
+  await expect(categorySummary).toBeVisible();
+  await expect(researchSummary).toBeVisible();
+  expect((await categorySummary.boundingBox())!.y).toBeLessThan((await researchSummary.boundingBox())!.y);
+  const categoryPanel = page.getByRole("region", { name: "What changes in your categories?" });
+  await expect(categoryPanel.getByText("No meaningful category swing in this simulation.")).toBeVisible();
+  await expect(categoryPanel.getByText("FG%", { exact: true })).not.toBeVisible();
+  await categoryPanel.getByText("Show all 1 categories and smaller changes").click();
+  await expect(categoryPanel.getByText("FG%", { exact: true })).toBeVisible();
+  await expect(page.getByText("Your read on xrtc Player 1")).not.toBeVisible();
+  await page.getByText("Review player outlook and sources").click();
+  await expect(page.getByText("Your read on xrtc Player 1")).toBeVisible();
+  await expect(page.getByText("Research across sources")).not.toBeVisible();
+  await page.getByText("Open news and all research sources").click();
+  await expect(page.getByText("Research across sources")).toBeVisible();
+  await page.getByRole("button", { name: "Concern" }).click();
+  await page.getByLabel("Availability risk").selectOption("high");
+  await page.getByLabel("Future upside").selectOption("steady");
+  await page.getByRole("button", { name: "Save brief" }).click();
+  await expect(page.getByText(/xrtc Player 1: role concern · availability risk high · upside steady/)).toBeVisible();
+  await expect(page.getByText("Review this player before deciding; the saved profile never changes the model tier.")).toBeVisible();
+  await expect(page.getByText("Passes model checks", { exact: true })).toBeVisible();
 
   const noPick = await request.post(`${app}/api/fantasy/ldl/trade-package-analysis`, {
     headers: { [accessHeader]: token },
