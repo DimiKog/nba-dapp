@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PlayerResearchEvidence } from "@/lib/api";
+import type { PlayerResearchEvidence, TradeCategoryChange } from "@/lib/api";
 import {
   deletePrivateOutlook, EMPTY_PRIVATE_OUTLOOK, fetchPrivateOutlook,
   PRIVATE_OUTLOOK_UPDATED, savePrivateOutlook, type PrivateTradeOutlook,
@@ -25,12 +25,12 @@ function profileStorageKey(league: "ldl" | "bdb", nbaId: number): string {
 }
 
 export function TradeDecisionComparison({
-  league, player, modelFit, modelSummary,
+  league, player, modelFit, categoryChanges,
 }: {
   league: "ldl" | "bdb";
   player: ResearchPlayer;
   modelFit: string;
-  modelSummary: string;
+  categoryChanges: TradeCategoryChange[];
 }) {
   const [saved, setSaved] = useState<DecisionBrief | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -46,20 +46,37 @@ export function TradeDecisionComparison({
     return () => { active = false; window.removeEventListener(PRIVATE_OUTLOOK_UPDATED, refresh); };
   }, [league, player.nba_id]);
 
+  const gains = categoryChanges.filter((change) => ["weakness_resolved", "improved"].includes(change.transition));
+  const declines = categoryChanges.filter((change) => ["new_weakness", "declined"].includes(change.transition));
+  const highlights = [...gains, ...declines]
+    .filter((change) => change.z_delta != null && Number.isFinite(change.z_delta))
+    .sort((left, right) => Math.abs(right.z_delta!) - Math.abs(left.z_delta!))
+    .slice(0, 3);
+
   return (
-    <section className="mx-4 mb-4 rounded-xl border border-indigo-200 bg-white p-3 dark:border-indigo-900 dark:bg-slate-900" aria-label={`Model and private assessment for ${player.name}`}>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
-          <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Model · category impact</p>
-          <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{modelFit}</p>
-          <p className="text-xs text-slate-600 dark:text-slate-300">{modelSummary}</p>
+    <section className="mx-4 my-4 rounded-xl border border-indigo-300 bg-white p-4 dark:border-indigo-700 dark:bg-slate-900" aria-label={`Model and private assessment for ${player.name}`}>
+      <p className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-indigo-700 dark:text-indigo-300">Decision at a glance</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/40">
+          <p className="text-[11px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Model · category impact</p>
+          <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">{modelFit}</p>
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">{gains.length} meaningful gains · {declines.length} meaningful declines</p>
+          {highlights.length > 0 && <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Largest category changes">
+            {highlights.map((change) => (
+              <span key={change.key} className={`rounded-md px-2 py-1 text-[11px] font-bold ${change.z_delta! >= 0
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"}`}>
+                {change.label} {change.z_delta! > 0 ? "+" : ""}{change.z_delta!.toFixed(2)}z
+              </span>
+            ))}
+          </div>}
         </div>
-        <div className="rounded-lg bg-indigo-50 px-3 py-2 dark:bg-indigo-950/30">
-          <p className="text-[10px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300">My assessment · {player.name}</p>
-          <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+        <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-950/40">
+          <p className="text-[11px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300">My assessment · {player.name}</p>
+          <p className="mt-2 text-lg font-black text-slate-950 dark:text-white">
             {state === "loading" ? "Loading…" : state === "error" ? "Unavailable" : saved ? assessmentLabel(saved.assessment) : "Not assessed"}
           </p>
-          <p className="text-xs text-slate-600 dark:text-slate-300">
+          <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
             {saved ? `Availability: ${saved.availability} · upside: ${saved.upside}` : "Private to your account"}
           </p>
           {saved && (saved.note || saved.sourceUrl) && (
@@ -71,7 +88,7 @@ export function TradeDecisionComparison({
           )}
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-slate-500">Different lenses, not two comparable scores. Your assessment never changes the model result. Edit it under player outlook and sources.</p>
+      <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">Different lenses, not two comparable scores. Your assessment never changes the model result. Edit it under player outlook and sources.</p>
     </section>
   );
 }
