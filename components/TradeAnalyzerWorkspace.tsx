@@ -1121,16 +1121,6 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} picks={assets.filter((asset) => asset.from_team === "counterparty_team")} />
       </div>
 
-      {exactContext && suggestion.package.counterparty_team_sends.map((player) => (
-        <TradeDecisionComparison
-          key={player.nba_id}
-          league={league}
-          player={player}
-          modelFit={`Category fit ${formatSigned(suggestion.selected_team.category_score.score)}`}
-          modelSummary={`${suggestion.selected_team.category_changes.filter((change) => change.transition !== "unchanged").length} meaningful category changes · full package`}
-        />
-      ))}
-
       {exactContext && (
         <div className="mx-4 mb-4">
           <ManualTradeCategoryImpact changes={suggestion.selected_team.category_changes} strategy={exactContext.strategy} />
@@ -1472,6 +1462,15 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
         <p className="mt-1 text-sm text-slate-500">Roster, cap and categories reflect the full package. Player value and pick value are assessed separately.</p>
       </div>
       <div className="p-4">
+        {payload.package.counterparty_team_sends.map((player) => (
+          <TradeDecisionComparison
+            key={player.nba_id}
+            league={league}
+            player={player}
+            modelFit={`Category fit ${formatSigned(payload.selected_team.category_score.score)}`}
+            categoryChanges={payload.selected_team.category_changes}
+          />
+        ))}
         <OneForTwoSuggestionCard
           suggestion={payload}
           rank={1}
@@ -2675,7 +2674,7 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
             league={league}
             player={{ nba_id: incoming.nba_id, name: incoming.name }}
             modelFit={`Category fit ${formatSigned(analysis.selected_team.category_score.score)}`}
-            modelSummary={`${analysis.selected_team.category_changes.filter((change) => change.transition !== "unchanged").length} meaningful category changes · one-for-one trade`}
+            categoryChanges={analysis.selected_team.category_changes}
           />
         </div>
       )}

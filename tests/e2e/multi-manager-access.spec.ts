@@ -261,9 +261,12 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   await expect(page.getByText("Player-value assessment · picks excluded")).toBeVisible();
   await expect(page.getByText("Passes model checks", { exact: true })).toBeVisible();
   const comparison = page.getByRole("region", { name: "Model and private assessment for xrtc Player 1" });
+  const exactResult = page.getByRole("heading", { name: "Exact trade package" }).locator("../..");
   await expect(comparison.getByText("Model · category impact")).toBeVisible();
   await expect(comparison.getByText("My assessment · xrtc Player 1")).toBeVisible();
   await expect(comparison.getByText("Not assessed")).toBeVisible();
+  await expect(comparison.getByText("0 meaningful gains · 0 meaningful declines")).toBeVisible();
+  expect((await comparison.boundingBox())!.y).toBeLessThan((await exactResult.getByText("You send", { exact: true }).boundingBox())!.y);
   const categorySummary = page.getByText("What changes in your categories?");
   const otherChecks = page.getByText("Other checks", { exact: true });
   const researchSummary = page.getByText("Review player outlook and sources");
