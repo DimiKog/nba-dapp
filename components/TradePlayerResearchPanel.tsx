@@ -29,24 +29,26 @@ export default function TradePlayerResearchPanel({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-cyan-200 bg-cyan-50/40 dark:border-cyan-900 dark:bg-cyan-950/10" aria-labelledby="trade-research-title">
-      <header className="border-b border-cyan-200 px-5 py-4 dark:border-cyan-900">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">Decision research · incoming players</p>
-            <h2 id="trade-research-title" className="mt-1 text-xl font-black text-slate-950 dark:text-white">What should you verify before making the trade?</h2>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Recent sourced reporting and observed minutes provide context around the app&apos;s category and salary analysis.</p>
-          </div>
-          <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase text-cyan-800 shadow-sm dark:bg-slate-900 dark:text-cyan-300">Context only</span>
+      <details className="group">
+        <summary className="cursor-pointer list-none px-5 py-4 marker:hidden [&::-webkit-details-marker]:hidden">
+          <span className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700 dark:text-cyan-300">Decision research · incoming players</span>
+              <span id="trade-research-title" className="mt-1 block text-lg font-black text-slate-950 dark:text-white">Review player outlook and sources</span>
+              <span className="mt-1 block text-xs text-slate-600 dark:text-slate-300">Your profile, observed minutes and reporting · separate from the model score</span>
+            </span>
+            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-cyan-800 shadow-sm dark:bg-slate-900 dark:text-cyan-300">Open details <span aria-hidden="true" className="inline-block transition-transform group-open:rotate-180">⌄</span></span>
+          </span>
+        </summary>
+        <div className={`grid gap-4 border-t border-cyan-200 p-4 dark:border-cyan-900 ${uniquePlayers.length > 1 ? "xl:grid-cols-2" : ""}`}>
+          {uniquePlayers.map((player) => (
+            <PlayerResearchCard key={`${league}-${player.nba_id}`} league={league} player={player} />
+          ))}
         </div>
-      </header>
-      <div className={`grid gap-4 p-4 ${uniquePlayers.length > 1 ? "xl:grid-cols-2" : ""}`}>
-        {uniquePlayers.map((player) => (
-          <PlayerResearchCard key={`${league}-${player.nba_id}`} league={league} player={player} />
-        ))}
-      </div>
-      <footer className="border-t border-cyan-200 bg-white/60 px-5 py-3 text-xs text-slate-600 dark:border-cyan-900 dark:bg-slate-950/30 dark:text-slate-300">
-        <strong>You make the final call:</strong> source coverage may be incomplete and reports may conflict. Review the publication, date and supporting evidence yourself. None of these links changes the app&apos;s recommendation.
-      </footer>
+        <footer className="border-t border-cyan-200 bg-white/60 px-5 py-3 text-xs text-slate-600 dark:border-cyan-900 dark:bg-slate-950/30 dark:text-slate-300">
+          <strong>You make the final call:</strong> coverage may be incomplete and reports may conflict. Check the source and date yourself. These links do not change the model result.
+        </footer>
+      </details>
     </section>
   );
 }
@@ -96,8 +98,13 @@ function PlayerResearchCard({
       {research && (
         <div className="mt-4 space-y-4">
           <RoleSignal signal={research.role_signal} />
-          <NewsEvidence research={research} />
-          <ResearchSourceLauncher player={research.player} />
+          <details className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+            <summary className="cursor-pointer text-sm font-bold text-cyan-800 dark:text-cyan-300">Open news and all research sources</summary>
+            <div className="mt-3 space-y-4">
+              <NewsEvidence research={research} />
+              <ResearchSourceLauncher player={research.player} />
+            </div>
+          </details>
         </div>
       )}
       {(research || error) && (

@@ -9,6 +9,7 @@ import SearchablePlayerPicker, {
 } from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
 import TradePlayerResearchPanel from "@/components/TradePlayerResearchPanel";
+import { TradeProfileSignal } from "@/components/TradeDecisionBrief";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
   fetchAutomaticOneForTwoSuggestions,
@@ -1116,6 +1117,10 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} picks={assets.filter((asset) => asset.from_team === "counterparty_team")} />
       </div>
 
+      {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
+        <TradeProfileSignal key={player.nba_id} league={league} player={player} />
+      ))}
+
       <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
 
       <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
@@ -1243,18 +1248,21 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
         </div>
         {yourRatio != null && <span className="rounded-full bg-white/70 px-3 py-1.5 text-xs font-black tabular-nums dark:bg-slate-950/40">You receive {yourRatio}% of sent value</span>}
       </div>
-      {partnerRatio != null && (
-        <p className="mt-3 text-xs font-semibold opacity-80">Partner receives {partnerRatio}% of the value they send.</p>
-      )}
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <ValueExchange label="Your team" value={value.selected_team} />
-        <ValueExchange label="Partner team" value={value.counterparty_team} />
-      </div>
-      {value.baseline_kind === "marginal_roster" && (
-        <p className="mt-3 text-[11px] font-semibold opacity-75">
-          Baseline: production around the league&apos;s marginal normal roster slot{value.baseline_impact != null ? ` (${formatValueScore(value.baseline_impact)})` : ""}. Salary, free-agent access and token cost are assessed separately.
-        </p>
-      )}
+      <details className="mt-3 border-t border-current/20 pt-2">
+        <summary className="cursor-pointer text-xs font-bold">How is player value calculated?</summary>
+        {partnerRatio != null && (
+          <p className="mt-3 text-xs font-semibold opacity-80">Partner receives {partnerRatio}% of the value they send.</p>
+        )}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <ValueExchange label="Your team" value={value.selected_team} />
+          <ValueExchange label="Partner team" value={value.counterparty_team} />
+        </div>
+        {value.baseline_kind === "marginal_roster" && (
+          <p className="mt-3 text-[11px] font-semibold opacity-75">
+            Baseline: production around the league&apos;s marginal normal roster slot{value.baseline_impact != null ? ` (${formatValueScore(value.baseline_impact)})` : ""}. Salary, free-agent access and token cost are assessed separately.
+          </p>
+        )}
+      </details>
       {value.compensation_required && (
         <p className="mt-3 text-xs font-bold">
           {picksAssessed ? "Pick value is assessed separately below and does not alter this player-value result" : "Unpriced picks are not counted yet"}{gap > 0 ? ` · estimated production gap to the balanced threshold: ${formatValueScore(gap)}` : ""}.
@@ -1406,17 +1414,17 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
           picksAssessed={payload.package.assets.length > 0}
           showStrategyImpact={false}
         />
+        <ManualTradeCategoryImpact
+          changes={payload.selected_team.category_changes}
+          strategy={payload.strategy}
+        />
         <div className="mt-4">
           <TradePlayerResearchPanel
             league={league}
             players={payload.package.counterparty_team_sends}
           />
         </div>
-        <ManualTradeCategoryImpact
-          changes={payload.selected_team.category_changes}
-          strategy={payload.strategy}
-        />
-        <PickValuePanel payload={payload} />
+        {payload.package.assets.length > 0 && <PickValuePanel payload={payload} />}
       </div>
       <MethodNote>Manual exact package · 1–2 players per side · up to two canonical picks per side · no automatic transfer · pick value never changes the recommendation tier.</MethodNote>
     </section>
@@ -1488,9 +1496,12 @@ function PickForPlayerResult({ payload, league, onAnalyzeExpandedPickPackage }: 
             )}
           </div>
         )}
-        <PayrollComparison selected={payload.selected_team} counterparty={payload.counterparty_team} />
-        <TradePlayerResearchPanel league={league} players={payload.package.counterparty_team_sends} />
         <ManualTradeCategoryImpact changes={payload.selected_team.category_changes} strategy={payload.strategy} />
+        <TradePlayerResearchPanel league={league} players={payload.package.counterparty_team_sends} />
+        <details className="rounded-xl border border-slate-200 dark:border-slate-700">
+          <summary className="cursor-pointer p-4 font-black text-slate-900 dark:text-white">Five-year payroll detail</summary>
+          <div className="p-4 pt-0"><PayrollComparison selected={payload.selected_team} counterparty={payload.counterparty_team} /></div>
+        </details>
         <details className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
           <summary className="cursor-pointer font-black text-slate-900 dark:text-white">Partner category impact</summary>
           <p className="mt-2 text-xs text-slate-500">These changes reflect the player leaving the partner. The pick&apos;s future value does not affect current-season category rankings.</p>
@@ -1524,14 +1535,17 @@ function ManualTradeCategoryImpact({
   const improving = changes.filter((change) => ["weakness_resolved", "improved"].includes(change.transition)).length;
   const declining = changes.filter((change) => ["new_weakness", "declined"].includes(change.transition)).length;
   const stable = changes.length - improving - declining;
+  const meaningful = changes
+    .filter((change) => ["weakness_resolved", "improved", "new_weakness", "declined"].includes(change.transition))
+    .sort((left, right) => Math.abs(right.z_delta ?? 0) - Math.abs(left.z_delta ?? 0));
 
   return (
     <section className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" aria-labelledby="manual-category-impact-title">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 p-4 dark:border-slate-700">
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600 dark:text-blue-400">Your team · category impact</p>
-          <h3 id="manual-category-impact-title" className="mt-1 text-lg font-black text-slate-950 dark:text-white">Before → after the trade</h3>
-          <p className="mt-1 text-xs text-slate-500">Rank shows your position among league teams; the bar shows the relative strength change.</p>
+          <h3 id="manual-category-impact-title" className="mt-1 text-lg font-black text-slate-950 dark:text-white">What changes in your categories?</h3>
+          <p className="mt-1 text-xs text-slate-500">Largest meaningful swings first · rank before → after</p>
         </div>
         <div className="flex flex-wrap gap-3 text-xs font-bold text-slate-500">
           <span><strong className="text-emerald-600 dark:text-emerald-400">{improving}</strong> meaningful gains</span>
@@ -1543,13 +1557,20 @@ function ManualTradeCategoryImpact({
       <StrategyImpactPanel strategy={strategy} changes={changes} />
 
       <div className="grid gap-x-6 px-4 py-2 xl:grid-cols-2">
-        {changes.map((change) => (
+        {meaningful.map((change) => (
           <CategoryImpactBar key={change.key} change={change} scaleCeiling={scaleCeiling} />
         ))}
+        {meaningful.length === 0 && <p className="py-3 text-sm text-slate-500">No meaningful category swing in this simulation.</p>}
       </div>
 
       <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-        <p><strong>How to read it:</strong> positive means your team improves relative to the league; negative means it declines. Small changes remain visible even when they do not count as meaningful gains or declines. This is not a percentage or probability.</p>
+        <details>
+          <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">Show all {changes.length} categories and smaller changes</summary>
+          <div className="mt-3 grid gap-x-6 xl:grid-cols-2">
+            {changes.map((change) => <CategoryImpactBar key={change.key} change={change} scaleCeiling={scaleCeiling} />)}
+          </div>
+        </details>
+        <p className="mt-2">Positive means improvement relative to the league; negative means decline. These are not percentages or probabilities.</p>
         <details className="mt-2">
           <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">What does the z-score change mean? See an example</summary>
           <div className="mt-2 space-y-1 rounded-lg bg-white p-3 dark:bg-slate-900">
@@ -1745,7 +1766,7 @@ function PackageMetric({ label, value, tone }: { label: string; value: string; t
 
 function TierBadge({ tier, compact = false }: { tier: AutomaticTradePackageSuggestion["recommendation_tier"] | TradePackageCompletionOption["recommendation_tier"]; compact?: boolean }) {
   const positive = tier === "proposable";
-  return <span className={`rounded-full font-bold uppercase ${compact ? "px-2 py-1 text-[9px]" : "px-3 py-1.5 text-xs"} ${positive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : tier === "exploratory" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{tier.replace("_", " ")}</span>;
+  return <span className={`rounded-full font-bold uppercase ${compact ? "px-2 py-1 text-[9px]" : "px-3 py-1.5 text-xs"} ${positive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : tier === "exploratory" ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800"}`}>{positive ? "Passes model checks" : tier.replace("_", " ")}</span>;
 }
 
 function OneForTwoEmptyState({ payload }: { payload: FantasyAutomaticTradePackageSuggestions }) {
@@ -2585,6 +2606,10 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
         <ExchangePlayer title="Outgoing" player={outgoing} fallback={analysis.trade.outgoing.name} league={league} />
         <ExchangePlayer title="Incoming" player={incoming} fallback={analysis.trade.incoming.name} league={league} />
       </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TeamImpact result={analysis.selected_team} league={league} primary />
+        <TeamImpact result={analysis.counterparty_team} league={league} />
+      </div>
       <TradePlayerResearchPanel
         league={league}
         players={incoming?.nba_id ? [{
@@ -2594,11 +2619,10 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
           position: incoming.position,
         }] : []}
       />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TeamImpact result={analysis.selected_team} league={league} primary />
-        <TeamImpact result={analysis.counterparty_team} league={league} />
-      </div>
-      <PayrollComparison selected={analysis.selected_team} counterparty={analysis.counterparty_team} />
+      <details className="rounded-xl border border-slate-200 dark:border-slate-700">
+        <summary className="cursor-pointer p-4 font-black text-slate-900 dark:text-white">Five-year payroll detail</summary>
+        <div className="p-4 pt-0"><PayrollComparison selected={analysis.selected_team} counterparty={analysis.counterparty_team} /></div>
+      </details>
       {analysis.verdict.warnings.length > 0 && <WarningList warnings={analysis.verdict.warnings} />}
       <MethodNote>One-for-one simulation · attempt-weighted percentages · lower turnovers rank better · missing contracts count as $0.</MethodNote>
     </section>
