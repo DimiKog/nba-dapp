@@ -2,40 +2,78 @@
 
 import { useEffect, useState } from "react";
 import type { PlayerResearchEvidence } from "@/lib/api";
+import {
+  deletePrivateOutlook, EMPTY_PRIVATE_OUTLOOK, fetchPrivateOutlook,
+  PRIVATE_OUTLOOK_UPDATED, savePrivateOutlook, type PrivateTradeOutlook,
+} from "@/lib/privateTradeOutlook";
 
 type ManagerAssessment = "unresolved" | "positive" | "neutral" | "concern";
 type AvailabilityRisk = "unresolved" | "low" | "moderate" | "high";
 type Upside = "unresolved" | "limited" | "steady" | "high";
 
-type DecisionBrief = {
-  assessment: ManagerAssessment;
-  availability: AvailabilityRisk;
-  upside: Upside;
-  note: string;
-  sourceUrl: string;
-  sourceDate: string;
-  savedAt: string | null;
-};
+type DecisionBrief = PrivateTradeOutlook;
 
 type ResearchPlayer = {
   nba_id: number;
   name: string;
 };
 
-const EMPTY_DECISION_BRIEF: DecisionBrief = {
-  assessment: "unresolved",
-  availability: "unresolved",
-  upside: "unresolved",
-  note: "",
-  sourceUrl: "",
-  sourceDate: "",
-  savedAt: null,
-};
-
-const PROFILE_UPDATED_EVENT = "trade-advisor-profile-updated";
+const EMPTY_DECISION_BRIEF = EMPTY_PRIVATE_OUTLOOK;
 
 function profileStorageKey(league: "ldl" | "bdb", nbaId: number): string {
   return `trade-advisor-decision-brief:v1:${league}:${nbaId}`;
+}
+
+export function TradeDecisionComparison({
+  league, player, modelFit, modelSummary,
+}: {
+  league: "ldl" | "bdb";
+  player: ResearchPlayer;
+  modelFit: string;
+  modelSummary: string;
+}) {
+  const [saved, setSaved] = useState<DecisionBrief | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      fetchPrivateOutlook(league, player.nba_id)
+        .then((brief) => { if (active) { setSaved(brief); setState("ready"); } })
+        .catch(() => { if (active) setState("error"); });
+    };
+    refresh();
+    window.addEventListener(PRIVATE_OUTLOOK_UPDATED, refresh);
+    return () => { active = false; window.removeEventListener(PRIVATE_OUTLOOK_UPDATED, refresh); };
+  }, [league, player.nba_id]);
+
+  return (
+    <section className="mx-4 mb-4 rounded-xl border border-indigo-200 bg-white p-3 dark:border-indigo-900 dark:bg-slate-900" aria-label={`Model and private assessment for ${player.name}`}>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-950/30">
+          <p className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Model · category impact</p>
+          <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{modelFit}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300">{modelSummary}</p>
+        </div>
+        <div className="rounded-lg bg-indigo-50 px-3 py-2 dark:bg-indigo-950/30">
+          <p className="text-[10px] font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-300">My assessment · {player.name}</p>
+          <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">
+            {state === "loading" ? "Loading…" : state === "error" ? "Unavailable" : saved ? assessmentLabel(saved.assessment) : "Not assessed"}
+          </p>
+          <p className="text-xs text-slate-600 dark:text-slate-300">
+            {saved ? `Availability: ${saved.availability} · upside: ${saved.upside}` : "Private to your account"}
+          </p>
+          {saved && (saved.note || saved.sourceUrl) && (
+            <details className="mt-2 text-xs text-indigo-800 dark:text-indigo-200">
+              <summary className="cursor-pointer font-bold">My reasoning and source</summary>
+              {saved.note && <p className="mt-1 whitespace-pre-wrap break-words">{saved.note}</p>}
+              {saved.sourceUrl && <a className="mt-1 block break-all underline" href={saved.sourceUrl} target="_blank" rel="noopener noreferrer">Open source{saved.sourceDate ? ` · ${saved.sourceDate}` : ""}</a>}
+            </details>
+          )}
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">Different lenses, not two comparable scores. Your assessment never changes the model result. Edit it under player outlook and sources.</p>
+    </section>
+  );
 }
 
 export function TradeProfileSignal({
@@ -47,29 +85,19 @@ export function TradeProfileSignal({
   player: ResearchPlayer;
   compact?: boolean;
 }) {
-  const storageKey = profileStorageKey(league, player.nba_id);
   const [saved, setSaved] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     const refresh = () => {
-      try {
-        const value = window.localStorage.getItem(storageKey);
-        setSaved(value ? parseDecisionBrief(value) : EMPTY_DECISION_BRIEF);
-      } catch {
-        setSaved(EMPTY_DECISION_BRIEF);
-      }
-    };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === storageKey) refresh();
+      fetchPrivateOutlook(league, player.nba_id)
+        .then((brief) => { setSaved(brief ?? EMPTY_DECISION_BRIEF); setUnavailable(false); })
+        .catch(() => setUnavailable(true));
     };
     refresh();
-    window.addEventListener(PROFILE_UPDATED_EVENT, refresh);
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.removeEventListener(PROFILE_UPDATED_EVENT, refresh);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [storageKey]);
+    window.addEventListener(PRIVATE_OUTLOOK_UPDATED, refresh);
+    return () => window.removeEventListener(PRIVATE_OUTLOOK_UPDATED, refresh);
+  }, [league, player.nba_id]);
 
   const hasProfile = Boolean(saved.savedAt);
   const needsReview = !hasProfile || saved.assessment === "concern" || saved.assessment === "unresolved" || saved.availability !== "low" || saved.upside === "unresolved";
@@ -78,7 +106,7 @@ export function TradeProfileSignal({
       <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${needsReview
         ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
         : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200"}`}>
-        {player.name}: {hasProfile ? needsReview ? "outlook needs review" : "outlook reviewed" : "outlook not reviewed"}
+        {player.name}: {unavailable ? "private outlook unavailable" : hasProfile ? needsReview ? "outlook needs review" : "outlook reviewed" : "outlook not reviewed"}
       </span>
     );
   }
@@ -88,13 +116,14 @@ export function TradeProfileSignal({
       : "border-blue-200 bg-blue-50 text-blue-950 dark:border-blue-900 dark:bg-blue-950/25 dark:text-blue-200"}`}>
       <p className="font-black">Model checks passed separately from player outlook</p>
       <p className="mt-1">
-        {hasProfile
+        {unavailable ? "Your private outlook is temporarily unavailable. Model scoring is unchanged."
+          : hasProfile
           ? `${player.name}: role ${assessmentLabel(saved.assessment).toLowerCase()} · availability risk ${saved.availability} · upside ${saved.upside}.`
           : `${player.name}: role, availability and upside have not been reviewed. A green model result is not a complete trade recommendation.`}
       </p>
       {needsReview && <p className="mt-1 font-semibold">Review this player before deciding; the saved profile never changes the model tier.</p>}
       {hasProfile && saved.note && <p className="mt-1 line-clamp-2 text-xs">Your note: {saved.note}</p>}
-      {hasProfile && <p className="mt-1 text-[11px] opacity-75">Saved {formatDateTime(saved.savedAt!)} · only in this browser</p>}
+      {hasProfile && <p className="mt-1 text-[11px] opacity-75">Saved {formatDateTime(saved.savedAt!)} · private to your account</p>}
     </div>
   );
 }
@@ -113,56 +142,79 @@ export default function TradeDecisionBrief({
   const [savedBrief, setSavedBrief] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
   const [loaded, setLoaded] = useState(false);
   const [storageError, setStorageError] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [legacyAvailable, setLegacyAvailable] = useState(false);
   const sourceUrlError = brief.sourceUrl.trim() !== "" && !isSafeHttpUrl(brief.sourceUrl);
   const hasChanges = loaded && JSON.stringify(brief) !== JSON.stringify(savedBrief);
   const coverage = decisionCoverage(research);
 
   useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      try {
-        const stored = window.localStorage.getItem(storageKey);
-        const parsed = stored ? parseDecisionBrief(stored) : EMPTY_DECISION_BRIEF;
-        setBrief(parsed);
-        setSavedBrief(parsed);
-      } catch {
+    const controller = new AbortController();
+    fetchPrivateOutlook(league, player.nba_id, controller.signal)
+      .then((saved) => {
+        const next = saved ?? EMPTY_DECISION_BRIEF;
+        setBrief(next);
+        setSavedBrief(next);
+        setStorageError(false);
+        if (!saved) {
+          try { setLegacyAvailable(Boolean(window.localStorage.getItem(storageKey))); } catch { /* Browser storage is optional. */ }
+        } else {
+          setLegacyAvailable(false);
+        }
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         setStorageError(true);
-      } finally {
-        setLoaded(true);
-      }
-    });
-    return () => { active = false; };
-  }, [storageKey]);
+      })
+      .finally(() => { if (!controller.signal.aborted) setLoaded(true); });
+    return () => controller.abort();
+  }, [league, player.nba_id, storageKey]);
 
   function updateBrief(patch: Partial<DecisionBrief>) {
     setBrief((current) => ({ ...current, ...patch, savedAt: current.savedAt }));
   }
 
-  function saveBrief() {
+  async function saveBrief() {
     if (sourceUrlError) return;
-    const next = { ...brief, savedAt: new Date().toISOString() };
+    setBusy(true);
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(next));
-      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
-      setBrief(next);
-      setSavedBrief(next);
+      const next = await savePrivateOutlook(league, player.nba_id, brief);
+      if (!next) throw new Error("Save returned no outlook");
+      setBrief(next); setSavedBrief(next);
+      setLegacyAvailable(false);
+      window.dispatchEvent(new Event(PRIVATE_OUTLOOK_UPDATED));
       setStorageError(false);
     } catch {
       setStorageError(true);
+    } finally {
+      setBusy(false);
     }
   }
 
-  function clearBrief() {
+  async function clearBrief() {
+    if (!savedBrief.savedAt) {
+      setBrief(EMPTY_DECISION_BRIEF);
+      return;
+    }
+    setBusy(true);
     try {
-      window.localStorage.removeItem(storageKey);
-      window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
+      await deletePrivateOutlook(league, player.nba_id);
+      window.dispatchEvent(new Event(PRIVATE_OUTLOOK_UPDATED));
       setBrief(EMPTY_DECISION_BRIEF);
       setSavedBrief(EMPTY_DECISION_BRIEF);
       setStorageError(false);
     } catch {
       setStorageError(true);
+    } finally {
+      setBusy(false);
     }
+  }
+
+  function importLegacyBrief() {
+    try {
+      const value = window.localStorage.getItem(storageKey);
+      if (value) setBrief({ ...parseDecisionBrief(value), savedAt: null });
+    } catch { setStorageError(true); }
   }
 
   return (
@@ -265,11 +317,12 @@ export default function TradeDecisionBrief({
         </div>
 
         {sourceUrlError && <p className="text-xs font-semibold text-red-700 dark:text-red-300">Use a complete http:// or https:// link.</p>}
-        {storageError && <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">This browser could not save the brief. Your trade analysis is unaffected.</p>}
+        {storageError && <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Private outlook is unavailable. No changes were saved; model analysis is unaffected.</p>}
+        {legacyAvailable && <button type="button" onClick={importLegacyBrief} className="text-left text-xs font-bold text-indigo-700 underline dark:text-indigo-300">Import an older note saved in this browser (review before saving to your account)</button>}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-indigo-200 pt-3 dark:border-indigo-900">
           <div className="text-[11px] text-slate-500">
-            <p><strong>Saved only in this browser.</strong> It does not affect the recommendation.</p>
+            <p><strong>Private to your account.</strong> It does not affect the model result.</p>
             {brief.savedAt && <p className="mt-0.5">Last saved {formatDateTime(brief.savedAt)}{hasChanges ? " · unsaved changes" : ""}</p>}
             {!brief.savedAt && loaded && <p className="mt-0.5">Not saved yet.</p>}
           </div>
@@ -277,7 +330,7 @@ export default function TradeDecisionBrief({
             <button
               type="button"
               onClick={clearBrief}
-              disabled={!brief.savedAt && !hasChanges}
+              disabled={busy || (!savedBrief.savedAt && !hasChanges)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-black text-slate-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
             >
               Clear
@@ -285,7 +338,7 @@ export default function TradeDecisionBrief({
             <button
               type="button"
               onClick={saveBrief}
-              disabled={!loaded || sourceUrlError || !hasChanges}
+              disabled={!loaded || busy || sourceUrlError || !hasChanges}
               className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-black text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Save brief
@@ -364,7 +417,8 @@ function assessmentSelectedTone(assessment: ManagerAssessment): string {
 function isSafeHttpUrl(value: string): boolean {
   try {
     const parsed = new URL(value.trim());
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    return (parsed.protocol === "http:" || parsed.protocol === "https:")
+      && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
   } catch {
     return false;
   }

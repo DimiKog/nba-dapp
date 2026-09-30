@@ -9,7 +9,7 @@ import SearchablePlayerPicker, {
 } from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
 import TradePlayerResearchPanel from "@/components/TradePlayerResearchPanel";
-import { TradeProfileSignal } from "@/components/TradeDecisionBrief";
+import { TradeDecisionComparison, TradeProfileSignal } from "@/components/TradeDecisionBrief";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
   fetchAutomaticOneForTwoSuggestions,
@@ -1121,6 +1121,16 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} picks={assets.filter((asset) => asset.from_team === "counterparty_team")} />
       </div>
 
+      {exactContext && suggestion.package.counterparty_team_sends.map((player) => (
+        <TradeDecisionComparison
+          key={player.nba_id}
+          league={league}
+          player={player}
+          modelFit={`Category fit ${formatSigned(suggestion.selected_team.category_score.score)}`}
+          modelSummary={`${suggestion.selected_team.category_changes.filter((change) => change.transition !== "unchanged").length} meaningful category changes · full package`}
+        />
+      ))}
+
       {exactContext && (
         <div className="mx-4 mb-4">
           <ManualTradeCategoryImpact changes={suggestion.selected_team.category_changes} strategy={exactContext.strategy} />
@@ -1138,9 +1148,6 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
               <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${productionValue.classification === "balanced" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}`}>
                 Player value: {productionValueSummary(productionValue)}
               </span>
-              {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
-                <TradeProfileSignal key={player.nba_id} league={league} player={player} compact />
-              ))}
               <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
                 {acquisitionSummary(exactContext.acquisition)}
               </span>
@@ -1148,9 +1155,6 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
           </summary>
           <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
             <AcquisitionContextPanel context={exactContext.acquisition} />
-            {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
-              <TradeProfileSignal key={player.nba_id} league={league} player={player} />
-            ))}
             <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
             <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-2">
               <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
@@ -2665,6 +2669,16 @@ function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
         <ExchangePlayer title="Outgoing" player={outgoing} fallback={analysis.trade.outgoing.name} league={league} />
         <ExchangePlayer title="Incoming" player={incoming} fallback={analysis.trade.incoming.name} league={league} />
       </div>
+      {incoming?.nba_id && (
+        <div className="-mx-4">
+          <TradeDecisionComparison
+            league={league}
+            player={{ nba_id: incoming.nba_id, name: incoming.name }}
+            modelFit={`Category fit ${formatSigned(analysis.selected_team.category_score.score)}`}
+            modelSummary={`${analysis.selected_team.category_changes.filter((change) => change.transition !== "unchanged").length} meaningful category changes · one-for-one trade`}
+          />
+        </div>
+      )}
       <div className="grid gap-4 lg:grid-cols-2">
         <TeamImpact result={analysis.selected_team} league={league} primary />
         <TeamImpact result={analysis.counterparty_team} league={league} />
