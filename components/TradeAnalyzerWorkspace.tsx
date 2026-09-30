@@ -1068,13 +1068,17 @@ function OneForTwoSuggestionsResult({ payload }: { payload: FantasyAutomaticTrad
   );
 }
 
-function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksAssessed = false, showStrategyImpact = true }: {
+function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksAssessed = false, showStrategyImpact = true, exactContext }: {
   suggestion: AutomaticTradePackageSuggestion;
   rank: number;
   league: LeagueSlug;
   assets?: FantasyTradePackageAnalysis["package"]["assets"];
   picksAssessed?: boolean;
   showStrategyImpact?: boolean;
+  exactContext?: {
+    acquisition: TradeAcquisitionContext;
+    strategy?: TradeCategoryStrategyContext;
+  };
 }) {
   const legalAsProposed = suggestion.completion_status === "legal_as_proposed";
   const drops = suggestion.completion_options.drop_candidates;
@@ -1091,7 +1095,7 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
           <TeamLogo league={league} logo={suggestion.counterparty_team.team.logo} name={suggestion.counterparty_team.team.name} size={44} />
           <div className="min-w-0">
             <h3 className="truncate font-black text-slate-950 dark:text-white">{suggestion.counterparty_team.team.name}</h3>
-            <p className="text-xs text-slate-500">Fit {formatSigned(suggestion.selected_team.category_score.score)} · partner {suggestion.counterparty_team.acceptance.status}</p>
+            <p className="text-xs text-slate-500">{exactContext ? "Your category fit" : "Fit"} {formatSigned(suggestion.selected_team.category_score.score)}{!exactContext && ` · partner ${suggestion.counterparty_team.acceptance.status}`}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1117,17 +1121,56 @@ function OneForTwoSuggestionCard({ suggestion, rank, league, assets = [], picksA
         <PackageSide title="You receive" players={suggestion.package.counterparty_team_sends} picks={assets.filter((asset) => asset.from_team === "counterparty_team")} />
       </div>
 
-      {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
-        <TradeProfileSignal key={player.nba_id} league={league} player={player} />
-      ))}
+      {exactContext && (
+        <div className="mx-4 mb-4">
+          <ManualTradeCategoryImpact changes={suggestion.selected_team.category_changes} strategy={exactContext.strategy} />
+        </div>
+      )}
 
-      <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
-
-      <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
-        <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
-        <PackageMetric label="Your cap result" value={capResultLabel(suggestion.selected_team.payroll.current_cap_result)} tone={suggestion.selected_team.cap_legality.eligible ? "positive" : "danger"} />
-        <PackageMetric label="Partner response" value={suggestion.counterparty_team.acceptance.reason} tone={suggestion.counterparty_team.acceptance.status === "positive" ? "positive" : "neutral"} />
-      </div>
+      {exactContext ? (
+        <details className="mx-4 mb-4 rounded-xl border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/30">
+          <summary className="cursor-pointer px-4 py-3 text-slate-800 dark:text-slate-100">
+            <span className="inline-flex flex-wrap items-center gap-2 align-middle">
+              <strong className="text-sm">Other checks</strong>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${suggestion.selected_team.cap_legality.eligible ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"}`}>
+                Cap: {capResultLabel(suggestion.selected_team.payroll.current_cap_result)}
+              </span>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${productionValue.classification === "balanced" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" : "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"}`}>
+                Player value: {productionValueSummary(productionValue)}
+              </span>
+              {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
+                <TradeProfileSignal key={player.nba_id} league={league} player={player} compact />
+              ))}
+              <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-800 dark:bg-violet-950 dark:text-violet-200">
+                {acquisitionSummary(exactContext.acquisition)}
+              </span>
+            </span>
+          </summary>
+          <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+            <AcquisitionContextPanel context={exactContext.acquisition} />
+            {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
+              <TradeProfileSignal key={player.nba_id} league={league} player={player} />
+            ))}
+            <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
+            <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-2">
+              <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
+              <PackageMetric label="Partner team impact" value={suggestion.counterparty_team.acceptance.reason} tone={suggestion.counterparty_team.acceptance.status === "positive" ? "positive" : "neutral"} />
+            </div>
+          </div>
+        </details>
+      ) : (
+        <>
+          {effectiveTier === "proposable" && suggestion.package.counterparty_team_sends.map((player) => (
+            <TradeProfileSignal key={player.nba_id} league={league} player={player} />
+          ))}
+          <ProductionValuePanel value={productionValue} usesCompletion={valueUsesCompletion} picksAssessed={picksAssessed} />
+          <div className="grid gap-3 border-t border-slate-200 p-4 dark:border-slate-700 md:grid-cols-3">
+            <PackageMetric label="Your category fit" value={formatSigned(suggestion.selected_team.category_score.score)} tone={suggestion.selected_team.category_score.score >= 0 ? "positive" : "danger"} />
+            <PackageMetric label="Your cap result" value={capResultLabel(suggestion.selected_team.payroll.current_cap_result)} tone={suggestion.selected_team.cap_legality.eligible ? "positive" : "danger"} />
+            <PackageMetric label="Partner response" value={suggestion.counterparty_team.acceptance.reason} tone={suggestion.counterparty_team.acceptance.status === "positive" ? "positive" : "neutral"} />
+          </div>
+        </>
+      )}
 
       {!legalAsProposed && (
         <div className="border-t border-slate-200 bg-blue-50/50 p-4 dark:border-slate-700 dark:bg-blue-950/10">
@@ -1272,6 +1315,26 @@ function ProductionValuePanel({ value, usesCompletion, picksAssessed = false }: 
   );
 }
 
+function productionValueSummary(value: TradePackageProductionValue): string {
+  switch (value.classification) {
+    case "balanced": return "balanced";
+    case "materially_equivalent": return "roster-boundary comparison";
+    case "uneven": return "extra compensation needed";
+    case "severely_uneven": return "major gap";
+    default: return "unavailable";
+  }
+}
+
+function acquisitionSummary(context: TradeAcquisitionContext): string {
+  switch (context.status) {
+    case "tokens_required": return "Tokens required";
+    case "free_agency_closed": return "Free agency closed";
+    case "free_agency_open_cap_not_enforced": return "Free agency open · cap later";
+    case "free_agency_open_cap_enforced": return "Free agency open · cap active";
+    default: return "Acquisition rules need review";
+  }
+}
+
 function AcquisitionContextPanel({ context }: { context: TradeAcquisitionContext }) {
   const presentation = context.status === "free_agency_closed"
     ? {
@@ -1404,7 +1467,6 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
         <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Exact trade package</h2>
         <p className="mt-1 text-sm text-slate-500">Roster, cap and categories reflect the full package. Player value and pick value are assessed separately.</p>
       </div>
-      <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="p-4">
         <OneForTwoSuggestionCard
           suggestion={payload}
@@ -1413,10 +1475,7 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
           assets={payload.package.assets}
           picksAssessed={payload.package.assets.length > 0}
           showStrategyImpact={false}
-        />
-        <ManualTradeCategoryImpact
-          changes={payload.selected_team.category_changes}
-          strategy={payload.strategy}
+          exactContext={{ acquisition: payload.acquisition_context, strategy: payload.strategy }}
         />
         <div className="mt-4">
           <TradePlayerResearchPanel

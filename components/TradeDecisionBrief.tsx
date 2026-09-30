@@ -41,9 +41,11 @@ function profileStorageKey(league: "ldl" | "bdb", nbaId: number): string {
 export function TradeProfileSignal({
   league,
   player,
+  compact = false,
 }: {
   league: "ldl" | "bdb";
   player: ResearchPlayer;
+  compact?: boolean;
 }) {
   const storageKey = profileStorageKey(league, player.nba_id);
   const [saved, setSaved] = useState<DecisionBrief>(EMPTY_DECISION_BRIEF);
@@ -71,6 +73,15 @@ export function TradeProfileSignal({
 
   const hasProfile = Boolean(saved.savedAt);
   const needsReview = !hasProfile || saved.assessment === "concern" || saved.assessment === "unresolved" || saved.availability !== "low" || saved.upside === "unresolved";
+  if (compact) {
+    return (
+      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${needsReview
+        ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+        : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200"}`}>
+        {player.name}: {hasProfile ? needsReview ? "outlook needs review" : "outlook reviewed" : "outlook not reviewed"}
+      </span>
+    );
+  }
   return (
     <div className={`mx-4 mb-4 rounded-xl border px-4 py-3 text-sm ${needsReview
       ? "border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-800 dark:bg-amber-950/25 dark:text-amber-200"
