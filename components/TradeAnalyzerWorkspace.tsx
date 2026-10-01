@@ -10,6 +10,7 @@ import SearchablePlayerPicker, {
 import TeamLogo from "@/components/TeamLogo";
 import TradePlayerResearchPanel from "@/components/TradePlayerResearchPanel";
 import { TradeDecisionComparison, TradeProfileSignal } from "@/components/TradeDecisionBrief";
+import { ReviewedInjuryNotice } from "@/components/ReviewedInjuryReport";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
 import {
   fetchAutomaticOneForTwoSuggestions,
@@ -1515,6 +1516,7 @@ function PickForPlayerResult({ payload, league, onAnalyzeExpandedPickPackage }: 
       </div>
       <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="space-y-4 p-4">
+        {player?.nba_id && <ReviewedInjuryNotice league={league} nbaId={player.nba_id} />}
         {payload.completion_status !== "legal_as_proposed" && payload.completion_status !== "legal_with_drop" && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
             Provisional analysis: salary and categories below show the pick-only trade as entered, before any roster-completion move. They are not the final completed-trade result.

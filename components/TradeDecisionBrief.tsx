@@ -6,6 +6,7 @@ import {
   deletePrivateOutlook, EMPTY_PRIVATE_OUTLOOK, fetchPrivateOutlook,
   PRIVATE_OUTLOOK_UPDATED, savePrivateOutlook, type PrivateTradeOutlook,
 } from "@/lib/privateTradeOutlook";
+import { ReviewedInjuryNotice } from "@/components/ReviewedInjuryReport";
 
 type ManagerAssessment = "unresolved" | "positive" | "neutral" | "concern";
 type AvailabilityRisk = "unresolved" | "low" | "moderate" | "high";
@@ -56,6 +57,7 @@ export function TradeDecisionComparison({
   return (
     <section className="mx-4 my-4 rounded-xl border border-indigo-300 bg-white p-4 dark:border-indigo-700 dark:bg-slate-900" aria-label={`Model and private assessment for ${player.name}`}>
       <p className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-indigo-700 dark:text-indigo-300">Decision at a glance</p>
+      <div className="mb-3"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/40">
           <p className="text-[11px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">Model · category impact</p>

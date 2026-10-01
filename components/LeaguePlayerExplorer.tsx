@@ -22,6 +22,7 @@ import {
 } from "@/lib/leagues";
 import TeamLogo from "@/components/TeamLogo";
 import InjuryFlag from "@/components/InjuryFlag";
+import { ReviewedInjuryNotice } from "@/components/ReviewedInjuryReport";
 import {
   fantasyStatValue,
   formatFantasyStat,
@@ -64,6 +65,7 @@ export default function LeaguePlayerExplorer() {
   const [selectedId, setSelectedId] = useState("");
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
+  const [hasFantasyAccess, setHasFantasyAccess] = useState(false);
   const [watchPending, setWatchPending] = useState<number | null>(null);
   const [watchError, setWatchError] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
@@ -83,6 +85,7 @@ export default function LeaguePlayerExplorer() {
     setSelectedId("");
     setComparisonIds([]);
     setWatchedIds(new Set());
+    setHasFantasyAccess(false);
     setWatchError(null);
     setVisibleLimit(PAGE_SIZE);
   }
@@ -96,6 +99,7 @@ export default function LeaguePlayerExplorer() {
       .then(([data, watchlist]) => {
         if (!active) return;
         setPayload(data);
+        setHasFantasyAccess(Boolean(watchlist));
         setWatchedIds(new Set(
           watchlist?.entries.map((entry) => entry.nba_player_id) ?? [],
         ));
@@ -366,6 +370,7 @@ export default function LeaguePlayerExplorer() {
             <PlayerDecisionPanel
               player={selected}
               league={league}
+              hasFantasyAccess={hasFantasyAccess}
               statsView={statsView}
               windowDays={payload.window.days}
               categories={categoryColumns}
@@ -666,6 +671,7 @@ function ExplorerMobileCard({
 function PlayerDecisionPanel({
   player,
   league,
+  hasFantasyAccess,
   statsView,
   windowDays,
   categories,
@@ -673,6 +679,7 @@ function PlayerDecisionPanel({
 }: {
   player: FantasyPlayerPerformance;
   league: LeagueSlug;
+  hasFantasyAccess: boolean;
   statsView: StatsView;
   windowDays: number;
   categories: FantasyCategory[];
@@ -697,9 +704,10 @@ function PlayerDecisionPanel({
             </div>
             {player.injury && (
               <p className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
-                {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
+                Feed injury: {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
               </p>
             )}
+            {hasFantasyAccess && player.nba_id && <div className="mt-3"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {player.category_strengths.map((strength) => (
                 <span key={strength} className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">{strength}</span>

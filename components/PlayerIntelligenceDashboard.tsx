@@ -4,18 +4,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Contract, PlayerIntelligence, PlayerIntelligenceCategory, PlayerIntelligenceSample, photoUrl } from "@/lib/api";
+import PlayerOutlookPilot from "@/components/PlayerOutlookPilot";
 
 type League = "ldl" | "bdb";
 type View = "season" | "recent";
 const CONTRACT_YEARS = ["2024-25", "2025-26", "2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
 
-export default function PlayerIntelligenceDashboard({ intelligence, contract, birthDate, league, source, initiallyWatched }: {
+export default function PlayerIntelligenceDashboard({ intelligence, contract, birthDate, league, source, initiallyWatched, hasLeagueAccess, canReviewInjury }: {
   intelligence: PlayerIntelligence;
   contract: Contract;
   birthDate: string | null;
   league: League | null;
   source: string | null;
   initiallyWatched: boolean;
+  hasLeagueAccess: boolean;
+  canReviewInjury: boolean;
 }) {
   const player = intelligence.player;
   const hasRecent = player.window_stats_intelligence.games > 0;
@@ -65,7 +68,7 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {league && <span className={`rounded-full px-3 py-1 text-xs font-bold ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{player.availability === "free_agent" ? `${intelligence.league?.name} free agent` : player.fantasy_team?.name ?? "Rostered"}</span>}
-                {player.injury && <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">{injuryLabel(player.injury)}</span>}
+                {player.injury && <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">Feed: {injuryLabel(player.injury)}</span>}
                 {!sample.qualified && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Small sample</span>}
               </div>
             </div>
@@ -87,6 +90,11 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
       </header>
 
       {!hasRecent && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">No games are available in the latest {intelligence.window.days}-day window. Season intelligence is shown.</div>}
+
+      {league && hasLeagueAccess && player.nba_id && <PlayerOutlookPilot
+        league={league} nbaId={player.nba_id} name={player.name} canReviewInjury={canReviewInjury}
+        freeAgent={player.availability === "free_agent"}
+      />}
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <DecisionCard label="Current salary" value={player.salary_2026_27 ?? "$0"} detail={player.salary_2026_27 ? "2026–27 contract" : "No contract · free agent"} />

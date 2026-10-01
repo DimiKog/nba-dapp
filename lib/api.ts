@@ -131,6 +131,13 @@ export interface PlayerResearchEvidence {
     confidence: "medium" | "low" | "insufficient";
     reason: string;
   };
+  completed_season_baseline?: {
+    season: string;
+    games: number;
+    minutes: number | null;
+    source: "cached_season_stats";
+    is_projection: false;
+  };
   coverage: {
     status: "available" | "no_exact_player_matches" | "provider_unavailable";
     provider: string;

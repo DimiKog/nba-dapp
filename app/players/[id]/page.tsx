@@ -44,7 +44,7 @@ export default async function PlayerPage({ params, searchParams }: {
     : null;
   const initiallyWatched = Boolean(player.nba_id && watchlist?.entries.some((entry) => entry.nba_player_id === player.nba_id));
 
-  return <PlayerIntelligenceDashboard intelligence={intelligence} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} />;
+  return <PlayerIntelligenceDashboard intelligence={intelligence} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} hasLeagueAccess={Boolean(membership)} canReviewInjury={Boolean(membership?.commissioner)} />;
 }
 
 function PlayerIdentityUnresolved({ player }: { player: PlayerDetail }) {

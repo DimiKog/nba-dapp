@@ -55,6 +55,7 @@ const sessions = {
   },
 };
 const privateTradeOutlooks = new Map();
+const reviewedInjuryReports = new Map();
 
 function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   return {
@@ -128,6 +129,26 @@ const server = createServer((request, response) => {
         };
         privateTradeOutlooks.set(key, brief);
         send(response, 200, { brief });
+      });
+      return;
+    }
+  }
+  const injuryMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/injury-report$/);
+  if (injuryMatch) {
+    const session = sessionFor(request);
+    const [, league, nbaId] = injuryMatch;
+    const member = session?.memberships.find((item) => item.league_slug === league);
+    if (!member) return send(response, 403, { error: "Membership required" });
+    if (request.method === "GET") return send(response, 200, { report: reviewedInjuryReports.get(nbaId) ?? null });
+    if (request.method === "POST") {
+      if (!member.commissioner) return send(response, 403, { error: "Commissioner required" });
+      let rawBody = "";
+      request.on("data", (chunk) => { rawBody += chunk; });
+      request.on("end", () => {
+        const body = JSON.parse(rawBody || "{}");
+        const report = { ...body, recordedAt: "2026-10-01T12:00:00Z" };
+        reviewedInjuryReports.set(nbaId, report);
+        send(response, 201, { report });
       });
       return;
     }
