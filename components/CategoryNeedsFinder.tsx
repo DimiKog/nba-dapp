@@ -10,16 +10,11 @@ import {
   type FantasyTargetCandidate,
   type FantasyWatchlist,
 } from "@/lib/api";
+import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
 
 type LeagueSlug = "ldl" | "bdb";
 type Availability = "all" | "free_agent" | "rostered";
 type Basis = "season" | "window";
-
-const CATEGORY_LABELS: Record<string, string> = {
-  fg_pct: "FG%", three_pm: "3PTM", ft_pct: "FT%", points: "PTS",
-  rebounds: "REB", oreb: "OREB", dreb: "DREB", assists: "AST",
-  steals: "ST", blocks: "BLK", turnovers: "TO", assist_turnover: "A/TO",
-};
 
 export default function CategoryNeedsFinder({
   league,

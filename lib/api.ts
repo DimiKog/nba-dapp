@@ -1646,11 +1646,3 @@ export async function fetchNews(limit = 8): Promise<NewsItem[]> {
   if (!res.ok) return [];
   return res.json();
 }
-
-export async function fetchTopContracts(n = 50): Promise<(Player & { rank: number; contract: Contract })[]> {
-  const res = await fetch(`${BASE}/api/nba/contracts/top?n=${n}`, {
-    next: { revalidate: 3600 },
-  });
-  if (!res.ok) throw new Error("Failed to fetch contracts");
-  return res.json();
-}
