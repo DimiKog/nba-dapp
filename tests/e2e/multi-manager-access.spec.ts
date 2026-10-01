@@ -58,6 +58,22 @@ test("private trade outlook is isolated per account", async ({ request }) => {
   expect((await (await request.get(path, { headers: { [accessHeader]: tokenA } })).json()).brief).toBeNull();
 });
 
+test("reviewed injury report is shared but commissioner-only to write", async ({ request }) => {
+  const [tokenA, tokenB] = await Promise.all([
+    tokenFor(request, "manager-a-subject"), tokenFor(request, "manager-b-subject"),
+  ]);
+  const path = `${app}/api/fantasy/ldl/players/1628978/injury-report`;
+  const body = {
+    status: "injured", summary: "Achilles injury reported by the team",
+    sourceUrl: "https://www.nba.com/news/report", sourceDate: "2026-09-30",
+    expectedReturnDate: "",
+  };
+  expect((await request.post(path, { headers: { [accessHeader]: tokenB }, data: body })).status()).toBe(403);
+  expect((await request.post(path, { headers: { [accessHeader]: tokenA }, data: body })).status()).toBe(201);
+  expect((await (await request.get(path, { headers: { [accessHeader]: tokenB } })).json()).report.summary).toBe(body.summary);
+  expect((await request.get(path)).status()).toBe(401);
+});
+
 test("membership-aware navigation differs by manager role", async ({ page, request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),
