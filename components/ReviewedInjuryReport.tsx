@@ -33,6 +33,10 @@ function useReport(league: League, nbaId: number) {
 }
 
 export function ReviewedInjuryNotice({ league, nbaId, showMissing = false }: { league: League; nbaId: number; showMissing?: boolean }) {
+  return <ReviewedInjuryNoticeForPlayer key={`${league}:${nbaId}`} league={league} nbaId={nbaId} showMissing={showMissing} />;
+}
+
+function ReviewedInjuryNoticeForPlayer({ league, nbaId, showMissing }: { league: League; nbaId: number; showMissing: boolean }) {
   const { report, state, stale } = useReport(league, nbaId);
   if (state === "loading") return null;
   if (state === "error") return <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Injury report unavailable. Verify availability independently.</p>;
@@ -57,6 +61,10 @@ const EMPTY_REPORT: InjuryReportDraft = {
 };
 
 export function InjuryReportEditor({ league, nbaId }: { league: League; nbaId: number }) {
+  return <InjuryReportEditorForPlayer key={`${league}:${nbaId}`} league={league} nbaId={nbaId} />;
+}
+
+function InjuryReportEditorForPlayer({ league, nbaId }: { league: League; nbaId: number }) {
   const { report, state } = useReport(league, nbaId);
   const [draft, setDraft] = useState<InjuryReportDraft>(EMPTY_REPORT);
   const [busy, setBusy] = useState(false);
