@@ -54,7 +54,7 @@ export interface PlayerIntelligenceSample {
   strengths: string[];
   weaknesses: string[];
   overall?: {
-    z_score: number;
+    z_score: number | null;
     nba_rank: number | null;
     nba_of: number | null;
     fantasy_market_rank: number | null;

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Contract, PlayerIntelligence, PlayerIntelligenceCategory, PlayerIntelligenceSample, photoUrl } from "@/lib/api";
+import { overallDetail } from "@/lib/playerIntelligenceFormat";
 import PlayerOutlookPilot from "@/components/PlayerOutlookPilot";
 
 type League = "ldl" | "bdb";
@@ -142,7 +143,6 @@ function ContractTimeline({ contract, salaries }: { contract: Contract; salaries
 }
 
 function overallRank(sample: PlayerIntelligenceSample, kind: "nba" | "market") { const overall = sample.overall; if (!overall) return `${sample.categories.length} ranked cats`; const rank = kind === "nba" ? overall.nba_rank : overall.fantasy_market_rank; const total = kind === "nba" ? overall.nba_of : overall.fantasy_market_of; return rank && total ? `#${rank} of ${total}` : "Not ranked"; }
-function overallDetail(sample: PlayerIntelligenceSample, kind: "nba" | "market") { if (!sample.overall) return sample.qualified ? "No combined neutral score" : "Small sample"; return kind === "nba" ? `Combined impact · ${sample.overall.z_score > 0 ? "+" : ""}${sample.overall.z_score.toFixed(2)} z` : "Ranked within availability market"; }
 function formatValue(category: PlayerIntelligenceCategory) { if (category.value == null) return "—"; if (category.key === "fg_pct" || category.key === "ft_pct") return `${category.value.toFixed(1)}%`; return category.value.toFixed(category.value >= 10 ? 1 : 2); }
 function injuryLabel(injury: NonNullable<PlayerIntelligence["player"]["injury"]>) { return [injury.body_part, injury.detail ?? injury.status.replaceAll("_", " ")].filter(Boolean).join(" · "); }
 function formatTimestamp(value: string | null) { if (!value) return "unavailable"; return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Athens" }).format(new Date(value)); }
