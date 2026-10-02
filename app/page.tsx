@@ -18,11 +18,8 @@ import {
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
 import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
-import {
-  ownedPlayersByTeam,
-  ownedPlayersForGame,
-  type OwnedPlayer,
-} from "@/lib/scoreboardOwnership";
+import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
+import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 
 export default async function Home() {
   const context = await loadCurrentFantasyContext().catch(() => ({
@@ -68,6 +65,18 @@ export default async function Home() {
 
   const ownedByTeam = ownedPlayersByTeam(personalTeams);
   const showLeagueLabels = new Set(personalTeams.map((team) => team.league)).size > 1;
+  const scoreboardItems: ScoreboardItem[] = games.map((g) => {
+    const isLive = !g.completed && g.status !== "Scheduled";
+    return {
+      id: g.id,
+      away: g.away,
+      home: g.home,
+      completed: g.completed,
+      showScore: g.completed || isLive,
+      displayStatus: g.completed || isLive ? g.status : formatGameDate(g.date) ?? g.status,
+      ownedPlayers: ownedPlayersForGame(ownedByTeam, g),
+    };
+  });
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
@@ -86,42 +95,7 @@ export default async function Home() {
       />
 
       {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">
-          NBA Scoreboard
-        </h2>
-        {games.length === 0 ? (
-          <p className="text-sm text-slate-400">No games scheduled.</p>
-        ) : (
-          <div className="flex flex-wrap gap-3">
-            {games.map((g) => {
-              const ownedPlayers = ownedPlayersForGame(ownedByTeam, g);
-              const isLive = !g.completed && g.status !== "Scheduled";
-              const showScore = g.completed || isLive;
-              const displayStatus = g.completed || isLive
-                ? g.status
-                : formatGameDate(g.date) ?? g.status;
-
-              return (
-                <div
-                  key={g.id}
-                  className={`flex min-w-[220px] flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${ownedPlayers.length > 0 ? "border-blue-300 ring-1 ring-blue-200 dark:border-blue-500 dark:ring-blue-900" : "border-slate-200 dark:border-slate-700"}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <TeamScore team={g.away} showScore={showScore} />
-                    <span className="text-xs font-medium text-slate-400">@</span>
-                    <TeamScore team={g.home} showScore={showScore} />
-                    <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${g.completed ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"}`}>
-                      {displayStatus}
-                    </span>
-                  </div>
-                  <OwnedPlayersLine players={ownedPlayers} showLeague={showLeagueLabels} />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <HomeScoreboard items={scoreboardItems} showLeague={showLeagueLabels} />
 
       <HomeRadarPanels radars={radarPanels} />
 
@@ -713,36 +687,6 @@ function TeamIdentity({
       <p className="truncate text-sm font-bold leading-tight text-slate-800 dark:text-slate-100">
         {team.name}
       </p>
-    </div>
-  );
-}
-
-function OwnedPlayersLine({ players, showLeague }: { players: OwnedPlayer[]; showLeague: boolean }) {
-  if (players.length === 0) return null;
-  return (
-    <p className="text-xs text-blue-700 dark:text-blue-300">
-      <span className="font-semibold">Your players: </span>
-      {players
-        .map((player) => `${player.name}${showLeague ? ` (${player.leagueName})` : ""}${player.injured ? " · injured" : ""}`)
-        .join(" · ")}
-    </p>
-  );
-}
-
-function TeamScore({ team, showScore }: { team: { name: string; short: string; logo: string | null; score: string | null; winner: boolean }; showScore: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      {team.logo && <img src={team.logo} alt={team.short} className="h-7 w-7 object-contain" />}
-      <div>
-        <p className={`text-sm font-bold ${team.winner ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}>
-          {team.short}
-        </p>
-        {showScore && (
-          <p className={`text-sm tabular-nums ${team.winner ? "font-bold text-slate-900 dark:text-slate-100" : "text-slate-500"}`}>
-            {team.score ?? "—"}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

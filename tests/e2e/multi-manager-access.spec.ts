@@ -135,9 +135,33 @@ test("scoreboard highlights games featuring the signed-in manager's own players"
   await expect(unownedCard.getByText("Your players:")).toHaveCount(0);
 });
 
-test("scoreboard shows no personal highlights to visitors without a membership", async ({ page }) => {
+test("scoreboard \"Mine only\" toggle filters to games with the manager's players and restores", async ({ page, request }) => {
+  const tokenA = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
+  await page.goto(app);
+
+  const toggle = page.getByRole("button", { name: "Mine only (1)" });
+  const ownedCard = page.locator("div.rounded-xl", { hasText: "MIN" }).filter({ hasText: "NO" });
+  const unownedCard = page.locator("div.rounded-xl", { hasText: "BOS" }).filter({ hasText: "NY" });
+
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(ownedCard).toHaveCount(1);
+  await expect(unownedCard).toHaveCount(1);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(ownedCard).toHaveCount(1);
+  await expect(unownedCard).toHaveCount(0);
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(unownedCard).toHaveCount(1);
+});
+
+test("scoreboard shows no personal highlights or toggle to visitors without a membership", async ({ page }) => {
   await page.goto(app);
   await expect(page.getByText("Your players:")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Mine only/ })).toHaveCount(0);
 });
 
 test("free-agent fit explains the weighted score without treating salary or risk as scored", async ({ page, request }) => {
