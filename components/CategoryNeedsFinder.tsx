@@ -220,7 +220,7 @@ export default function CategoryNeedsFinder({
               <p><strong className="text-slate-900 dark:text-white">Market rank:</strong> free agents and rostered trade targets are ranked separately from their absolute z-score.</p>
               <p><strong className="text-slate-900 dark:text-white">FG% and FT%:</strong> shooting impact accounts for attempt volume, not percentage alone.</p>
               <p><strong className="text-slate-900 dark:text-white">Turnovers:</strong> lower is better, so fewer turnovers produce a more positive score.</p>
-              <p><strong className="text-slate-900 dark:text-white">Overall fit:</strong> combines category scores and gives more weight to your team&apos;s deeper weaknesses.</p>
+              <p><strong className="text-slate-900 dark:text-white">Overall fit:</strong> combines category scores and gives more weight to your team&apos;s deeper weaknesses. Sample confidence reflects games recorded, not expected future minutes.</p>
             </div>
           </details>
           {targets.fallback_reason && (
@@ -270,9 +270,9 @@ export default function CategoryNeedsFinder({
 
 const MARKET_PRESENTATION = {
   strong: {
-    label: "Strong FA options",
+    label: "Category help available",
     className: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
-    description: "At least one available player provides a meaningful improvement without damaging another selected need.",
+    description: "At least one free agent meets the statistical threshold for this category without materially hurting another selected need. Expected minutes and role are not assessed.",
   },
   limited: {
     label: "Limited FA market",
@@ -315,7 +315,7 @@ function RecommendationLane({
         <p className="mt-1 text-sm opacity-90">{lane.message ?? market.description}</p>
       </div>
 
-      <RecommendationGroup league={league} title="Strong free agents" description="Clear additions for this category with controlled downside." players={lane.strong_free_agents} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} />
+      <RecommendationGroup league={league} title={`${lane.label} statistical helpers`} description="Category impact from recorded games, not a pickup recommendation. Check expected minutes, role and availability." players={lane.strong_free_agents} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} />
       <RecommendationGroup league={league} title="Best available" description="Relative market leaders, although their absolute improvement is modest." players={lane.best_available} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} />
       <RecommendationGroup league={league} title="Trade targets" description="Rostered players worth exploring when free agency cannot provide enough help." players={lane.trade_targets} categoryKey={lane.key} categoryLabel={lane.label} watchedIds={watchedIds} watchlistReady={watchlistReady} pendingWatchId={pendingWatchId} onWatch={onWatch} tone="trade" />
       {lane.last_resort.length > 0 && (
@@ -410,7 +410,7 @@ function CandidateCard({
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{player.availability === "free_agent" ? "Free agent" : player.fantasy_team?.name ?? "Rostered"}</span>
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{player.confidence} confidence</span>
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{player.confidence} sample coverage</span>
         {player.availability_rank && player.availability_of && (
           <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">Market #{player.availability_rank} of {player.availability_of}</span>
         )}
@@ -464,7 +464,7 @@ function CandidateCard({
 
 function faFitConclusion(player: FantasyTargetCandidate): string {
   const reasons = player.recommendation_reason_codes ?? [];
-  if (reasons.includes("absolute_category_helper")) return "meaningful help for a selected need, with controlled trade-offs";
+  if (reasons.includes("absolute_category_helper")) return "statistical help for a selected need; future role and minutes unassessed";
   if (reasons.includes("top_of_available_market")) return "best in this market, but not a strong absolute helper";
   if (reasons.includes("below_strong_and_best_available_thresholds")) return "last-resort option; stronger alternatives are preferable";
   return "no qualifying recommendation lane for the selected needs";
