@@ -18,6 +18,11 @@ import {
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
 import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
+import {
+  ownedPlayersByTeam,
+  ownedPlayersForGame,
+  type OwnedPlayer,
+} from "@/lib/scoreboardOwnership";
 
 export default async function Home() {
   const context = await loadCurrentFantasyContext().catch(() => ({
@@ -61,6 +66,9 @@ export default async function Home() {
     ]),
   ]);
 
+  const ownedByTeam = ownedPlayersByTeam(personalTeams);
+  const showLeagueLabels = new Set(personalTeams.map((team) => team.league)).size > 1;
+
   return (
     <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
 
@@ -87,6 +95,7 @@ export default async function Home() {
         ) : (
           <div className="flex flex-wrap gap-3">
             {games.map((g) => {
+              const ownedPlayers = ownedPlayersForGame(ownedByTeam, g);
               const isLive = !g.completed && g.status !== "Scheduled";
               const showScore = g.completed || isLive;
               const displayStatus = g.completed || isLive
@@ -94,13 +103,19 @@ export default async function Home() {
                 : formatGameDate(g.date) ?? g.status;
 
               return (
-                <div key={g.id} className="flex min-w-[220px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-                  <TeamScore team={g.away} showScore={showScore} />
-                  <span className="text-xs font-medium text-slate-400">@</span>
-                  <TeamScore team={g.home} showScore={showScore} />
-                  <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${g.completed ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"}`}>
-                    {displayStatus}
-                  </span>
+                <div
+                  key={g.id}
+                  className={`flex min-w-[220px] flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${ownedPlayers.length > 0 ? "border-blue-300 ring-1 ring-blue-200 dark:border-blue-500 dark:ring-blue-900" : "border-slate-200 dark:border-slate-700"}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <TeamScore team={g.away} showScore={showScore} />
+                    <span className="text-xs font-medium text-slate-400">@</span>
+                    <TeamScore team={g.home} showScore={showScore} />
+                    <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${g.completed ? "bg-slate-100 text-slate-500 dark:bg-slate-800" : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"}`}>
+                      {displayStatus}
+                    </span>
+                  </div>
+                  <OwnedPlayersLine players={ownedPlayers} showLeague={showLeagueLabels} />
                 </div>
               );
             })}
@@ -699,6 +714,18 @@ function TeamIdentity({
         {team.name}
       </p>
     </div>
+  );
+}
+
+function OwnedPlayersLine({ players, showLeague }: { players: OwnedPlayer[]; showLeague: boolean }) {
+  if (players.length === 0) return null;
+  return (
+    <p className="text-xs text-blue-700 dark:text-blue-300">
+      <span className="font-semibold">Your players: </span>
+      {players
+        .map((player) => `${player.name}${showLeague ? ` (${player.leagueName})` : ""}${player.injured ? " · injured" : ""}`)
+        .join(" · ")}
+    </p>
   );
 }
 

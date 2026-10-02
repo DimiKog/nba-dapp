@@ -118,6 +118,28 @@ test("Manager Today recommendations stay isolated per manager membership", async
   await expect(page.getByText("38", { exact: true })).toBeVisible();
 });
 
+test("scoreboard highlights games featuring the signed-in manager's own players", async ({ page, request }) => {
+  const tokenA = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
+  await page.goto(app);
+
+  await expect(page.getByText("Your players:")).toHaveCount(1);
+  await expect(page.getByText(/Player 2 \(LDL\)/)).toBeVisible();
+  await expect(page.getByText(/Player 2 \(BδB\)/)).toBeVisible();
+  const ownedCard = page.locator("div.rounded-xl", { hasText: "MIN" }).filter({ hasText: "NO" });
+  await expect(ownedCard).toHaveCount(1);
+  await expect(ownedCard.getByText("Your players:")).toBeVisible();
+  await expect(ownedCard).toHaveClass(/border-blue-300/);
+  const unownedCard = page.locator("div.rounded-xl", { hasText: "BOS" }).filter({ hasText: "NY" });
+  await expect(unownedCard).toHaveCount(1);
+  await expect(unownedCard.getByText("Your players:")).toHaveCount(0);
+});
+
+test("scoreboard shows no personal highlights to visitors without a membership", async ({ page }) => {
+  await page.goto(app);
+  await expect(page.getByText("Your players:")).toHaveCount(0);
+});
+
 test("free-agent fit explains the weighted score without treating salary or risk as scored", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
