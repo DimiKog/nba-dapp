@@ -123,7 +123,7 @@ test("free-agent fit explains the weighted score without treating salary or risk
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
   await page.getByText("Explore all 1 eligible candidates").click();
-  await expect(page.getByText("Model: meaningful help for a selected need, with controlled trade-offs")).toBeVisible();
+  await expect(page.getByText("Model: statistical help for a selected need; future role and minutes unassessed")).toBeVisible();
   await page.getByText("How is this scored?").click();
   await expect(page.getByText(/Salary, tokens, future role and injury risk are not in this score/)).toBeVisible();
 });
