@@ -160,7 +160,20 @@ const server = createServer((request, response) => {
     const nbaId = Number(researchMatch[1]);
     return send(response, 200, playerResearchFixture(nbaId));
   }
-  if (url.pathname === "/api/nba/scoreboard" || url.pathname === "/api/nba/news") {
+  if (url.pathname === "/api/nba/scoreboard") {
+    const team = (name, short) => ({ name, short, logo: null, score: null, winner: false });
+    return send(response, 200, [
+      {
+        id: "e2e-game-owned", date: "2026-10-09T23:00:00Z", status: "Scheduled", completed: false,
+        away: team("New Orleans Pelicans", "NO"), home: team("Minnesota Timberwolves", "MIN"),
+      },
+      {
+        id: "e2e-game-unowned", date: "2026-10-09T23:30:00Z", status: "Scheduled", completed: false,
+        away: team("New York Knicks", "NY"), home: team("Boston Celtics", "BOS"),
+      },
+    ]);
+  }
+  if (url.pathname === "/api/nba/news") {
     return send(response, 200, []);
   }
   if (/^\/api\/fantasy\/(ldl|bdb)\/standings$/.test(url.pathname)) {
@@ -422,8 +435,8 @@ function rosterPerformanceFixture(league, membership, incomplete) {
       player_id: 20_000 + index,
       name: `Fixture Player ${index + 1}`,
       short_name: `Player ${index + 1}`,
-      nba_team: "Test Team",
-      nba_team_short: "TST",
+      nba_team: index === 1 ? "Minnesota Timberwolves" : "Test Team",
+      nba_team_short: index === 1 ? "MIN" : "TST",
       position: "G",
       photo: null,
       fantasy_team: null,
