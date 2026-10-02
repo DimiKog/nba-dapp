@@ -169,8 +169,22 @@ const server = createServer((request, response) => {
   if (/^\/api\/fantasy\/(ldl|bdb)\/free-agent-radar$/.test(url.pathname)) {
     return send(response, 200, {
       league: { slug: url.pathname.includes("/bdb/") ? "bdb" : "ldl", name: "Test league" },
-      categories: [],
-      players: [],
+      categories: ["points"], minimum_games: 3,
+      window: { days: 7, from: "2026-10-01", to: "2026-10-08", season: "2026-27" },
+      players: [{
+        player_id: 21001, nba_id: 21001, name: "Radar Test Player", nba_team: "Test Team",
+        position: "G", photo: null, salary_2026_27: null,
+        window_stats: { games: 4 }, season_average: { games: 20 }, recent_average: { games: 4 },
+        trend_rank: 1, trend_score: 1.25, trend_confidence: "medium",
+        trend_strengths: ["PTS"], category_trends: { PTS: { recent: 18, season: 14, delta: 4, improved: true } },
+        trend_explanation: {
+          schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",
+          reason_code: "recent_vs_season_standardized_category_deltas",
+          recent_games: 4, season_games: 20, minimum_recent_games: 3, score: 1.25,
+          category_contributions: [{ key: "points", label: "PTS", standardized_delta: 1.25, recent: 18, season: 14 }],
+          team_need_fit_in_score: false, salary_and_tokens_in_score: false,
+        },
+      }],
     });
   }
   const ledgerMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/commissioner\/completed-trades$/);
@@ -200,6 +214,16 @@ const server = createServer((request, response) => {
     if (!membership) return send(response, 403, { error: "Not your team" });
     const incomplete = teamId === "bdb-team-b";
     return send(response, 200, rosterPerformanceFixture(league, membership, incomplete));
+  }
+  const rosterMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)$/);
+  if (rosterMatch) {
+    const [, league, teamId] = rosterMatch;
+    const membership = membershipByTeam(league, teamId);
+    if (!membership) return send(response, 404, { error: "Team not found" });
+    return send(response, 200, {
+      team_id: teamId, team_name: membership.franchise_name,
+      logo: null, owner: null, players: [],
+    });
   }
   const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players$/);
   if (playersMatch) {
@@ -463,6 +487,14 @@ function targetsFixture(league, membership, managerId) {
       fantasy_team: null,
       fit_rank: 1,
       fit_score: managerId === 1 ? 1.25 : 0.85,
+      fit_explanation: {
+        schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
+        sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,
+        contributions_field: "need_contributions", market_rank_separate_from_score: true,
+        salary_and_tokens_in_score: false, future_role_and_injury_risk_in_score: false,
+      },
+      recommendation_reason_codes: ["absolute_category_helper", "controlled_tradeoffs"],
+      need_contributions: [{ key: "ft_pct", label: "FT%", player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
       confidence: "high",
       recommendation_tier: "strong",
       recommendation_labels: ["fixture"],

@@ -392,6 +392,9 @@ function CandidateCard({
     ? player.need_contributions?.find((item) => item.key === categoryKey)
     : undefined;
   const categoryZ = categoryContribution?.absolute_z ?? categoryContribution?.player_z;
+  const fit = player.fit_explanation;
+  const rankedContributions = [...(player.need_contributions ?? [])]
+    .sort((a, b) => Math.abs(b.weighted_contribution) - Math.abs(a.weighted_contribution));
   return (
     <article className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex items-start gap-3">
@@ -420,6 +423,18 @@ function CandidateCard({
           )}
         </div>
       )}
+      {fit && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+        <p className="font-black text-slate-900 dark:text-white">Model: {faFitConclusion(player)}</p>
+        <p className="mt-1 text-slate-600 dark:text-slate-300">Weighted fit {player.fit_score >= 0 ? "+" : ""}{player.fit_score.toFixed(2)} · {fit.basis_used} sample, {fit.sample_games} games.</p>
+        <details className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+          <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">How is this scored?</summary>
+          <p className="mt-2 text-slate-600 dark:text-slate-300">Each need&apos;s player z-score is multiplied by its team-need weight; the sum is divided by the total weight. Market rank is separate.</p>
+          {rankedContributions.length > 0 && <ul className="mt-2 space-y-1">
+            {rankedContributions.map((item) => <li key={item.key} className="flex justify-between gap-2"><span>{item.label} · {item.player_z >= 0 ? "+" : ""}{item.player_z.toFixed(2)}z × {item.weight.toFixed(1)}</span><strong className={item.weighted_contribution >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>{item.weighted_contribution >= 0 ? "+" : ""}{item.weighted_contribution.toFixed(2)}</strong></li>)}
+          </ul>}
+          <p className="mt-2 text-slate-500 dark:text-slate-400">Salary, tokens, future role and injury risk are not in this score. Review them separately; this model does not learn from saved player notes.</p>
+        </details>
+      </div>}
       <DetailRow label="Helps" values={player.helps} tone="positive" />
       <DetailRow label="Trade-offs" values={player.tradeoffs} tone="negative" />
       <div className="mt-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
@@ -445,6 +460,14 @@ function CandidateCard({
       </div>
     </article>
   );
+}
+
+function faFitConclusion(player: FantasyTargetCandidate): string {
+  const reasons = player.recommendation_reason_codes ?? [];
+  if (reasons.includes("absolute_category_helper")) return "meaningful help for a selected need, with controlled trade-offs";
+  if (reasons.includes("top_of_available_market")) return "best in this market, but not a strong absolute helper";
+  if (reasons.includes("below_strong_and_best_available_thresholds")) return "last-resort option; stronger alternatives are preferable";
+  return "no qualifying recommendation lane for the selected needs";
 }
 
 function formatInjury(injury: FantasyTargetCandidate["injury"]) {

@@ -1470,6 +1470,8 @@ function ExactPackageResult({ payload, league, onAnalyzeExpandedPickPackage }: {
             player={player}
             modelFit={`Category fit ${formatSigned(payload.selected_team.category_score.score)}`}
             categoryChanges={payload.selected_team.category_changes}
+            explanation={payload.decision_explanation}
+            capStatus={capResultLabel(payload.selected_team.payroll.current_cap_result)}
           />
         ))}
         <OneForTwoSuggestionCard
@@ -1516,7 +1518,17 @@ function PickForPlayerResult({ payload, league, onAnalyzeExpandedPickPackage }: 
       </div>
       <AcquisitionContextPanel context={payload.acquisition_context} />
       <div className="space-y-4 p-4">
-        {player?.nba_id && <ReviewedInjuryNotice league={league} nbaId={player.nba_id} />}
+        {player?.nba_id && !payload.decision_explanation && <ReviewedInjuryNotice league={league} nbaId={player.nba_id} />}
+        {player?.nba_id && payload.decision_explanation && <div className="-mx-4">
+          <TradeDecisionComparison
+            league={league}
+            player={player}
+            modelFit={`Category fit ${formatSigned(payload.selected_team.category_score.score)}`}
+            categoryChanges={payload.selected_team.category_changes}
+            explanation={payload.decision_explanation}
+            capStatus={capResultLabel(payload.selected_team.payroll.current_cap_result)}
+          />
+        </div>}
         {payload.completion_status !== "legal_as_proposed" && payload.completion_status !== "legal_with_drop" && (
           <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
             Provisional analysis: salary and categories below show the pick-only trade as entered, before any roster-completion move. They are not the final completed-trade result.

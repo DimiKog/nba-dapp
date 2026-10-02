@@ -416,7 +416,7 @@ function RadarCard({
             <div>
               <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
                 {player.trend_rank != null
-                  ? `#${player.trend_rank} upward trend`
+                  ? `#${player.trend_rank} recent-trend rank`
                   : "Available free agent · season reference"}
               </p>
               <h3 className="font-black text-slate-950 dark:text-white">{player.name}</h3>
@@ -448,6 +448,7 @@ function RadarCard({
               ))}
             </div>
           )}
+          {player.trend_explanation && <RadarScoreExplanation player={player} />}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
             <span>
               {player.trend_rank != null
@@ -465,6 +466,28 @@ function RadarCard({
       </div>
     </article>
   );
+}
+
+function RadarScoreExplanation({ player }: { player: FantasyRadarPlayer }) {
+  const explanation = player.trend_explanation;
+  if (!explanation) return null;
+  const contributions = [...explanation.category_contributions]
+    .sort((a, b) => Math.abs(b.standardized_delta) - Math.abs(a.standardized_delta));
+  return <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+    <p className="font-black text-slate-900 dark:text-white">{explanation.status === "scored"
+      ? `Recent trend ${explanation.score != null && explanation.score >= 0 ? "+" : ""}${explanation.score?.toFixed(2) ?? "—"} · ${explanation.recent_games} recent games`
+      : `No trend score yet · ${explanation.recent_games}/${explanation.minimum_recent_games} recent games`}</p>
+    <p className="mt-1 text-slate-600 dark:text-slate-300">{explanation.status === "scored"
+      ? "Change against this player's season average, standardized across eligible free agents. Not a team-fit or pickup recommendation."
+      : "The recent sample does not meet the minimum; season stats are context only."}</p>
+    {contributions.length > 0 && <details className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-700">
+      <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">Which categories drive the trend?</summary>
+      <ul className="mt-2 space-y-1">
+        {contributions.map((item) => <li key={item.key} className="flex justify-between gap-2"><span>{item.label}: {item.season.toFixed(2)} → {item.recent.toFixed(2)}</span><strong className={item.standardized_delta >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>{item.standardized_delta >= 0 ? "+" : ""}{item.standardized_delta.toFixed(2)}</strong></li>)}
+      </ul>
+      <p className="mt-2 text-slate-500 dark:text-slate-400">Salary, tokens and your team needs do not enter this score. It updates when fresh games arrive; it does not learn from your assessments.</p>
+    </details>}
+  </div>;
 }
 
 function TrendChips({
