@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { PlayerResearchEvidence, TradeCategoryChange } from "@/lib/api";
+import type { PlayerResearchEvidence, TradeCategoryChange, TradePackageDecisionExplanation } from "@/lib/api";
 import {
   deletePrivateOutlook, EMPTY_PRIVATE_OUTLOOK, fetchPrivateOutlook,
   PRIVATE_OUTLOOK_UPDATED, savePrivateOutlook, type PrivateTradeOutlook,
@@ -26,12 +26,14 @@ function profileStorageKey(league: "ldl" | "bdb", nbaId: number): string {
 }
 
 export function TradeDecisionComparison({
-  league, player, modelFit, categoryChanges,
+  league, player, modelFit, categoryChanges, explanation, capStatus,
 }: {
   league: "ldl" | "bdb";
   player: ResearchPlayer;
   modelFit: string;
   categoryChanges: TradeCategoryChange[];
+  explanation?: TradePackageDecisionExplanation;
+  capStatus?: string;
 }) {
   const [saved, setSaved] = useState<DecisionBrief | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -53,10 +55,16 @@ export function TradeDecisionComparison({
     .filter((change) => change.z_delta != null && Number.isFinite(change.z_delta))
     .sort((left, right) => Math.abs(right.z_delta!) - Math.abs(left.z_delta!))
     .slice(0, 3);
+  const reasons = explanation?.tier_reason_codes.map(explainTradeReason) ?? [];
+  const conclusion = explanation ? tradeConclusion(explanation, reasons) : null;
 
   return (
     <section className="mx-4 my-4 rounded-xl border border-indigo-300 bg-white p-4 dark:border-indigo-700 dark:bg-slate-900" aria-label={`Model and private assessment for ${player.name}`}>
       <p className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-indigo-700 dark:text-indigo-300">Decision at a glance</p>
+      {conclusion && <div className={`mb-3 rounded-lg border px-3 py-2 ${conclusion.tone}`}>
+        <p className="text-sm font-black">{conclusion.title}</p>
+        <p className="mt-0.5 text-xs">{conclusion.detail}</p>
+      </div>}
       <div className="mb-3"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg bg-blue-50 p-4 dark:bg-blue-950/40">
@@ -71,6 +79,10 @@ export function TradeDecisionComparison({
                 {change.label} {change.z_delta! > 0 ? "+" : ""}{change.z_delta!.toFixed(2)}z
               </span>
             ))}
+          </div>}
+          {explanation && <div className="mt-3 border-t border-blue-200 pt-2 text-xs dark:border-blue-900">
+            <p className="font-black text-slate-800 dark:text-slate-100">{explanation.current_season_cap.season} payroll: {formatPayrollDelta(explanation.current_season_cap.payroll_delta)}</p>
+            <p className="text-slate-600 dark:text-slate-300">{capStatus ?? "Cap policy shown in full package"}{explanation.current_season_cap.after_remaining != null ? ` · ${formatPayrollAmount(explanation.current_season_cap.after_remaining)} remaining` : ""}</p>
           </div>}
         </div>
         <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-950/40">
@@ -90,9 +102,69 @@ export function TradeDecisionComparison({
           )}
         </div>
       </div>
+      {explanation && <details className="mt-3 rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:text-slate-200">
+        <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">Why did the model reach this result?</summary>
+        <ul className="mt-2 space-y-1">
+          <li>Category fit: {explanation.checks.category_fit.passed ? "passes" : "does not pass"} ({explanation.checks.category_fit.score >= 0 ? "+" : ""}{explanation.checks.category_fit.score.toFixed(2)}).</li>
+          <li>Partner incentive: {explanation.checks.partner_incentive.status}.</li>
+          <li>Roster boundary: {explanation.checks.roster_boundary.passed ? "available" : "not established"}; package {explanation.completion.legal_as_entered ? "legal as entered" : "needs a completion or legality review"}.</li>
+          <li>Player value: {explanation.checks.player_value.classification.replaceAll("_", " ")}.</li>
+          {reasons.map((reason, index) => <li key={`${reason}-${index}`}>Tier reason: {reason}.</li>)}
+        </ul>
+        <p className="mt-2 text-slate-500 dark:text-slate-400">Pick value and your private outlook do not change this model tier. This is a fixed rule-based assessment, not a model learning from your notes.</p>
+      </details>}
       <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">Different lenses, not two comparable scores. Your assessment never changes the model result. Edit it under player outlook and sources.</p>
     </section>
   );
+}
+
+function explainTradeReason(code: string): string {
+  const labels: Record<string, string> = {
+    category_fit_negative: "the package weakens your weighted category fit",
+    partner_incentive_neutral: "the partner has no clear measured incentive",
+    partner_incentive_negative: "the partner's measured result is negative",
+    partner_incentive_blocked: "the partner's incentive check is blocked",
+    roster_boundary_unavailable: "the roster replacement boundary is not available",
+    player_value_materially_equivalent: "player production is only approximately balanced",
+    player_value_uneven: "player production is uneven",
+    player_value_severely_uneven: "player production has a major gap",
+    player_value_unknown: "player production value cannot be confirmed",
+    pick_for_player_player_value_not_assessed: "a pick-for-player exchange has no combined player-value verdict",
+  };
+  return labels[code] ?? code.replaceAll("_", " ");
+}
+
+function tradeConclusion(explanation: TradePackageDecisionExplanation, reasons: string[]) {
+  if (!explanation.completion.legal_as_entered) return {
+    title: "Not ready to propose as entered",
+    detail: explanation.completion.status === "illegal"
+      ? "The roster or cap rules fail for this package. Category and player-value checks are separate from legality."
+      : "A roster or DPE decision is still required. Recalculate the completed package before proposing it.",
+    tone: "border-red-200 bg-red-50 text-red-950 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200",
+  };
+  if (explanation.recommendation_tier === "proposable") return {
+    title: "The package passes the model checks",
+    detail: "Category fit, partner incentive and player value clear the measured gates. Review player outlook before deciding.",
+    tone: "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200",
+  };
+  if (explanation.recommendation_tier === "not_assessed") return {
+    title: "No full player-value verdict for this package",
+    detail: reasons[0] ?? "Review the completed package before treating this as a proposal.",
+    tone: "border-slate-200 bg-slate-50 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100",
+  };
+  return {
+    title: explanation.recommendation_tier === "not_recommended" ? "The model does not recommend this package" : "Explore only — not a clear proposal",
+    detail: reasons.length ? `${reasons.slice(0, 2).join("; ")}${reasons.length > 2 ? `; plus ${reasons.length - 2} more check${reasons.length - 2 === 1 ? "" : "s"}` : ""}.` : "One or more measured checks do not clear the current thresholds.",
+    tone: "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200",
+  };
+}
+
+function formatPayrollAmount(amount: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 1, notation: "compact" }).format(amount);
+}
+
+function formatPayrollDelta(amount: number): string {
+  return `${amount > 0 ? "+" : ""}${formatPayrollAmount(amount)}`;
 }
 
 export function TradeProfileSignal({

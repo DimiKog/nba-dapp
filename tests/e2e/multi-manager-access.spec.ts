@@ -118,6 +118,26 @@ test("Manager Today recommendations stay isolated per manager membership", async
   await expect(page.getByText("38", { exact: true })).toBeVisible();
 });
 
+test("free-agent fit explains the weighted score without treating salary or risk as scored", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+  await page.getByText("Explore all 1 eligible candidates").click();
+  await expect(page.getByText("Model: meaningful help for a selected need, with controlled trade-offs")).toBeVisible();
+  await page.getByText("How is this scored?").click();
+  await expect(page.getByText(/Salary, tokens, future role and injury risk are not in this score/)).toBeVisible();
+});
+
+test("free-agent radar distinguishes recent trend from team fit", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/watchlist?league=ldl`);
+  await expect(page.getByText("Recent trend +1.25 · 4 recent games")).toBeVisible();
+  await expect(page.getByText(/Not a team-fit or pickup recommendation/)).toBeVisible();
+  await page.getByText("Which categories drive the trend?").click();
+  await expect(page.getByText("PTS: 14.00 → 18.00")).toBeVisible();
+});
+
 test("trade suggestions are restricted to the signed-in manager team", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),
@@ -209,6 +229,18 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
         analysis_scope: "player_package",
         completion_status: "legal_as_proposed",
         recommendation_tier: "proposable",
+        decision_explanation: {
+          schema_version: 1, recommendation_tier: "proposable", tier_reason_codes: [],
+          checks: {
+            category_fit: { passed: true, score: 0, reason_code: "category_fit_nonnegative" },
+            partner_incentive: { passed: true, status: "positive", reason_code: "partner_incentive_positive" },
+            roster_boundary: { passed: true, reason_code: "roster_boundary_available" },
+            player_value: { passed: true, classification: "balanced", reason_code: "player_value_balanced" },
+          },
+          completion: { status: "legal_as_proposed", legal_as_entered: true, reason_code: "completion_legal_as_proposed" },
+          current_season_cap: { season: "2026-27", before_payroll: 100000000, after_payroll: 102000000, payroll_delta: 2000000, before_remaining: 15000000, after_remaining: 13000000, eligibility_reason_code: "remains_under" },
+          limitations: { pick_value_changes_tier: false, manager_outlook_changes_tier: false },
+        },
         acquisition_context: { status: "free_agency_open_cap_not_enforced", message: "Offseason context" },
         package: { selected_team_sends: [completionPlayer], counterparty_team_sends: [incomingPlayer], drops: { selected_team: null, counterparty_team: null }, assets: [resolvedPick] },
         selected_team: { ...teamResult("ldl-team-a", "Manager A LDL", 14, 14), category_score: { score: 0 } },
@@ -279,6 +311,12 @@ test("pick-for-player advisor submits a canonical pick without an outgoing playe
   const comparison = page.getByRole("region", { name: "Model and private assessment for xrtc Player 1" });
   const exactResult = page.getByRole("heading", { name: "Exact trade package" }).locator("../..");
   await expect(comparison.getByText("Model · category impact")).toBeVisible();
+  await expect(comparison.getByText("The package passes the model checks")).toBeVisible();
+  await expect(comparison.getByText("2026-27 payroll: +$2M")).toBeVisible();
+  await expect(comparison.getByText("Why did the model reach this result?")).toBeVisible();
+  await expect(comparison.getByText(/Category fit: passes/)).not.toBeVisible();
+  await comparison.getByText("Why did the model reach this result?").click();
+  await expect(comparison.getByText(/Category fit: passes/)).toBeVisible();
   await expect(comparison.getByText("My assessment · xrtc Player 1")).toBeVisible();
   await expect(comparison.getByText("Not assessed")).toBeVisible();
   await expect(comparison.getByText("0 meaningful gains · 0 meaningful declines")).toBeVisible();

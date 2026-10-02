@@ -762,6 +762,7 @@ export type TradePackageCompletionStatus =
   | "legal_as_proposed"
   | "legal_with_drop"
   | "legal_as_expanded_package"
+  | "dpe_choice_required"
   | "roster_rules_unknown"
   | "illegal";
 
@@ -845,6 +846,29 @@ export interface TradePackageProductionValue {
     balanced: number;
     severely_uneven: number;
   };
+}
+
+export interface TradePackageDecisionExplanation {
+  schema_version: number;
+  recommendation_tier: "proposable" | "exploratory" | "not_recommended" | "not_assessed";
+  tier_reason_codes: string[];
+  checks: {
+    category_fit: { passed: boolean; score: number; reason_code: string };
+    partner_incentive: { passed: boolean; status: string; reason_code: string };
+    roster_boundary: { passed: boolean; reason_code: string };
+    player_value: { passed: boolean; classification: string; reason_code: string };
+  };
+  completion: { status: TradePackageCompletionStatus; legal_as_entered: boolean; reason_code: string };
+  current_season_cap: {
+    season: string;
+    before_payroll: number;
+    after_payroll: number;
+    payroll_delta: number;
+    before_remaining: number | null;
+    after_remaining: number | null;
+    eligibility_reason_code: string;
+  };
+  limitations: { pick_value_changes_tier: false; manager_outlook_changes_tier: false };
 }
 
 export interface TradePackageCompletionOption {
@@ -983,6 +1007,7 @@ export interface ExplicitPickSideAssessment {
 
 export interface FantasyTradePackageAnalysis extends AutomaticTradePackageSuggestion {
   analysis_scope: "player_package" | "pick_for_player_context";
+  decision_explanation?: TradePackageDecisionExplanation;
   player_value_recommendation_applied: boolean;
   acquisition_context: TradeAcquisitionContext;
   package: Omit<AutomaticTradePackageSuggestion["package"], "assets"> & {
@@ -1093,6 +1118,20 @@ export interface FantasyTargetCandidate {
   } | null;
   fit_rank: number;
   fit_score: number;
+  fit_explanation?: {
+    schema_version: number;
+    score_kind: "team_need_weighted_player_z";
+    basis_used: string;
+    sample_games: number;
+    weighted_sum: number;
+    total_weight: number;
+    score: number;
+    contributions_field: "need_contributions";
+    market_rank_separate_from_score: boolean;
+    salary_and_tokens_in_score: false;
+    future_role_and_injury_risk_in_score: false;
+  };
+  recommendation_reason_codes?: string[];
   confidence: "high" | "medium" | "low";
   availability_rank?: number;
   availability_of?: number;
@@ -1227,6 +1266,25 @@ export interface FantasyRadarPlayer extends FantasyPlayerPerformance {
   trend_strengths: string[];
   trend_confidence: "high" | "medium" | "insufficient_sample";
   category_trends: Record<string, FantasyCategoryTrend>;
+  trend_explanation?: {
+    schema_version: number;
+    score_kind: "recent_vs_season_category_trend";
+    status: "scored" | "insufficient_sample";
+    reason_code: string;
+    recent_games: number;
+    season_games: number;
+    minimum_recent_games: number;
+    category_contributions: Array<{
+      key: string;
+      label: string;
+      standardized_delta: number;
+      recent: number;
+      season: number;
+    }>;
+    score?: number;
+    team_need_fit_in_score: false;
+    salary_and_tokens_in_score: false;
+  };
 }
 
 export interface FantasyFreeAgentRadar {
