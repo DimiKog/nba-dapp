@@ -155,6 +155,7 @@ export default function LeaguePlayerExplorer() {
       const searchable = [
         player.name,
         player.nba_team,
+        player.nba_status?.club,
         player.fantasy_team?.name,
         player.position,
       ].join(" ").toLowerCase();
@@ -599,7 +600,9 @@ function ExplorerMobileCard({
               <p className="mt-0.5 text-[11px] text-slate-500">
                 #{player.impact_rank ?? "—"}
                 {player.position ? ` · ${player.position}` : ""}
-                {player.nba_team ? ` · ${player.nba_team}` : ""}
+                {player.nba_status?.state === "outside_nba_confirmed"
+                  ? ` · ${player.nba_status.club} (outside NBA)`
+                  : player.nba_team ? ` · ${player.nba_team}` : ""}
               </p>
             </div>
             <p className="shrink-0 text-sm font-bold tabular-nums text-blue-700 dark:text-blue-400">
@@ -698,7 +701,12 @@ function PlayerDecisionPanel({
                 ? <FreeAgentBadge />
                 : player.status !== "Active" && <StatusBadge status={player.status} />}
             </div>
-            <p className="mt-1 text-sm text-slate-500">{player.nba_team || "NBA team unavailable"} · {player.position || "Position unavailable"}</p>
+            <p className="mt-1 text-sm text-slate-500">{nbaTeamDisplay(player)} · {player.position || "Position unavailable"}</p>
+            {player.nba_status?.state === "outside_nba_confirmed" && player.nba_status.source_url && (
+              <a href={player.nba_status.source_url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs font-semibold text-amber-700 underline dark:text-amber-300">
+                Verified club source · {player.nba_status.source_date} ↗
+              </a>
+            )}
             <div className="mt-3">
               <FantasyAvailability league={league} player={player} />
             </div>
@@ -820,6 +828,12 @@ function ComparisonTray({
   );
 }
 
+function nbaTeamDisplay(player: FantasyPlayerPerformance): string {
+  return player.nba_status?.state === "outside_nba_confirmed"
+    ? `${player.nba_status.club} · outside NBA`
+    : player.nba_team || "NBA team unverified";
+}
+
 function PlayerIdentity({ player }: { player: FantasyPlayerPerformance }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -827,7 +841,7 @@ function PlayerIdentity({ player }: { player: FantasyPlayerPerformance }) {
       <div className="min-w-0">
         <p className="truncate font-bold text-slate-950 dark:text-white">{player.name}</p>
         <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-          <span>{player.nba_team || "NBA team unavailable"}</span>
+          <span>{nbaTeamDisplay(player)}</span>
           {player.injury && <InjuryFlag showLabel />}
         </div>
       </div>

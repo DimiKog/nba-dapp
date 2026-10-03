@@ -286,6 +286,7 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
   availability_of?: number | null;
   nba_relevance?: "current_or_recent" | "legacy_only";
   nba_relevance_evidence?: Array<"current_team" | "current_salary" | "recent_performance">;
+  nba_status?: NbaStatusEvidence;
   tenure?: {
     fantasy_season: string;
     year: number;
@@ -332,6 +333,15 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
     stats: string | null;
     injury: string | null;
   };
+}
+
+export interface NbaStatusEvidence {
+  state: "verified_nba_roster" | "outside_nba_confirmed" | "waived_event" | "unverified";
+  club: string | null;
+  source_url: string | null;
+  source_date: string | null;
+  review_due_on: string | null;
+  recommendation_eligible: boolean;
 }
 
 export interface FantasyRosterPerformance {
@@ -1107,6 +1117,7 @@ export interface FantasyTargetCandidate {
   short_name: string;
   nba_team: string;
   nba_team_short: string;
+  nba_status?: NbaStatusEvidence;
   position: string;
   photo: string | null;
   availability: "free_agent" | "rostered";
