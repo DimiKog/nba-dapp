@@ -600,8 +600,8 @@ function ExplorerMobileCard({
               <p className="mt-0.5 text-[11px] text-slate-500">
                 #{player.impact_rank ?? "—"}
                 {player.position ? ` · ${player.position}` : ""}
-                {player.nba_status?.state === "outside_nba_confirmed"
-                  ? ` · ${player.nba_status.club} (outside NBA)`
+                {player.nba_status?.recommendation_eligible === false
+                  ? ` · ${player.nba_status.club} (NBA status review)`
                   : player.nba_team ? ` · ${player.nba_team}` : ""}
               </p>
             </div>
@@ -702,7 +702,7 @@ function PlayerDecisionPanel({
                 : player.status !== "Active" && <StatusBadge status={player.status} />}
             </div>
             <p className="mt-1 text-sm text-slate-500">{nbaTeamDisplay(player)} · {player.position || "Position unavailable"}</p>
-            {player.nba_status?.state === "outside_nba_confirmed" && player.nba_status.source_url && (
+            {player.nba_status?.recommendation_eligible === false && player.nba_status.source_url && (
               <a href={player.nba_status.source_url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs font-semibold text-amber-700 underline dark:text-amber-300">
                 Verified club source · {player.nba_status.source_date} ↗
               </a>
@@ -829,8 +829,8 @@ function ComparisonTray({
 }
 
 function nbaTeamDisplay(player: FantasyPlayerPerformance): string {
-  return player.nba_status?.state === "outside_nba_confirmed"
-    ? `${player.nba_status.club} · outside NBA`
+  return player.nba_status?.recommendation_eligible === false
+    ? `${player.nba_status.club} · ${player.nba_status.state === "outside_nba_confirmed" ? "outside NBA" : "NBA status review"}`
     : player.nba_team || "NBA team unverified";
 }
 

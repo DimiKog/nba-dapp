@@ -336,7 +336,7 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
 }
 
 export interface NbaStatusEvidence {
-  state: "verified_nba_roster" | "outside_nba_confirmed" | "waived_event" | "unverified";
+  state: "verified_nba_roster" | "outside_nba_confirmed" | "outside_nba_review_due" | "conflicting_evidence" | "waived_event" | "unverified";
   club: string | null;
   source_url: string | null;
   source_date: string | null;

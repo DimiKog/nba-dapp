@@ -330,8 +330,8 @@ function WatchlistCard({
                     ? "Fantasy free agent"
                     : player.fantasy_team?.name ?? "Rostered"
                   : "Player details unavailable"}
-                {player?.nba_status?.state === "outside_nba_confirmed"
-                  ? ` · Outside NBA: ${player.nba_status.club}`
+                {player?.nba_status?.recommendation_eligible === false
+                  ? ` · ${player.nba_status.club} (NBA status needs review)`
                   : player?.nba_team ? ` · ${player.nba_team}` : ""}
               </p>
               {player && (
@@ -424,8 +424,8 @@ function RadarCard({
               </p>
               <h3 className="font-black text-slate-950 dark:text-white">{player.name}</h3>
               <p className="text-xs text-slate-500">
-                {player.nba_status?.state === "outside_nba_confirmed"
-                  ? `${player.nba_status.club} · outside NBA`
+                {player.nba_status?.recommendation_eligible === false
+                  ? `${player.nba_status.club} · ${player.nba_status.state === "outside_nba_confirmed" ? "outside NBA" : "NBA status needs review"}`
                   : player.nba_team || "NBA team unverified"} · {player.position || "—"}
               </p>
             </div>
@@ -441,9 +441,14 @@ function RadarCard({
               </button>
             </div>
           </div>
-          {player.nba_status?.state === "outside_nba_confirmed" && (
+          {player.nba_status?.recommendation_eligible === false && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Confirmed outside NBA · excluded from pickup recommendations. {player.nba_status.source_date && `Source: ${player.nba_status.source_date}. `}{player.nba_status.source_url && (
+              {player.nba_status.state === "outside_nba_confirmed"
+                ? "Confirmed outside NBA"
+                : player.nba_status.state === "conflicting_evidence"
+                  ? "Conflicting NBA and club evidence — review required"
+                  : "Outside-NBA evidence is due for review"}
+              {" · excluded from pickup recommendations. "}{player.nba_status.source_date && `Source: ${player.nba_status.source_date}. `}{player.nba_status.source_url && (
                 <a href={player.nba_status.source_url} target="_blank" rel="noopener noreferrer" className="underline">
                   Club source ↗
                 </a>

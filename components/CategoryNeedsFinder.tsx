@@ -403,7 +403,7 @@ function CandidateCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <div><h3 className="truncate text-sm font-black text-slate-950 dark:text-white">{player.name}</h3><p className="text-xs text-slate-500">{player.nba_status?.state === "outside_nba_confirmed" ? `${player.nba_status.club} · outside NBA` : player.nba_team_short || player.nba_team || "NBA team unverified"} · {player.position}</p></div>
+            <div><h3 className="truncate text-sm font-black text-slate-950 dark:text-white">{player.name}</h3><p className="text-xs text-slate-500">{player.nba_status?.recommendation_eligible === false ? `${player.nba_status.club} · NBA status review` : player.nba_team_short || player.nba_team || "NBA team unverified"} · {player.position}</p></div>
             <div className="text-right"><p className="text-lg font-black tabular-nums text-blue-700 dark:text-blue-400">{player.fit_score > 0 ? "+" : ""}{player.fit_score.toFixed(2)}</p><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Fit #{player.fit_rank}</p></div>
           </div>
         </div>
@@ -415,9 +415,9 @@ function CandidateCard({
           <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">Market #{player.availability_rank} of {player.availability_of}</span>
         )}
       </div>
-      {player.nba_status?.state === "outside_nba_confirmed" && (
+      {player.nba_status?.recommendation_eligible === false && (
         <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-          Outside NBA · not a current pickup recommendation. {player.nba_status.source_date && `Source: ${player.nba_status.source_date}. `}{player.nba_status.source_url && (
+          NBA status requires review · not a current pickup recommendation. {player.nba_status.source_date && `Source: ${player.nba_status.source_date}. `}{player.nba_status.source_url && (
             <a href={player.nba_status.source_url} target="_blank" rel="noopener noreferrer" className="underline">Club source ↗</a>
           )}
         </p>
@@ -471,7 +471,7 @@ function CandidateCard({
 
 function faFitConclusion(player: FantasyTargetCandidate): string {
   const reasons = player.recommendation_reason_codes ?? [];
-  if (reasons.includes("outside_nba_confirmed")) return "statistical fit only; confirmed outside NBA and excluded from pickup recommendations";
+  if (reasons.some((reason) => ["outside_nba_confirmed", "outside_nba_review_due", "conflicting_evidence"].includes(reason))) return "statistical fit only; NBA status requires review before a pickup";
   if (reasons.includes("absolute_category_helper")) return "statistical help for a selected need; future role and minutes unassessed";
   if (reasons.includes("top_of_available_market")) return "best in this market, but not a strong absolute helper";
   if (reasons.includes("below_strong_and_best_available_thresholds")) return "last-resort option; stronger alternatives are preferable";
