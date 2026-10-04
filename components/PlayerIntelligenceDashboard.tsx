@@ -3,17 +3,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Contract, PlayerIntelligence, PlayerIntelligenceCategory, PlayerIntelligenceSample, photoUrl } from "@/lib/api";
+import { Contract, PlayerIntelligence, PlayerIntelligenceCategory, PlayerIntelligenceSample, PlayerPreseasonAverages, photoUrl } from "@/lib/api";
 import { overallDetail } from "@/lib/playerIntelligenceFormat";
 import PlayerOutlookPilot from "@/components/PlayerOutlookPilot";
 import RefreshDataButton from "@/components/RefreshDataButton";
+import PreseasonAveragesPanel from "@/components/PreseasonAveragesPanel";
 
 type League = "ldl" | "bdb";
 type View = "season" | "recent";
 const CONTRACT_YEARS = ["2024-25", "2025-26", "2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
 
-export default function PlayerIntelligenceDashboard({ intelligence, contract, birthDate, league, source, initiallyWatched, hasLeagueAccess, canReviewInjury }: {
+export default function PlayerIntelligenceDashboard({ intelligence, preseason, contract, birthDate, league, source, initiallyWatched, hasLeagueAccess, canReviewInjury }: {
   intelligence: PlayerIntelligence;
+  preseason: PlayerPreseasonAverages | null;
   contract: Contract;
   birthDate: string | null;
   league: League | null;
@@ -107,6 +109,8 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
         <DecisionCard label={league ? `${intelligence.league?.name} market` : "Sample"} value={league ? overallRank(sample, "market") : `${sample.games} games`} detail={league ? overallDetail(sample, "market") : `Minimum ${sample.minimum_games} to qualify`} />
         <DecisionCard label="Category profile" value={`${sample.strengths.length} strong`} detail={`${sample.weaknesses.length} ${sample.weaknesses.length === 1 ? "weakness" : "weaknesses"} · ${sample.games} games`} />
       </section>
+
+      <PreseasonAveragesPanel data={preseason} />
 
       <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Category intelligence</p><h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{view === "season" ? "Season profile" : `Recent ${intelligence.window.days}-day profile`}</h2></div><p className="text-xs text-slate-500">0 z is NBA average · positive is better · turnovers are inverted</p></div>

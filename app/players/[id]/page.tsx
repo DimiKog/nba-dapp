@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import PlayerIntelligenceDashboard from "@/components/PlayerIntelligenceDashboard";
-import { ApiResponseError, fetchPlayer, fetchPlayerIntelligence, photoUrl, type FantasyWatchlist, type PlayerDetail } from "@/lib/api";
+import { ApiResponseError, fetchPlayer, fetchPlayerIntelligence, fetchPlayerPreseasonAverages, photoUrl, type FantasyWatchlist, type PlayerDetail } from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 import { readWatchlist } from "@/lib/watchlistServer";
 
@@ -28,11 +28,14 @@ export default async function PlayerPage({ params, searchParams }: {
   if (!player.nba_id) return <PlayerIdentityUnresolved player={player} />;
   const league = requestedLeague;
 
-  const intelligence = await fetchPlayerIntelligence(playerId, {
-    league: league ?? undefined,
-    nbaId: player.nba_id,
-    window: 7,
-  }).catch(() => null);
+  const [intelligence, preseason] = await Promise.all([
+    fetchPlayerIntelligence(playerId, {
+      league: league ?? undefined,
+      nbaId: player.nba_id,
+      window: 7,
+    }).catch(() => null),
+    fetchPlayerPreseasonAverages(player.nba_id).catch(() => null),
+  ]);
   if (!intelligence) return <PlayerUnavailable title={`${player.name}'s intelligence is temporarily unavailable`} retryHref={currentHref(playerId, query)} />;
 
   const access = league ? await loadCurrentFantasyAccess() : null;
@@ -44,7 +47,7 @@ export default async function PlayerPage({ params, searchParams }: {
     : null;
   const initiallyWatched = Boolean(player.nba_id && watchlist?.entries.some((entry) => entry.nba_player_id === player.nba_id));
 
-  return <PlayerIntelligenceDashboard intelligence={intelligence} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} hasLeagueAccess={Boolean(membership)} canReviewInjury={Boolean(membership?.commissioner)} />;
+  return <PlayerIntelligenceDashboard intelligence={intelligence} preseason={preseason} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} hasLeagueAccess={Boolean(membership)} canReviewInjury={Boolean(membership?.commissioner)} />;
 }
 
 function PlayerIdentityUnresolved({ player }: { player: PlayerDetail }) {
