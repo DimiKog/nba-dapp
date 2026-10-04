@@ -170,7 +170,7 @@ test("yesterday's scoreboard results disappear when their Athens cutoff expires"
 
   await page.clock.fastForward(70_000);
   await expect(yesterday).toHaveCount(0);
-  await expect(page.getByText("DEN", { exact: true })).toBeVisible();
+  await expect(page.getByText("MIN", { exact: true })).toBeVisible();
 });
 
 test("scoreboard shows no personal highlights or toggle to visitors without a membership", async ({ page }) => {
