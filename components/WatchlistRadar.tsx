@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -37,9 +37,15 @@ export default function WatchlistRadar({
   const [pendingId, setPendingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(30);
+  const lastRefresh = useRef(0);
+  const requestId = useRef(0);
 
   useEffect(() => {
     storeLeague(league);
+  }, [league]);
+
+  useEffect(() => {
+    lastRefresh.current = Date.now();
   }, [league]);
 
   const watchedIds = useMemo(
@@ -73,7 +79,41 @@ export default function WatchlistRadar({
     [radar],
   );
 
-  async function loadLeague(next: LeagueSlug) {
+  const refreshLeague = useCallback(async (next: LeagueSlug, showLoading = false) => {
+    const currentRequest = ++requestId.current;
+    if (showLoading) setLoading(true);
+    try {
+      const [nextRadar, nextWatchlist] = await Promise.all([
+        fetchFreeAgentRadar(next, 7, 2, true),
+        fetchFantasyWatchlist(next),
+      ]);
+      if (currentRequest !== requestId.current) return;
+      setRadar(nextRadar);
+      setWatchlist(nextWatchlist);
+      setMessage(null);
+      lastRefresh.current = Date.now();
+    } catch {
+      if (currentRequest === requestId.current) setMessage("Could not refresh the latest data. Try again.");
+    } finally {
+      if (currentRequest === requestId.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh.current < 60_000) return;
+      lastRefresh.current = Date.now();
+      void refreshLeague(league);
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [league, refreshLeague]);
+
+  function loadLeague(next: LeagueSlug) {
     if (next === league) return;
     setLeague(next);
     setLoading(true);
@@ -82,13 +122,7 @@ export default function WatchlistRadar({
     setPosition("all");
     setVisibleLimit(30);
     router.replace(`/watchlist?league=${next}`, { scroll: false });
-    const [nextRadar, nextWatchlist] = await Promise.all([
-      fetchFreeAgentRadar(next).catch(() => null),
-      fetchFantasyWatchlist(next).catch(() => null),
-    ]);
-    setRadar(nextRadar);
-    setWatchlist(nextWatchlist);
-    setLoading(false);
+    void refreshLeague(next, true);
   }
 
   async function refreshWatchlist() {
@@ -153,21 +187,24 @@ export default function WatchlistRadar({
             Track trade targets and find available players trending upward in each league&apos;s categories.
           </p>
         </div>
-        <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-          {(["ldl", "bdb"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => loadLeague(item)}
-              className={`rounded-lg px-6 py-2 text-sm font-bold ${
-                league === item
-                  ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              {item === "ldl" ? "LDL" : "BδB"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={loading} onClick={() => void refreshLeague(league, true)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">{loading ? "Refreshing…" : "Refresh data"}</button>
+          <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            {(["ldl", "bdb"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => loadLeague(item)}
+                className={`rounded-lg px-6 py-2 text-sm font-bold ${
+                  league === item
+                    ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+              >
+                {item === "ldl" ? "LDL" : "BδB"}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

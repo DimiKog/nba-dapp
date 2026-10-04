@@ -171,7 +171,7 @@ export async function fetchPlayers(search?: string): Promise<Player[]> {
 
 export async function fetchPlayer(id: number): Promise<PlayerDetail> {
   const res = await fetch(`${BASE}/api/nba/players/${id}`, {
-    next: { revalidate: 3600 },
+    cache: "no-store",
   });
   if (!res.ok) throw new ApiResponseError("Player unavailable", res.status);
   return res.json();
@@ -185,7 +185,7 @@ export async function fetchPlayerIntelligence(
   const path = options.league && options.nbaId
     ? `/api/fantasy/${options.league}/players/${options.nbaId}/intelligence`
     : `/api/nba/players/${playerId}/intelligence`;
-  const res = await fetch(`${BASE}${path}?window=${window}`, { next: { revalidate: 300 } });
+  const res = await fetch(`${BASE}${path}?window=${window}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Player intelligence unavailable");
   return res.json();
 }
@@ -1398,7 +1398,7 @@ export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<Fant
 }
 
 export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string): Promise<FantasyRoster> {
-  const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { next: { revalidate: 300 } });
+  const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch roster");
   return res.json();
 }
@@ -1410,7 +1410,7 @@ export async function fetchFantasyRosterPerformance(
 ): Promise<FantasyRosterPerformance> {
   const res = await fetch(
     `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/performance?window=${window}`,
-    { next: { revalidate: 60 } },
+    { cache: "no-store" },
   );
   if (!res.ok) throw new Error("Failed to fetch roster performance");
   return res.json();
@@ -1618,7 +1618,7 @@ export async function fetchLeaguePlayerExplorer(
 ): Promise<LeaguePlayerExplorer> {
   const res = await fetch(
     `${BASE}/api/fantasy/${encodeURIComponent(league)}/players?window=${window}`,
-    { next: { revalidate: 60 } },
+    { cache: "no-store" },
   );
   if (!res.ok) throw new Error("Failed to fetch league player explorer");
   return res.json();
@@ -1628,10 +1628,11 @@ export async function fetchFreeAgentRadar(
   league: "ldl" | "bdb",
   window = 7,
   minimumGames = 2,
+  fresh = false,
 ): Promise<FantasyFreeAgentRadar> {
   const res = await fetch(
     `${BASE}/api/fantasy/${league}/free-agent-radar?window=${window}&min_games=${minimumGames}`,
-    { next: { revalidate: 60 } },
+    fresh ? { cache: "no-store" } : { next: { revalidate: 60 } },
   );
   if (!res.ok) throw new Error("Failed to fetch free-agent radar");
   return res.json();
