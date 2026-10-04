@@ -20,20 +20,30 @@ export type ScoreboardItem = {
   showScore: boolean;
   displayStatus: string;
   ownedPlayers: OwnedPlayer[];
+  expiresAt: string | null;
 };
 
 export default function HomeScoreboard({
   items,
   slateDate,
+  previousSlateDate,
 }: {
   items: ScoreboardItem[];
   slateDate: string | null;
+  previousSlateDate: string | null;
 }) {
   const router = useRouter();
   const lastRefresh = useRef(0);
   const [mineOnly, setMineOnly] = useState(false);
-  const ownedCount = items.filter((item) => item.ownedPlayers.length > 0).length;
-  const visible = mineOnly ? items.filter((item) => item.ownedPlayers.length > 0) : items;
+  const [expiredAt, setExpiredAt] = useState<string | null>(null);
+  const previousExpiry = items.find((item) => item.expiresAt)?.expiresAt ?? null;
+  const showPrevious = Boolean(previousExpiry && expiredAt !== previousExpiry);
+  const currentItems = items.filter((item) => !item.expiresAt);
+  const previousItems = showPrevious ? items.filter((item) => item.expiresAt) : [];
+  const activeItems = [...currentItems, ...previousItems];
+  const ownedCount = activeItems.filter((item) => item.ownedPlayers.length > 0).length;
+  const visibleCurrent = mineOnly ? currentItems.filter((item) => item.ownedPlayers.length > 0) : currentItems;
+  const visiblePrevious = mineOnly ? previousItems.filter((item) => item.ownedPlayers.length > 0) : previousItems;
 
   useEffect(() => {
     lastRefresh.current = Date.now();
@@ -50,7 +60,15 @@ export default function HomeScoreboard({
     };
   }, [router]);
 
+  useEffect(() => {
+    if (!previousExpiry) return;
+    const delay = Math.max(0, Date.parse(previousExpiry) - Date.now());
+    const timer = window.setTimeout(() => setExpiredAt(previousExpiry), delay);
+    return () => window.clearTimeout(timer);
+  }, [previousExpiry]);
+
   const slateLabel = formatSlateDate(slateDate);
+  const previousLabel = formatSlateDate(previousSlateDate);
 
   return (
     <section>
@@ -61,7 +79,7 @@ export default function HomeScoreboard({
           </h2>
           {slateLabel && <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">NBA date (US) · {slateLabel}</p>}
         </div>
-        {ownedCount > 0 && (
+        {(ownedCount > 0 || mineOnly) && (
           <button
             type="button"
             aria-pressed={mineOnly}
@@ -76,33 +94,51 @@ export default function HomeScoreboard({
           </button>
         )}
       </div>
-      {items.length === 0 ? (
+      {currentItems.length === 0 ? (
         <p className="text-sm text-slate-400">No games on the current or next NBA date.</p>
+      ) : visibleCurrent.length === 0 ? (
+        <p className="text-sm text-slate-400">No games with your players on this slate.</p>
       ) : (
         <div className="flex flex-wrap gap-3">
-          {visible.map((item) => (
-            <div
-              key={item.id}
-              className={`flex min-w-[260px] max-w-sm flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${item.ownedPlayers.length > 0 ? "border-blue-300 ring-1 ring-blue-200 dark:border-blue-500 dark:ring-blue-900" : "border-slate-200 dark:border-slate-700"}`}
-            >
-              <div className="flex items-center gap-3">
-                <TeamScore team={item.away} showScore={item.showScore} />
-                <span className="text-xs font-medium text-slate-400">@</span>
-                <TeamScore team={item.home} showScore={item.showScore} />
-                <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${item.completed
-                  ? "bg-slate-100 text-slate-500 dark:bg-slate-800"
-                  : item.showScore
-                    ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                    : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"}`}>
-                  {item.displayStatus}
-                </span>
-              </div>
-              <OwnedPlayersLine players={item.ownedPlayers} />
-            </div>
-          ))}
+          {visibleCurrent.map((item) => <ScoreboardCard key={item.id} item={item} />)}
+        </div>
+      )}
+      {visiblePrevious.length > 0 && (
+        <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400">
+              Yesterday&apos;s results{previousLabel ? ` · ${previousLabel}` : ""}
+            </h3>
+            <span className="text-xs text-slate-400 dark:text-slate-500">Until 19:00 Athens</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {visiblePrevious.map((item) => <ScoreboardCard key={item.id} item={item} />)}
+          </div>
         </div>
       )}
     </section>
+  );
+}
+
+function ScoreboardCard({ item }: { item: ScoreboardItem }) {
+  return (
+    <div
+      className={`flex min-w-[260px] max-w-sm flex-col gap-2 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${item.ownedPlayers.length > 0 ? "border-blue-300 ring-1 ring-blue-200 dark:border-blue-500 dark:ring-blue-900" : "border-slate-200 dark:border-slate-700"}`}
+    >
+      <div className="flex items-center gap-3">
+        <TeamScore team={item.away} showScore={item.showScore} />
+        <span className="text-xs font-medium text-slate-400">@</span>
+        <TeamScore team={item.home} showScore={item.showScore} />
+        <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${item.completed
+          ? "bg-slate-100 text-slate-500 dark:bg-slate-800"
+          : item.showScore
+            ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+            : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"}`}>
+          {item.displayStatus}
+        </span>
+      </div>
+      <OwnedPlayersLine players={item.ownedPlayers} />
+    </div>
   );
 }
 

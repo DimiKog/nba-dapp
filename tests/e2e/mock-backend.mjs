@@ -171,6 +171,11 @@ const server = createServer((request, response) => {
         id: "e2e-game-unowned", date: "2026-10-09T23:30:00Z", status: "Scheduled", completed: false,
         away: team("New York Knicks", "NY"), home: team("Boston Celtics", "BOS"),
       },
+      {
+        id: "e2e-game-previous", date: "2026-10-08T23:00:00Z", status: "Final", completed: true,
+        nba_date: "2026-10-08", expires_at: new Date(Date.now() + 60_000).toISOString(),
+        away: team("Toronto Raptors", "TOR"), home: team("Miami Heat", "MIA"),
+      },
     ]);
   }
   if (url.pathname === "/api/nba/news") {

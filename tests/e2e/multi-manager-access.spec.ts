@@ -123,16 +123,16 @@ test("scoreboard highlights games featuring the signed-in manager's own players"
   await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
   await page.goto(app);
 
-  await expect(page.getByText("Your players:")).toHaveCount(1);
-  await expect(page.getByText(/Player 2 \(LDL\)/)).toBeVisible();
-  await expect(page.getByText(/Player 2 \(BδB\)/)).toBeVisible();
   const ownedCard = page.locator("div.rounded-xl", { hasText: "MIN" }).filter({ hasText: "NO" });
   await expect(ownedCard).toHaveCount(1);
-  await expect(ownedCard.getByText("Your players:")).toBeVisible();
+  await expect(ownedCard.locator('[aria-label="LDL: Player 2"]')).toBeVisible();
+  await expect(ownedCard.locator('[aria-label="BδB: Player 2"]')).toBeVisible();
+  await expect(ownedCard.locator('[aria-label="LDL: Player 2"]')).toHaveClass(/border-cyan-500/);
+  await expect(ownedCard.locator('[aria-label="BδB: Player 2"]')).toHaveClass(/border-violet-500/);
   await expect(ownedCard).toHaveClass(/border-blue-300/);
   const unownedCard = page.locator("div.rounded-xl", { hasText: "BOS" }).filter({ hasText: "NY" });
   await expect(unownedCard).toHaveCount(1);
-  await expect(unownedCard.getByText("Your players:")).toHaveCount(0);
+  await expect(unownedCard.locator('[aria-label^="LDL:"], [aria-label^="BδB:"]')).toHaveCount(0);
 });
 
 test("scoreboard \"Mine only\" toggle filters to games with the manager's players and restores", async ({ page, request }) => {
@@ -158,9 +158,24 @@ test("scoreboard \"Mine only\" toggle filters to games with the manager's player
   await expect(unownedCard).toHaveCount(1);
 });
 
+test("yesterday's scoreboard results disappear when their Athens cutoff expires", async ({ page, request }) => {
+  await page.clock.install({ time: new Date() });
+  const tokenA = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
+  await page.goto(app);
+
+  const yesterday = page.getByRole("heading", { name: /Yesterday's results/ });
+  await expect(yesterday).toBeVisible();
+  await expect(page.getByText("TOR", { exact: true })).toBeVisible();
+
+  await page.clock.fastForward(70_000);
+  await expect(yesterday).toHaveCount(0);
+  await expect(page.getByText("MIN", { exact: true })).toBeVisible();
+});
+
 test("scoreboard shows no personal highlights or toggle to visitors without a membership", async ({ page }) => {
   await page.goto(app);
-  await expect(page.getByText("Your players:")).toHaveCount(0);
+  await expect(page.locator('[aria-label^="LDL: Player"], [aria-label^="BδB: Player"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Mine only/ })).toHaveCount(0);
 });
 
