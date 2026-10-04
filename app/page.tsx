@@ -74,6 +74,7 @@ export default async function Home() {
       showScore: g.completed || isLive,
       displayStatus: g.completed || isLive ? g.status : formatGameDate(g.date) ?? g.status,
       ownedPlayers: ownedPlayersForGame(ownedByTeam, g),
+      expiresAt: g.expires_at ?? null,
     };
   });
 
@@ -94,7 +95,11 @@ export default async function Home() {
       />
 
       {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
-      <HomeScoreboard items={scoreboardItems} slateDate={games[0]?.date ?? null} />
+      <HomeScoreboard
+        items={scoreboardItems}
+        slateDate={games.find((game) => !game.expires_at)?.date ?? null}
+        previousSlateDate={games.find((game) => game.expires_at)?.date ?? null}
+      />
 
       <HomeRadarPanels radars={radarPanels} />
 

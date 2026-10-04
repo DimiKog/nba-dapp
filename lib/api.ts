@@ -1727,6 +1727,7 @@ export interface GameTeam {
 export interface Game {
   id: string; date: string; status: string;
   completed: boolean; home: GameTeam; away: GameTeam;
+  nba_date?: string; expires_at?: string | null;
 }
 export interface NewsItem {
   headline: string; description: string | null;
