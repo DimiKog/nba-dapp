@@ -96,6 +96,26 @@ export interface PlayerIntelligence {
   };
 }
 
+export interface PlayerPreseasonAverages {
+  season: string;
+  games: number;
+  last_game_date: string | null;
+  status: "available" | "no_games" | "identity_unmapped";
+  source: "ESPN";
+  averages: {
+    minutes: number;
+    fg_pct: number | null;
+    three_pm: number;
+    ft_pct: number | null;
+    points: number;
+    rebounds: number;
+    assists: number;
+    steals: number;
+    blocks: number;
+    turnovers: number;
+  } | null;
+}
+
 export interface PlayerResearchEvidence {
   generated_at: string;
   player: {
@@ -187,6 +207,15 @@ export async function fetchPlayerIntelligence(
     : `/api/nba/players/${playerId}/intelligence`;
   const res = await fetch(`${BASE}${path}?window=${window}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Player intelligence unavailable");
+  return res.json();
+}
+
+export async function fetchPlayerPreseasonAverages(nbaId: number): Promise<PlayerPreseasonAverages> {
+  const res = await fetch(
+    `${BASE}/api/nba/players/by-nba-id/${nbaId}/preseason-averages`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error("Preseason averages unavailable");
   return res.json();
 }
 
