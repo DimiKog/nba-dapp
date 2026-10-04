@@ -64,7 +64,6 @@ export default async function Home() {
   ]);
 
   const ownedByTeam = ownedPlayersByTeam(personalTeams);
-  const showLeagueLabels = new Set(personalTeams.map((team) => team.league)).size > 1;
   const scoreboardItems: ScoreboardItem[] = games.map((g) => {
     const isLive = !g.completed && g.status !== "Scheduled";
     return {
@@ -95,7 +94,7 @@ export default async function Home() {
       />
 
       {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
-      <HomeScoreboard items={scoreboardItems} showLeague={showLeagueLabels} />
+      <HomeScoreboard items={scoreboardItems} slateDate={games[0]?.date ?? null} />
 
       <HomeRadarPanels radars={radarPanels} />
 
