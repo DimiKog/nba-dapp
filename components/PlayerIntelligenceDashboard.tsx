@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { Contract, PlayerIntelligence, PlayerIntelligenceCategory, PlayerIntelligenceSample, photoUrl } from "@/lib/api";
 import { overallDetail } from "@/lib/playerIntelligenceFormat";
 import PlayerOutlookPilot from "@/components/PlayerOutlookPilot";
+import RefreshDataButton from "@/components/RefreshDataButton";
 
 type League = "ldl" | "bdb";
 type View = "season" | "recent";
@@ -73,7 +74,10 @@ export default function PlayerIntelligenceDashboard({ intelligence, contract, bi
                 {!sample.qualified && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Small sample</span>}
               </div>
             </div>
-            {league && player.nba_id && <button type="button" disabled={watched || watchPending} onClick={addToWatchlist} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${watched ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"}`}>{watched ? "Watching" : watchPending ? "Saving…" : "+ Watch"}</button>}
+            <div className="flex flex-wrap gap-2">
+              <RefreshDataButton />
+              {league && player.nba_id && <button type="button" disabled={watched || watchPending} onClick={addToWatchlist} className={`rounded-xl px-4 py-2.5 text-sm font-bold ${watched ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"}`}>{watched ? "Watching" : watchPending ? "Saving…" : "+ Watch"}</button>}
+            </div>
           </div>
           {watchError && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{watchError}</p>}
         </div>

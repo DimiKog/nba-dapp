@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   fetchFantasyWatchlist,
   fetchLeaguePlayerExplorer,
@@ -70,6 +70,8 @@ export default function LeaguePlayerExplorer() {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
   const [filterLeague, setFilterLeague] = useState(league);
+  const lastRefresh = useRef(0);
+  const requestId = useRef(0);
 
   if (league !== filterLeague) {
     setFilterLeague(league);
@@ -92,12 +94,14 @@ export default function LeaguePlayerExplorer() {
 
   useEffect(() => {
     let active = true;
+    const currentRequest = ++requestId.current;
+    lastRefresh.current = Date.now();
     Promise.all([
       fetchLeaguePlayerExplorer(league),
       fetchFantasyWatchlist(league).catch(() => null),
     ])
       .then(([data, watchlist]) => {
-        if (!active) return;
+        if (!active || currentRequest !== requestId.current) return;
         setPayload(data);
         setHasFantasyAccess(Boolean(watchlist));
         setWatchedIds(new Set(
@@ -106,18 +110,46 @@ export default function LeaguePlayerExplorer() {
         setStatsView(data.ranking_basis);
         const first = [...data.players].sort(rankPlayers)[0];
         setSelectedId(playerKey(first));
+        lastRefresh.current = Date.now();
       })
       .catch(() => {
-        if (active) setError(`Could not load ${leagueLabel(league)} players.`);
+        if (active && currentRequest === requestId.current) setError(`Could not load ${leagueLabel(league)} players.`);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active && currentRequest === requestId.current) setLoading(false);
       });
 
     return () => {
       active = false;
     };
   }, [league]);
+
+  const refreshPlayers = useCallback(async () => {
+    const currentRequest = ++requestId.current;
+    try {
+      const data = await fetchLeaguePlayerExplorer(league);
+      if (currentRequest !== requestId.current) return;
+      setPayload(data);
+      setError(null);
+      lastRefresh.current = Date.now();
+    } catch {
+      if (currentRequest === requestId.current) setError(`Could not refresh ${leagueLabel(league)} players.`);
+    }
+  }, [league]);
+
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh.current < 60_000) return;
+      lastRefresh.current = Date.now();
+      void refreshPlayers();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refreshPlayers]);
 
   useEffect(() => {
     storeLeague(league);
@@ -251,21 +283,24 @@ export default function LeaguePlayerExplorer() {
             Search and rank rostered players and fantasy free agents by category, performance and contract.
           </p>
         </div>
-        <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-          {(["ldl", "bdb"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => changeLeague(item)}
-              className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
-                league === item
-                  ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
-                  : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              }`}
-            >
-              {item === "ldl" ? "LDL" : "BδB"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
+          <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            {(["ldl", "bdb"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => changeLeague(item)}
+                className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
+                  league === item
+                    ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
+                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                }`}
+              >
+                {item === "ldl" ? "LDL" : "BδB"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

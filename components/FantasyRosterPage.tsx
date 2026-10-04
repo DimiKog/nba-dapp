@@ -13,6 +13,7 @@ import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamPayrollPanel from "@/components/TeamPayrollPanel";
 import TeamSectionNav from "@/components/TeamSectionNav";
+import RefreshDataButton from "@/components/RefreshDataButton";
 import { notFound } from "next/navigation";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 
@@ -79,16 +80,19 @@ export default async function FantasyRosterPage({
             )}
           </div>
         </div>
-        {isPersonalTeam && (
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/fantasy/${league}/strategy`} className="w-fit rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
-              Category strategy
-            </Link>
-            <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
-              Analyze a trade →
-            </Link>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <RefreshDataButton />
+          {isPersonalTeam && (
+            <>
+              <Link href={`/fantasy/${league}/strategy`} className="w-fit rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
+                Category strategy
+              </Link>
+              <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+                Analyze a trade →
+              </Link>
+            </>
+          )}
+        </div>
       </div>
 
       {performance && <TeamPageOverview performance={performance} profile={seasonProfile} />}
