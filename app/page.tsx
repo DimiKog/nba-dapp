@@ -18,8 +18,10 @@ import {
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
 import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
+import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
+import { isLeagueSlug, leagueLabel, type LeagueSlug } from "@/lib/leagues";
 
 export default async function Home() {
   const context = await loadCurrentFantasyContext().catch(() => ({
@@ -35,12 +37,13 @@ export default async function Home() {
     fetchFantasyStandings("bdb").catch(() => []),
     Promise.all(
       (session?.memberships ?? [])
-        .filter((membership) => (
-          membership.league_slug === "ldl" || membership.league_slug === "bdb"
-        ) && membership.fantrax_team_id)
+        .filter((membership): membership is FantasyMembership & {
+          league_slug: LeagueSlug;
+          fantrax_team_id: string;
+        } => isLeagueSlug(membership.league_slug) && Boolean(membership.fantrax_team_id))
         .map(async (membership) => {
-            const slug = membership.league_slug as "ldl" | "bdb";
-            const teamId = membership.fantrax_team_id!;
+            const slug = membership.league_slug;
+            const teamId = membership.fantrax_team_id;
             const [matchup, performance, profile] = await Promise.all([
               fetchFantasyMatchupsForTeam(slug, teamId).catch(() => null),
               fetchFantasyRosterPerformance(slug, teamId).catch(() => null),
@@ -48,7 +51,7 @@ export default async function Home() {
             ]);
             return {
               league: slug,
-              leagueName: slug === "ldl" ? "LDL" : "BδB",
+              leagueName: leagueLabel(slug),
               teamName: membership.franchise_name,
               teamId,
               matchup,

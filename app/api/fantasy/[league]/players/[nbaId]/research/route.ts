@@ -1,4 +1,5 @@
 import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+import { isLeagueSlug } from "@/lib/leagues";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 const ALLOWED_PARAMS = new Set(["days", "limit"]);
@@ -8,7 +9,7 @@ export async function GET(
   context: { params: Promise<{ league: string; nbaId: string }> },
 ) {
   const { league, nbaId } = await context.params;
-  if ((league !== "ldl" && league !== "bdb") || !/^\d{1,10}$/.test(nbaId)) {
+  if (!isLeagueSlug(league) || !/^\d{1,10}$/.test(nbaId)) {
     return Response.json({ error: "Unknown league or invalid player" }, { status: 400 });
   }
   const incoming = new URL(request.url).searchParams;

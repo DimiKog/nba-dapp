@@ -1,11 +1,12 @@
 import { authorizeFantasyRequest, copyBackendResponse } from "@/lib/fantasySessionServer";
+import { isLeagueSlug } from "@/lib/leagues";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 type Context = { params: Promise<{ league: string; nbaId: string }> };
 
 async function forward(request: Request, context: Context, method: "GET" | "POST") {
   const { league, nbaId } = await context.params;
-  if ((league !== "ldl" && league !== "bdb") || !/^\d{1,10}$/.test(nbaId) || Number(nbaId) < 1) {
+  if (!isLeagueSlug(league) || !/^\d{1,10}$/.test(nbaId) || Number(nbaId) < 1) {
     return Response.json({ error: "Unknown league or invalid player" }, { status: 400 });
   }
   const access = await authorizeFantasyRequest(request, league);

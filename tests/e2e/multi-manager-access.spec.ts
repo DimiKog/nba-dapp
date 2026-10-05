@@ -14,6 +14,30 @@ async function tokenFor(
   return (await response.json() as { token: string }).token;
 }
 
+test("unconfigured league stays closed across shared fantasy routes", async ({ request }) => {
+  const getRoutes = [
+    ["/api/fantasy/third/category-strategy", 404],
+    ["/api/fantasy/third/roster/team-a/targets", 404],
+    ["/api/fantasy/third/roster/team-a/trade-analysis", 400],
+    ["/api/fantasy/third/roster/team-a/trade-partners", 400],
+    ["/api/fantasy/third/players/123/research", 400],
+    ["/api/fantasy/third/players/123/injury-report", 400],
+    ["/api/fantasy/third/players/123/my-trade-outlook", 400],
+    ["/api/watchlist/third", 404],
+  ] as const;
+  for (const [path, status] of getRoutes) {
+    expect((await request.get(`${app}${path}`)).status()).toBe(status);
+  }
+  const postRoutes = [
+    "/api/fantasy/third/trade-suggestions",
+    "/api/fantasy/third/trade-package-suggestions",
+    "/api/fantasy/third/trade-package-analysis",
+  ];
+  for (const path of postRoutes) {
+    expect((await request.post(`${app}${path}`, { data: {} })).status()).toBe(404);
+  }
+});
+
 test("each manager receives only their own memberships", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),
