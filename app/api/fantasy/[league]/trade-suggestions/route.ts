@@ -1,4 +1,5 @@
 import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+import { isLeagueSlug } from "@/lib/leagues";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
@@ -21,7 +22,7 @@ export async function POST(
   context: { params: Promise<{ league: string }> },
 ) {
   const { league } = await context.params;
-  if (league !== "ldl" && league !== "bdb") {
+  if (!isLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
 

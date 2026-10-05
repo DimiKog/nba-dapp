@@ -11,7 +11,7 @@ export const LEAGUE_PRESENTATION = {
 }>;
 
 export function isLeagueSlug(value: string | null | undefined): value is LeagueSlug {
-  return value === "ldl" || value === "bdb";
+  return LEAGUE_SLUGS.some((slug) => slug === value);
 }
 
 export function leaguePresentation(value: string | null | undefined) {

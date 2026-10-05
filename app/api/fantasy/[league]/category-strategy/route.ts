@@ -1,19 +1,16 @@
 import { authorizeFantasyRequest, copyBackendResponse } from "@/lib/fantasySessionServer";
+import { isLeagueSlug } from "@/lib/leagues";
 import {
   readTeamCategoryStrategy,
   writeTeamCategoryStrategy,
 } from "@/lib/teamCategoryStrategyServer";
-
-function validLeague(league: string): league is "ldl" | "bdb" {
-  return league === "ldl" || league === "bdb";
-}
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ league: string }> },
 ) {
   const { league } = await context.params;
-  if (!validLeague(league)) {
+  if (!isLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
   const access = await authorizeFantasyRequest(request, league);
@@ -28,7 +25,7 @@ export async function PUT(
   context: { params: Promise<{ league: string }> },
 ) {
   const { league } = await context.params;
-  if (!validLeague(league)) {
+  if (!isLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
   const body = await request.json().catch(() => null);

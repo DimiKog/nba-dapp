@@ -1,5 +1,6 @@
-import { mutateWatchlist, validLeague } from "@/lib/watchlistServer";
+import { mutateWatchlist } from "@/lib/watchlistServer";
 import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
+import { isLeagueSlug } from "@/lib/leagues";
 
 export async function DELETE(
   request: Request,
@@ -7,7 +8,7 @@ export async function DELETE(
 ) {
   const { league, nbaPlayerId: rawPlayerId } = await context.params;
   const nbaPlayerId = Number(rawPlayerId);
-  if (!validLeague(league)) {
+  if (!isLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
   if (!Number.isInteger(nbaPlayerId) || nbaPlayerId <= 0) {
