@@ -9,6 +9,18 @@ import SearchablePlayerPicker, {
 } from "@/components/SearchablePlayerPicker";
 import TeamLogo from "@/components/TeamLogo";
 import TradePlayerResearchPanel from "@/components/TradePlayerResearchPanel";
+import TradeAnalyzerDestinationResult from "@/components/TradeAnalyzerDestinationResult";
+import {
+  basisLabel,
+  capResultLabel,
+  capTone,
+  ChipList,
+  ConfidenceBadge,
+  FallbackBanner,
+  formatSigned,
+  MethodNote,
+  phaseLabel,
+} from "@/components/TradeAnalyzerShared";
 import { TradeDecisionComparison, TradeProfileSignal } from "@/components/TradeDecisionBrief";
 import { ReviewedInjuryNotice } from "@/components/ReviewedInjuryReport";
 import type { TradeAnalyzerInitialState } from "@/components/FantasyTradeAnalyzerPage";
@@ -30,7 +42,6 @@ import {
   type FantasyTradePackageAnalysis,
   type TradeBasis,
   type TradeAcquisitionContext,
-  type TradeCapResult,
   type TradeCategoryChange,
   type TradeCategoryStrategyContext,
   type TradePartner,
@@ -646,7 +657,7 @@ export default function TradeAnalyzerWorkspace({
       {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">{error}</p>}
       {loading && <LoadingResult />}
       {analysis && <TradeAnalysisResult analysis={analysis} outgoing={outgoingPlayer} incoming={incomingPlayer} league={league} />}
-      {partners && <PartnerRankingResult payload={partners} onExplore={exploreReturns} />}
+      {partners && <TradeAnalyzerDestinationResult payload={partners} onExplore={exploreReturns} />}
       {suggestions && (
         <BalancedSuggestionsResult
           payload={suggestions}
@@ -2615,55 +2626,6 @@ function SuggestionEmptyState({ payload }: { payload: FantasyBalancedTradeSugges
   );
 }
 
-function PartnerRankingResult({ payload, onExplore }: { payload: FantasyTradePartners; onExplore: (partner: TradePartner) => void }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? payload.partners : payload.partners.slice(0, 6);
-  return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="border-b border-slate-200 p-5 dark:border-slate-700">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Trade market</p>
-        <h2 className="mt-1 text-2xl font-black text-slate-950 dark:text-white">Best destinations for {payload.outgoing.name}</h2>
-        <p className="mt-1 text-sm text-slate-500">{payload.total_partners} teams screened · {basisLabel(payload.basis_used)} · {phaseLabel(payload.season_phase)}</p>
-      </div>
-      {payload.fallback_reason && <FallbackBanner />}
-      <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
-        {visible.map((partner) => (
-          <article key={partner.team.id} className="flex min-w-0 flex-col rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-            <div className="flex items-start gap-3">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white">#{partner.rank}</span>
-              <TeamLogo league={payload.league.slug} logo={partner.team.logo} name={partner.team.name} size={42} />
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate font-black text-slate-950 dark:text-white">{partner.team.name}</h3>
-                <p className="text-xs text-slate-500">Fit {formatSigned(partner.fit_score)} · Approach {formatSigned(partner.approach_score)}</p>
-              </div>
-              <ConfidenceBadge confidence={partner.confidence} />
-            </div>
-            <p className="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200">{partner.reason}</p>
-            <ChipList label="Helps" values={partner.helps} tone="positive" />
-            <ChipList label="Harms" values={partner.harms} tone="danger" />
-            <div className="mt-4 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/70">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Cap screen</p>
-              <p className={`mt-1 text-sm font-bold ${capTone(partner.cap_screen.result)}`}>{capResultLabel(partner.cap_screen.result)}</p>
-              <p className="mt-1 text-xs text-slate-500">Return salary is not included yet.</p>
-            </div>
-            <button type="button" onClick={() => onExplore(partner)} className="mt-4 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white hover:bg-blue-700">
-              Explore possible returns
-            </button>
-          </article>
-        ))}
-      </div>
-      {payload.partners.length > 6 && (
-        <div className="border-t border-slate-200 px-4 py-3 text-center dark:border-slate-700">
-          <button type="button" onClick={() => setShowAll((current) => !current)} className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300">
-            {showAll ? "Show top six only" : `Show all ${payload.partners.length} teams`}
-          </button>
-        </div>
-      )}
-      <MethodNote>Destination ranking is a market screen, not a completed trade. Category fit and cap feasibility are finalized only after selecting a return player.</MethodNote>
-    </section>
-  );
-}
-
 function TradeAnalysisResult({ analysis, outgoing, incoming, league }: {
   analysis: FantasyTradeAnalysis;
   outgoing: FantasyPlayerPerformance | null;
@@ -2827,28 +2789,6 @@ function WarningList({ warnings }: { warnings: TradeWarning[] }) {
   );
 }
 
-function ChipList({ label, values, tone }: { label: string; values: string[]; tone: "positive" | "danger" }) {
-  if (!values.length) return null;
-  return (
-    <div className="mt-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-      <div className="mt-1 flex flex-wrap gap-1">{values.map((value) => <span key={value} className={`rounded-md px-2 py-1 text-[10px] font-bold ${tone === "positive" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"}`}>{value}</span>)}</div>
-    </div>
-  );
-}
-
-function ConfidenceBadge({ confidence }: { confidence: TradePartner["confidence"] }) {
-  return <span className="rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase text-slate-500 dark:bg-slate-800">{confidence}</span>;
-}
-
-function FallbackBanner() {
-  return <p className="border-b border-blue-200 bg-blue-50 px-5 py-3 text-sm text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-300">No qualifying recent games were available, so season performance was used.</p>;
-}
-
-function MethodNote({ children }: { children: React.ReactNode }) {
-  return <p className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-950/40">{children}</p>;
-}
-
 function LoadingResult() {
   return <div className="mt-6 h-72 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />;
 }
@@ -2863,10 +2803,6 @@ function formatRank(value: number | null) {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function formatSigned(value: number) {
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
-}
-
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
@@ -2874,35 +2810,6 @@ function formatMoney(value: number) {
 function formatSignedMoney(value: number) {
   const amount = formatMoney(Math.abs(value));
   return value > 0 ? `+${amount}` : value < 0 ? `-${amount}` : "$0";
-}
-
-function basisLabel(basis: TradeBasis) {
-  return basis === "season" ? "Season performance" : "Recent 14-day performance";
-}
-
-function phaseLabel(phase: "in_season" | "off_season") {
-  return phase === "in_season" ? "In-season" : "Offseason";
-}
-
-function capResultLabel(result: TradeCapResult) {
-  const labels: Record<TradeCapResult, string> = {
-    unknown: "Cap unavailable",
-    compliant: "Cap compliant",
-    not_cap_compliant: "Not cap compliant",
-    requires_additional_move: "Additional move required",
-    clears_cap: "Moves under the cap",
-    moves_toward_cap: "Moves toward the cap",
-    moves_away_from_cap: "Moves away from the cap",
-    crosses_over: "Moves over the cap",
-    remains_under: "Remains under the cap",
-  };
-  return labels[result];
-}
-
-function capTone(result: TradeCapResult) {
-  if (["compliant", "clears_cap", "moves_toward_cap", "remains_under"].includes(result)) return "text-emerald-600 dark:text-emerald-400";
-  if (["not_cap_compliant", "requires_additional_move", "moves_away_from_cap", "crosses_over"].includes(result)) return "text-red-600 dark:text-red-400";
-  return "text-amber-600 dark:text-amber-400";
 }
 
 function transitionLabel(transition: TradeCategoryChange["transition"]) {
