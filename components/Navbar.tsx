@@ -6,6 +6,9 @@ import { useEffect, useSyncExternalStore } from "react";
 import {
   getServerLeagueSnapshot,
   getStoredLeagueSnapshot,
+  isLeagueSlug,
+  LEAGUE_SLUGS,
+  leagueLabel,
   storeLeague,
   subscribeLeagueStore,
   type LeagueSlug,
@@ -23,9 +26,9 @@ function resolveNavbarLeague(
   leagueParam: string | null,
   storedLeague: LeagueSlug,
 ): LeagueSlug {
-  if (leagueParam === "ldl" || leagueParam === "bdb") return leagueParam;
-  const fantasyMatch = pathname.match(/^\/fantasy\/(ldl|bdb)(?:\/|$)/);
-  if (fantasyMatch?.[1] === "ldl" || fantasyMatch?.[1] === "bdb") {
+  if (isLeagueSlug(leagueParam)) return leagueParam;
+  const fantasyMatch = pathname.match(/^\/fantasy\/([^/]+)(?:\/|$)/);
+  if (isLeagueSlug(fantasyMatch?.[1])) {
     return fantasyMatch[1];
   }
   return storedLeague;
@@ -59,12 +62,8 @@ export default function Navbar({
     ...(membership?.commissioner
       ? [{ href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" }]
       : []),
-    ...(session?.memberships.some((item) => item.league_slug === "ldl" && item.fantrax_team_id)
-      ? [{ href: "/fantasy/ldl/my-team", path: "/fantasy/ldl", label: "My LDL" }]
-      : []),
-    ...(session?.memberships.some((item) => item.league_slug === "bdb" && item.fantrax_team_id)
-      ? [{ href: "/fantasy/bdb/my-team", path: "/fantasy/bdb", label: "My BδB" }]
-      : []),
+    ...LEAGUE_SLUGS.filter((slug) => session?.memberships.some((item) => item.league_slug === slug && item.fantrax_team_id))
+      .map((slug) => ({ href: `/fantasy/${slug}/my-team`, path: `/fantasy/${slug}`, label: `My ${leagueLabel(slug)}` })),
   ];
 
   return (

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import InjuryFlag from "@/components/InjuryFlag";
+import { leaguePresentation, type LeagueSlug } from "@/lib/leagues";
 import {
   FantasyPlayerPerformance,
   FantasyPlayerStats,
@@ -118,8 +119,9 @@ export default function RosterPerformanceTable({
   league,
 }: {
   performance: FantasyRosterPerformance;
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
 }) {
+  const showTenure = leaguePresentation(league)?.showTenure ?? false;
   const hasWindowGames = performance.players.some((player) => player.window_stats.games > 0);
   const [view, setView] = useState<View>(hasWindowGames ? "window" : "season");
   const [selectedKey, setSelectedKey] = useState(() => (
@@ -167,7 +169,7 @@ export default function RosterPerformanceTable({
                     const key = playerKey(player);
                     const isSelected = key === playerKey(selected);
                     const photo = photoUrl(player.photo, player.nba_id);
-                    const tenure = league === "ldl" ? tenureBadge(player) : null;
+                    const tenure = showTenure ? tenureBadge(player) : null;
                     return (
                       <button
                         key={key}
@@ -262,7 +264,7 @@ export default function RosterPerformanceTable({
             <div className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-950/20 sm:border-r sm:border-b-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">2026–27 salary</p>
               <p className="mt-1 break-all text-lg font-black tabular-nums text-slate-900 dark:text-white">{selected.salary_2026_27 ?? "—"}</p>
-              {league === "ldl" && <TenureDetail player={selected} />}
+              {showTenure && <TenureDetail player={selected} />}
               <div className="mt-5 border-t border-slate-200 pt-3 dark:border-slate-700">
                 <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Contract by season</p>
                 <dl className="space-y-2">

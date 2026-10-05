@@ -2,6 +2,7 @@ import type {
   FantasyRosterPerformance,
   FantasyTeamCategoryProfile,
 } from "@/lib/api";
+import { leaguePresentation } from "@/lib/leagues";
 
 export default function TeamPageOverview({
   performance,
@@ -12,16 +13,17 @@ export default function TeamPageOverview({
 }) {
   const injured = performance.players.filter((player) => player.injury);
   const current = performance.payroll?.seasons[0] ?? null;
-  const claimBudget = performance.league.slug === "bdb"
+  const presentation = leaguePresentation(performance.league.slug);
+  const claimBudget = presentation?.showClaimTokens
     ? performance.team.claim_budget
     : null;
-  const tenure = performance.league.slug === "ldl"
+  const tenure = presentation?.showTenure
     ? performance.players.map((player) => player.tenure).filter(Boolean)
     : [];
   const finalYear = tenure.filter((entry) => entry?.status === "final_legal_year").length;
   const expired = tenure.filter((entry) => entry?.status === "tenure_expired_free_agent").length;
   const franchise = tenure.filter((entry) => entry?.franchise_player).length;
-  const showTenure = performance.league.slug === "ldl";
+  const showTenure = presentation?.showTenure ?? false;
   const freshest = performance.players
     .map((player) => player.freshness.stats)
     .filter((value): value is string => Boolean(value))
@@ -58,7 +60,7 @@ export default function TeamPageOverview({
           <SummaryCard
             label="Claim tokens"
             value={formatTokenBalance(claimBudget.remaining)}
-            detail="Current BδB balance"
+            detail={`Current ${presentation?.label} balance`}
             tone="accent"
           />
         )}

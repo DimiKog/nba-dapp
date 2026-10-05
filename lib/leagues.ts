@@ -1,4 +1,22 @@
-export type LeagueSlug = "ldl" | "bdb";
+export const LEAGUE_SLUGS = ["ldl", "bdb"] as const;
+export type LeagueSlug = (typeof LEAGUE_SLUGS)[number];
+
+export const LEAGUE_PRESENTATION = {
+  ldl: { label: "LDL", showTenure: true, showClaimTokens: false },
+  bdb: { label: "BδB", showTenure: false, showClaimTokens: true },
+} as const satisfies Record<LeagueSlug, {
+  label: string;
+  showTenure: boolean;
+  showClaimTokens: boolean;
+}>;
+
+export function isLeagueSlug(value: string | null | undefined): value is LeagueSlug {
+  return value === "ldl" || value === "bdb";
+}
+
+export function leaguePresentation(value: string | null | undefined) {
+  return isLeagueSlug(value) ? LEAGUE_PRESENTATION[value] : null;
+}
 
 const LEAGUE_STORAGE_KEY = "nba-app:league";
 
@@ -14,13 +32,13 @@ export function parseLeagueSlug(value: string | null | undefined): LeagueSlug {
 }
 
 export function leagueLabel(league: LeagueSlug): string {
-  return league === "ldl" ? "LDL" : "BδB";
+  return LEAGUE_PRESENTATION[league].label;
 }
 
 export function readStoredLeague(): LeagueSlug | null {
   if (typeof window === "undefined") return null;
   const value = window.sessionStorage.getItem(LEAGUE_STORAGE_KEY);
-  if (value === "ldl" || value === "bdb") return value;
+  if (isLeagueSlug(value)) return value;
   return null;
 }
 
@@ -60,6 +78,6 @@ export function resolveClientLeague(
   urlValue: string | null | undefined,
   storedLeague: LeagueSlug = getStoredLeagueSnapshot(),
 ): LeagueSlug {
-  if (urlValue === "ldl" || urlValue === "bdb") return urlValue;
+  if (isLeagueSlug(urlValue)) return urlValue;
   return storedLeague;
 }
