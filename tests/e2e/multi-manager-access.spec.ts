@@ -38,6 +38,26 @@ test("unconfigured league stays closed across shared fantasy routes", async ({ r
   }
 });
 
+test("home league panels keep LDL and BδB order and league-specific links", async ({ page }) => {
+  await page.goto(app);
+
+  const standings = page.getByRole("heading", { name: "Fantasy standings" }).locator("xpath=ancestor::section[1]");
+  await expect(standings.getByRole("button", { name: "LDL" })).toBeVisible();
+  await expect(standings.getByRole("button", { name: "BδB" })).toBeVisible();
+  await expect(standings.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/fantasy/ldl");
+  await standings.getByRole("button", { name: "BδB" }).click();
+  await expect(standings.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/fantasy/bdb");
+
+  const radar = page.getByRole("heading", { name: "Free-agent trends" }).locator("xpath=ancestor::section[1]");
+  await expect(radar.getByRole("heading", { name: "Test league radar" })).toHaveCount(2);
+  await expect(radar.getByRole("link", { name: /Radar Test Player/ }).first()).toHaveAttribute(
+    "href", "/players/21001?league=ldl&from=home",
+  );
+  await expect(radar.getByRole("link", { name: /Radar Test Player/ }).last()).toHaveAttribute(
+    "href", "/players/21001?league=bdb&from=home",
+  );
+});
+
 test("each manager receives only their own memberships", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),

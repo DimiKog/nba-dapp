@@ -1,8 +1,7 @@
 import Link from "next/link";
 import TeamLogo from "@/components/TeamLogo";
 import type { FantasyTeam } from "@/lib/api";
-
-type LeagueSlug = "ldl" | "bdb";
+import { leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
 export default function FantasyLeagueStandings({
   active,
@@ -107,7 +106,7 @@ function compactMoney(value: number) {
 function LeagueTabs({ active }: { active: LeagueSlug }) {
   return (
     <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-      {(["ldl", "bdb"] as const).map((league) => (
+      {LEAGUE_SLUGS.map((league) => (
         <Link
           key={league}
           href={`/fantasy/${league}`}
@@ -117,7 +116,7 @@ function LeagueTabs({ active }: { active: LeagueSlug }) {
               : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           }`}
         >
-          {league === "ldl" ? "LDL" : "BδB"}
+          {leagueLabel(league)}
         </Link>
       ))}
     </div>
