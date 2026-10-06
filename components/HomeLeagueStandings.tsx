@@ -4,18 +4,15 @@ import Link from "next/link";
 import { useState } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { FantasyTeam } from "@/lib/api";
-
-type LeagueSlug = "ldl" | "bdb";
+import { leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
 export default function HomeLeagueStandings({
-  ldlTeams,
-  bdbTeams,
+  standings,
 }: {
-  ldlTeams: FantasyTeam[];
-  bdbTeams: FantasyTeam[];
+  standings: Array<{ league: LeagueSlug; teams: FantasyTeam[] }>;
 }) {
-  const [league, setLeague] = useState<LeagueSlug>("ldl");
-  const teams = (league === "ldl" ? ldlTeams : bdbTeams).slice(0, 5);
+  const [league, setLeague] = useState<LeagueSlug>(LEAGUE_SLUGS[0]);
+  const teams = (standings.find((panel) => panel.league === league)?.teams ?? []).slice(0, 5);
 
   return (
     <section>
@@ -25,7 +22,7 @@ export default function HomeLeagueStandings({
             Fantasy standings
           </h2>
           <div className="mt-2 flex w-fit gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-            {(["ldl", "bdb"] as const).map((item) => (
+            {LEAGUE_SLUGS.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -36,7 +33,7 @@ export default function HomeLeagueStandings({
                     : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
-                {item === "ldl" ? "LDL" : "BδB"}
+                {leagueLabel(item)}
               </button>
             ))}
           </div>
@@ -81,7 +78,7 @@ export default function HomeLeagueStandings({
           </table>
         ) : (
           <p className="p-6 text-center text-sm text-slate-400">
-            {league === "ldl" ? "LDL" : "BδB"} standings are temporarily unavailable.
+            {leagueLabel(league)} standings are temporarily unavailable.
           </p>
         )}
       </div>

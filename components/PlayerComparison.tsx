@@ -18,8 +18,8 @@ import {
   resolveFantasyCategories,
   type FantasyCategory,
 } from "@/lib/fantasyCategories";
+import { leagueLabel, LEAGUE_SLUGS, parseLeagueSlug, type LeagueSlug } from "@/lib/leagues";
 
-type LeagueSlug = "ldl" | "bdb";
 type StatsView = "season" | "window";
 
 const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
@@ -27,7 +27,7 @@ const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] a
 export default function PlayerComparison() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialLeague = searchParams.get("league") === "bdb" ? "bdb" : "ldl";
+  const initialLeague = parseLeagueSlug(searchParams.get("league"));
   const initialIds = searchParams.getAll("player").slice(0, 4);
   const [league, setLeague] = useState<LeagueSlug>(initialLeague);
   const [selectedIds, setSelectedIds] = useState<string[]>(initialIds);
@@ -45,7 +45,7 @@ export default function PlayerComparison() {
         setStatsView(data.ranking_basis);
       })
       .catch(() => {
-        if (active) setError(`Could not load ${league === "ldl" ? "LDL" : "BδB"} comparison data.`);
+        if (active) setError(`Could not load ${leagueLabel(league)} comparison data.`);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -131,7 +131,7 @@ export default function PlayerComparison() {
           </p>
         </div>
         <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-          {(["ldl", "bdb"] as const).map((item) => (
+          {LEAGUE_SLUGS.map((item) => (
             <button
               key={item}
               type="button"
@@ -142,7 +142,7 @@ export default function PlayerComparison() {
                   : "text-slate-500 dark:text-slate-400"
               }`}
             >
-              {item === "ldl" ? "LDL" : "BδB"}
+              {leagueLabel(item)}
             </button>
           ))}
         </div>
@@ -153,8 +153,8 @@ export default function PlayerComparison() {
           <div className="min-w-0 flex-1">
             <SearchablePlayerPicker
               label="Add player"
-              helper={selectedIds.length >= 4 ? "Comparison is full (4/4)" : `Search ${league === "ldl" ? "LDL" : "BδB"}`}
-              placeholder={`Search ${league === "ldl" ? "LDL" : "BδB"} players…`}
+              helper={selectedIds.length >= 4 ? "Comparison is full (4/4)" : `Search ${leagueLabel(league)}`}
+              placeholder={`Search ${leagueLabel(league)} players…`}
               value=""
               options={availableOptions}
               disabled={selectedIds.length >= 4 || loading}

@@ -13,6 +13,7 @@ import {
   type FantasyMatchup,
   type FantasyMatchupPeriod,
   type FantasyRosterPerformance,
+  type FantasyTeam,
   type FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
@@ -21,7 +22,10 @@ import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
-import { isLeagueSlug, leagueLabel, type LeagueSlug } from "@/lib/leagues";
+import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
+
+type LeagueStandingsPanel = { league: LeagueSlug; teams: FantasyTeam[] };
+type LeagueRadarPanel = { league: LeagueSlug; radar: FantasyFreeAgentRadar | null };
 
 export default async function Home() {
   const context = await loadCurrentFantasyContext().catch(() => ({
@@ -30,11 +34,13 @@ export default async function Home() {
     session: null,
   }));
   const session = context.session;
-  const [games, news, ldlTeams, bdbTeams, personalTeams, radarPanels] = await Promise.all([
+  const [games, news, standingsPanels, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
-    fetchFantasyStandings("ldl").catch(() => []),
-    fetchFantasyStandings("bdb").catch(() => []),
+    Promise.all(LEAGUE_SLUGS.map(async (league): Promise<LeagueStandingsPanel> => ({
+      league,
+      teams: await fetchFantasyStandings(league).catch(() => []),
+    }))),
     Promise.all(
       (session?.memberships ?? [])
         .filter((membership): membership is FantasyMembership & {
@@ -60,10 +66,10 @@ export default async function Home() {
             };
           }),
     ).catch(() => []),
-    Promise.all([
-      fetchFreeAgentRadar("ldl").catch(() => null),
-      fetchFreeAgentRadar("bdb").catch(() => null),
-    ]),
+    Promise.all(LEAGUE_SLUGS.map(async (league): Promise<LeagueRadarPanel> => ({
+      league,
+      radar: await fetchFreeAgentRadar(league).catch(() => null),
+    }))),
   ]);
 
   const ownedByTeam = ownedPlayersByTeam(personalTeams);
@@ -108,7 +114,7 @@ export default async function Home() {
 
       {/* Fantasy standings + News */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <HomeLeagueStandings ldlTeams={ldlTeams} bdbTeams={bdbTeams} />
+        <HomeLeagueStandings standings={standingsPanels} />
 
         {/* News */}
         <section>
@@ -263,7 +269,7 @@ function NeedsAttention({ teams }: { teams: PersonalTeamDashboard[] }) {
 function HomeRadarPanels({
   radars,
 }: {
-  radars: Array<FantasyFreeAgentRadar | null>;
+  radars: LeagueRadarPanel[];
 }) {
   return (
     <section>
@@ -279,11 +285,11 @@ function HomeRadarPanels({
         </Link>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        {radars.map((radar, index) => (
+        {radars.map(({ league, radar }) => (
           <HomeRadarCard
-            key={radar?.league.slug ?? index}
+            key={league}
             radar={radar}
-            fallbackLeague={index === 0 ? "ldl" : "bdb"}
+            league={league}
           />
         ))}
       </div>
@@ -293,13 +299,12 @@ function HomeRadarPanels({
 
 function HomeRadarCard({
   radar,
-  fallbackLeague,
+  league,
 }: {
   radar: FantasyFreeAgentRadar | null;
-  fallbackLeague: "ldl" | "bdb";
+  league: LeagueSlug;
 }) {
-  const league = (radar?.league.slug === "bdb" ? "bdb" : fallbackLeague) as "ldl" | "bdb";
-  const leagueName = radar?.league.name ?? (fallbackLeague === "ldl" ? "LDL" : "BδB");
+  const leagueName = radar?.league.name ?? leagueLabel(league);
   const leaders = radar?.players.filter((player) => player.trend_rank != null).slice(0, 3) ?? [];
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -364,7 +369,7 @@ function HomeRadarCard({
 }
 
 type PersonalTeamDashboard = {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   leagueName: string;
   teamName: string;
   teamId: string;
