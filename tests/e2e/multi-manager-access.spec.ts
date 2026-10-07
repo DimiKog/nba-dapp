@@ -38,6 +38,25 @@ test("unconfigured league stays closed across shared fantasy routes", async ({ r
   }
 });
 
+test("trade analyzer tabs preserve their inputs and URL modes", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a/trade?mode=suggestions`);
+
+  await expect(page.getByRole("button", { name: "1-for-1" })).toBeVisible();
+  await page.getByRole("button", { name: "Analyze trade" }).first().click();
+  await expect(page.getByRole("combobox", { name: "Trade partner" })).toBeVisible();
+  await expect(page).toHaveURL(/mode=analyze/);
+
+  await page.getByRole("button", { name: "Find destinations" }).click();
+  await expect(page.getByRole("heading", { name: "Who needs this player most?" })).toBeVisible();
+  await expect(page).toHaveURL(/mode=partners/);
+
+  await page.getByRole("button", { name: "Suggested trades" }).click();
+  await expect(page.getByRole("button", { name: "1-for-2" })).toBeVisible();
+  await expect(page).toHaveURL(/mode=suggestions/);
+});
+
 test("home league panels keep LDL and BδB order and league-specific links", async ({ page }) => {
   await page.goto(app);
 
