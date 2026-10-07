@@ -1,33 +1,49 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import TeamLogo from "@/components/TeamLogo";
 import type { FantasyTeam } from "@/lib/api";
 import { leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
+type StandingsLeague = LeagueSlug | "gnfc";
+const STANDINGS_LEAGUES = [...LEAGUE_SLUGS, "gnfc"] as const;
+
+function standingsLeagueLabel(league: StandingsLeague) {
+  return league === "gnfc" ? "GNFC Γ5" : leagueLabel(league);
+}
+
 export default function FantasyLeagueStandings({
   active,
   teams,
+  intro,
+  showMyTeamLink = true,
 }: {
-  active: LeagueSlug;
+  active: StandingsLeague;
   teams: FantasyTeam[];
+  intro?: ReactNode;
+  showMyTeamLink?: boolean;
 }) {
+  const showCap = active !== "gnfc";
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Fantasy</h1>
-          <p className="mt-1 text-slate-500 dark:text-slate-400">2026-27 Season</p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            {active === "gnfc" ? "GNFC Γ5 · Penny Hardaway · 2026-27" : "2026-27 Season"}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Link href="/" className="text-sm text-blue-500 hover:underline">← NBA Home</Link>
-          <Link
+          {showMyTeamLink && <Link
             href={`/fantasy/${active}/my-team`}
             className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-bold text-white transition-colors hover:bg-blue-700"
           >
             Open my team →
-          </Link>
+          </Link>}
         </div>
       </div>
 
+      {intro}
       <LeagueTabs active={active} />
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -39,7 +55,7 @@ export default function FantasyLeagueStandings({
               <th className="px-4 py-3 text-center">W</th>
               <th className="px-4 py-3 text-center">L</th>
               <th className="hidden px-4 py-3 text-center sm:table-cell">T</th>
-              <th className="px-4 py-3 text-right">Cap +/-</th>
+              {showCap && <th className="px-4 py-3 text-right">Cap +/-</th>}
               <th className="hidden px-4 py-3 text-right lg:table-cell">PF</th>
               <th className="hidden px-4 py-3 text-right lg:table-cell">PA</th>
             </tr>
@@ -59,9 +75,7 @@ export default function FantasyLeagueStandings({
                 <td className="px-4 py-3 text-center tabular-nums text-slate-700 dark:text-slate-300">{team.wins ?? "—"}</td>
                 <td className="px-4 py-3 text-center tabular-nums text-slate-700 dark:text-slate-300">{team.losses ?? "—"}</td>
                 <td className="hidden px-4 py-3 text-center tabular-nums text-slate-500 dark:text-slate-400 sm:table-cell">{team.ties ?? "—"}</td>
-                <td className="px-4 py-3 text-right">
-                  <CapStatus team={team} />
-                </td>
+                {showCap && <td className="px-4 py-3 text-right"><CapStatus team={team} /></td>}
                 <td className="hidden px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400 lg:table-cell">{team.points_for ?? "—"}</td>
                 <td className="hidden px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-400 lg:table-cell">{team.points_against ?? "—"}</td>
               </tr>
@@ -103,10 +117,10 @@ function compactMoney(value: number) {
   return `$${value.toLocaleString("en-US")}`;
 }
 
-function LeagueTabs({ active }: { active: LeagueSlug }) {
+function LeagueTabs({ active }: { active: StandingsLeague }) {
   return (
     <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-      {LEAGUE_SLUGS.map((league) => (
+      {STANDINGS_LEAGUES.map((league) => (
         <Link
           key={league}
           href={`/fantasy/${league}`}
@@ -116,7 +130,7 @@ function LeagueTabs({ active }: { active: LeagueSlug }) {
               : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           }`}
         >
-          {leagueLabel(league)}
+          {standingsLeagueLabel(league)}
         </Link>
       ))}
     </div>
