@@ -1178,6 +1178,16 @@ export interface FantasyTargetCandidate {
   availability_percentile?: number;
   recommendation_tier?: "strong" | "best_available" | "last_resort" | "not_recommended";
   recommendation_labels?: string[];
+  actionability?: {
+    status: "ready" | "needs_review" | "requires_move" | "statistical_only";
+    reasons: string[];
+    role_signal: string;
+    cap_result: string;
+    roster_result: string;
+    stats_season?: string;
+    observed_games?: number;
+    observed_minutes?: number | null;
+  };
   helps: string[];
   hurts_needs: string[];
   tradeoffs: string[];
@@ -1247,6 +1257,12 @@ export interface FantasyCategoryTargets {
   };
   candidates: FantasyTargetCandidate[];
   category_recommendations?: FantasyCategoryRecommendation[];
+  acquisition_context?: {
+    roster_count: number;
+    roster_limit: number | null;
+    cap_applies: boolean;
+    cap_season: string | null;
+  };
 }
 
 export interface LeaguePlayerExplorer {
@@ -1477,6 +1493,7 @@ export async function fetchFantasyCategoryTargets(
     position?: string;
     category?: string;
     limit?: number;
+    actionScope?: "ready" | "all";
   } = {},
   identityHeaders?: HeadersInit,
 ): Promise<FantasyCategoryTargets> {
@@ -1485,6 +1502,7 @@ export async function fetchFantasyCategoryTargets(
     window: String(options.window ?? 14),
     availability: options.availability ?? "all",
     limit: String(options.limit ?? 24),
+    action_scope: options.actionScope ?? "all",
   });
   if (options.position) params.set("position", options.position);
   if (options.category) params.set("category", options.category);
