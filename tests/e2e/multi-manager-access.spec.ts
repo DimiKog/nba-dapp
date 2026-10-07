@@ -249,7 +249,18 @@ test("free-agent fit explains the weighted score without treating salary or risk
   await page.getByText("Explore all 1 eligible candidates").click();
   await expect(page.getByText("Model: statistical help for a selected need; future role and minutes unassessed")).toBeVisible();
   await page.getByText("How is this scored?").click();
-  await expect(page.getByText(/Salary, tokens, future role and injury risk are not in this score/)).toBeVisible();
+  await expect(page.getByText(/Salary, tokens, future role and injury risk do not change the category-fit score/)).toBeVisible();
+});
+
+test("conditional FA options appear only after the manager asks to explore them", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+  await expect(page.getByText("Conditional FA", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Show options requiring changes" }).click();
+  await page.getByText("Explore all 2 eligible candidates").click();
+  await expect(page.getByText("Conditional FA", { exact: true })).toBeVisible();
+  await expect(page.getByText("Roster spot or drop needed")).toBeVisible();
 });
 
 test("free-agent radar distinguishes recent trend from team fit", async ({ page, request }) => {
