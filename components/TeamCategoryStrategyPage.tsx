@@ -9,15 +9,16 @@ import {
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 import type { TeamCategoryStrategy } from "@/lib/teamCategoryStrategy";
 import { readTeamCategoryStrategy } from "@/lib/teamCategoryStrategyServer";
+import { leagueLabel, type LeagueSlug } from "@/lib/leagues";
 
 export default async function TeamCategoryStrategyPage({
   league,
 }: {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
 }) {
   const access = await loadCurrentFantasyAccess();
   const membership = membershipFor(access?.session ?? null, league);
-  const leagueName = league === "ldl" ? "LDL" : "BδB";
+  const leagueName = leagueLabel(league);
 
   if (!access || !membership?.fantrax_team_id) {
     return (

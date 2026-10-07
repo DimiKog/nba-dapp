@@ -1,5 +1,7 @@
+import type { LeagueSlug } from "@/lib/leagues";
+
 export type OwnedPlayer = {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   leagueName: string;
   name: string;
   injured: boolean;
@@ -15,7 +17,7 @@ type RosterPlayerLike = {
 };
 
 type PersonalTeamLike = {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   leagueName: string;
   performance: { players: RosterPlayerLike[] } | null;
 };

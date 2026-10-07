@@ -16,7 +16,7 @@ import {
   formatFantasyStat,
   resolveFantasyCategories,
 } from "@/lib/fantasyCategories";
-import { storeLeague, type LeagueSlug } from "@/lib/leagues";
+import { leagueLabel, LEAGUE_SLUGS, storeLeague, type LeagueSlug } from "@/lib/leagues";
 
 export default function WatchlistRadar({
   initialLeague,
@@ -190,7 +190,7 @@ export default function WatchlistRadar({
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" disabled={loading} onClick={() => void refreshLeague(league, true)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">{loading ? "Refreshing…" : "Refresh data"}</button>
           <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {(["ldl", "bdb"] as const).map((item) => (
+            {LEAGUE_SLUGS.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -201,7 +201,7 @@ export default function WatchlistRadar({
                     : "text-slate-500 dark:text-slate-400"
                 }`}
               >
-                {item === "ldl" ? "LDL" : "BδB"}
+                {leagueLabel(item)}
               </button>
             ))}
           </div>

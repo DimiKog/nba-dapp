@@ -15,6 +15,7 @@ import {
   getServerLeagueSnapshot,
   getStoredLeagueSnapshot,
   leagueLabel,
+  LEAGUE_SLUGS,
   resolveClientLeague,
   storeLeague,
   subscribeLeagueStore,
@@ -286,7 +287,7 @@ export default function LeaguePlayerExplorer() {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
           <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {(["ldl", "bdb"] as const).map((item) => (
+            {LEAGUE_SLUGS.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -297,7 +298,7 @@ export default function LeaguePlayerExplorer() {
                     : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
-                {item === "ldl" ? "LDL" : "BδB"}
+                {leagueLabel(item)}
               </button>
             ))}
           </div>

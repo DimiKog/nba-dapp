@@ -4,8 +4,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { loadCurrentFantasySession, membershipFor } from "@/lib/fantasySessionServer";
-
-type LeagueSlug = "ldl" | "bdb";
+import { leagueLabel, type LeagueSlug } from "@/lib/leagues";
 
 export default async function PersonalTeamRedirect({
   league,
@@ -20,7 +19,7 @@ export default async function PersonalTeamRedirect({
     );
   }
 
-  const leagueName = league === "ldl" ? "LDL" : "BδB";
+  const leagueName = leagueLabel(league);
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10">
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/30">

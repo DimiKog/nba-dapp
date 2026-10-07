@@ -14,8 +14,18 @@ test("the existing leagues keep their labels, order and presentation features", 
   assert.deepEqual(LEAGUE_SLUGS, ["ldl", "bdb"]);
   assert.equal(leagueLabel("ldl"), "LDL");
   assert.equal(leagueLabel("bdb"), "BδB");
-  assert.deepEqual(LEAGUE_PRESENTATION.ldl, { label: "LDL", showTenure: true, showClaimTokens: false });
-  assert.deepEqual(LEAGUE_PRESENTATION.bdb, { label: "BδB", showTenure: false, showClaimTokens: true });
+  assert.deepEqual(LEAGUE_PRESENTATION.ldl, {
+    label: "LDL",
+    showTenure: true,
+    showClaimTokens: false,
+    scoreboardPlayerClasses: "border-cyan-500 bg-cyan-50 text-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-200",
+  });
+  assert.deepEqual(LEAGUE_PRESENTATION.bdb, {
+    label: "BδB",
+    showTenure: false,
+    showClaimTokens: true,
+    scoreboardPlayerClasses: "border-violet-500 bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200",
+  });
 });
 
 test("unknown slugs never receive league-specific presentation features", () => {

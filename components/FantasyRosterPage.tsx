@@ -16,8 +16,7 @@ import TeamSectionNav from "@/components/TeamSectionNav";
 import RefreshDataButton from "@/components/RefreshDataButton";
 import { notFound } from "next/navigation";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
-
-type LeagueSlug = "ldl" | "bdb";
+import { leagueLabel, type LeagueSlug } from "@/lib/leagues";
 
 export default async function FantasyRosterPage({
   league,
@@ -65,7 +64,7 @@ export default async function FantasyRosterPage({
   return (
     <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-10">
       <Link href={`/fantasy/${league}`} className="text-sm text-blue-500 hover:underline">
-        ← {league === "ldl" ? "LDL" : "BδB"} Standings
+        ← {leagueLabel(league)} Standings
       </Link>
 
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
