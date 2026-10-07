@@ -1374,6 +1374,9 @@ export interface FantasyLeague {
   personal_team_id: string;
   personal_team_name: string;
   enabled: boolean;
+  expected_team_count?: number | null;
+  availability_ready?: boolean;
+  trade_analyzer_enabled?: boolean;
   season_phase?: FantasySeasonPhase;
   roster_rules?: {
     minimum_players?: number;
@@ -1420,13 +1423,13 @@ export interface FantasyMatchupPeriod {
   matchups: FantasyMatchup[];
 }
 
-export async function fetchFantasyStandings(league: "ldl" | "bdb"): Promise<FantasyTeam[]> {
+export async function fetchFantasyStandings(league: "ldl" | "bdb" | "gnfc"): Promise<FantasyTeam[]> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/standings`, { next: { revalidate: 300 } });
   if (!res.ok) throw new Error("Failed to fetch standings");
   return res.json();
 }
 
-export async function fetchFantasyRoster(league: "ldl" | "bdb", teamId: string): Promise<FantasyRoster> {
+export async function fetchFantasyRoster(league: "ldl" | "bdb" | "gnfc", teamId: string): Promise<FantasyRoster> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch roster");
   return res.json();
