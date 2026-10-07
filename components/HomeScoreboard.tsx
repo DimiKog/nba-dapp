@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { OwnedPlayer } from "@/lib/scoreboardOwnership";
+import { LEAGUE_PRESENTATION, LEAGUE_SLUGS } from "@/lib/leagues";
 
 type ScoreboardTeam = {
   name: string;
@@ -144,7 +145,7 @@ function ScoreboardCard({ item }: { item: ScoreboardItem }) {
 
 function OwnedPlayersLine({ players }: { players: OwnedPlayer[] }) {
   if (players.length === 0) return null;
-  const leagues = (["ldl", "bdb"] as const)
+  const leagues = LEAGUE_SLUGS
     .map((league) => ({ league, players: players.filter((player) => player.league === league) }))
     .filter((group) => group.players.length > 0);
   return (
@@ -155,9 +156,7 @@ function OwnedPlayersLine({ players }: { players: OwnedPlayer[] }) {
             <span
               key={`${player.name}-${index}`}
               aria-label={`${player.leagueName}: ${player.name}${player.injured ? ", injured" : ""}`}
-              className={`rounded-md border-l-2 px-2 py-1 text-[11px] font-medium leading-tight ${league === "ldl"
-                ? "border-cyan-500 bg-cyan-50 text-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-200"
-                : "border-violet-500 bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200"}`}
+              className={`rounded-md border-l-2 px-2 py-1 text-[11px] font-medium leading-tight ${LEAGUE_PRESENTATION[league].scoreboardPlayerClasses}`}
             >
               {player.name}{player.injured && <span aria-hidden="true" className="ml-1 text-rose-500">●</span>}
             </span>

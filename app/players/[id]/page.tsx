@@ -5,8 +5,7 @@ import PlayerIntelligenceDashboard from "@/components/PlayerIntelligenceDashboar
 import { ApiResponseError, fetchPlayer, fetchPlayerIntelligence, fetchPlayerPreseasonAverages, photoUrl, type FantasyWatchlist, type PlayerDetail } from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 import { readWatchlist } from "@/lib/watchlistServer";
-
-type League = "ldl" | "bdb";
+import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
 export default async function PlayerPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
@@ -16,7 +15,7 @@ export default async function PlayerPage({ params, searchParams }: {
   const playerId = Number(id);
   if (!Number.isInteger(playerId)) notFound();
 
-  const requestedLeague: League | null = query.league === "ldl" || query.league === "bdb" ? query.league : null;
+  const requestedLeague: LeagueSlug | null = isLeagueSlug(query.league) ? query.league : null;
   const source = ["watchlist", "explorer", "recommendations", "roster"].includes(query.from ?? "") ? query.from! : null;
   let player: PlayerDetail;
   try {
@@ -63,7 +62,7 @@ function PlayerIdentityUnresolved({ player }: { player: PlayerDetail }) {
           <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Identity match pending</p><h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">{player.name}</h1><p className="mt-1 text-sm text-slate-500">{player.position ?? "Position unavailable"} · {player.team ?? "NBA team unavailable"}</p></div>
         </div>
         <div className="border-t border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-          NBA and fantasy intelligence cannot be calculated until this player is matched to an NBA identity. The player record remains available, but LDL and BδB context is disabled for now.
+          NBA and fantasy intelligence cannot be calculated until this player is matched to an NBA identity. The player record remains available, but {LEAGUE_SLUGS.map(leagueLabel).join(" and ")} context is disabled for now.
         </div>
       </section>
     </main>

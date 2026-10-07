@@ -2,12 +2,13 @@ export const LEAGUE_SLUGS = ["ldl", "bdb"] as const;
 export type LeagueSlug = (typeof LEAGUE_SLUGS)[number];
 
 export const LEAGUE_PRESENTATION = {
-  ldl: { label: "LDL", showTenure: true, showClaimTokens: false },
-  bdb: { label: "BδB", showTenure: false, showClaimTokens: true },
+  ldl: { label: "LDL", showTenure: true, showClaimTokens: false, scoreboardPlayerClasses: "border-cyan-500 bg-cyan-50 text-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-200" },
+  bdb: { label: "BδB", showTenure: false, showClaimTokens: true, scoreboardPlayerClasses: "border-violet-500 bg-violet-50 text-violet-900 dark:bg-violet-950/60 dark:text-violet-200" },
 } as const satisfies Record<LeagueSlug, {
   label: string;
   showTenure: boolean;
   showClaimTokens: boolean;
+  scoreboardPlayerClasses: string;
 }>;
 
 export function isLeagueSlug(value: string | null | undefined): value is LeagueSlug {
