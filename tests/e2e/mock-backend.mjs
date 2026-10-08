@@ -279,7 +279,7 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    return send(response, 200, targetsFixture(league, membership, session.user.id));
+    return send(response, 200, targetsFixture(league, membership, session.user.id, url.searchParams.get("action_scope")));
   }
   if (/^\/api\/fantasy\/(ldl|bdb)\/trade-suggestions$/.test(url.pathname)) {
     let rawBody = "";
@@ -477,7 +477,7 @@ function categoryProfileFixture(league, membership) {
   };
 }
 
-function targetsFixture(league, membership, managerId) {
+function targetsFixture(league, membership, managerId, actionScope) {
   const name = managerId === 1
     ? `${league.toUpperCase()} Manager A Target`
     : `${league.toUpperCase()} xrtc Target`;
@@ -490,7 +490,7 @@ function targetsFixture(league, membership, managerId) {
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
     need_source: "profile_weaknesses",
     needs: [],
-    sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: 80, returned: 1 },
+    sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: actionScope === "all" ? 2 : 1, returned: actionScope === "all" ? 2 : 1 },
     filters: { availability: "free_agent", position: null, limit: 12 },
     candidates: [{
       player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
@@ -515,13 +515,35 @@ function targetsFixture(league, membership, managerId) {
       need_contributions: [{ key: "ft_pct", label: "FT%", player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
       confidence: "high",
       recommendation_tier: "strong",
+      actionability: { status: "ready", reasons: [], role_signal: "observed_current_minutes", cap_result: "within_known_caps", roster_result: "open_slot" },
       recommendation_labels: ["fixture"],
       helps: ["FT%", "AST"],
       hurts_needs: [],
       tradeoffs: ["TO"],
       salary_2026_27: null,
       injury: null,
-    }],
+    }, ...(actionScope === "all" ? [{
+      player_id: 9000 + managerId,
+      nba_id: 9000 + managerId,
+      name: "Conditional FA",
+      short_name: "Conditional FA",
+      nba_team: "Test Team",
+      nba_team_short: "TST",
+      position: "F",
+      photo: null,
+      availability: "free_agent",
+      fantasy_team: null,
+      fit_rank: 2,
+      fit_score: 0.7,
+      confidence: "medium",
+      recommendation_tier: "strong",
+      actionability: { status: "requires_move", reasons: ["roster_drop_required"], role_signal: "historical_only", cap_result: "within_known_caps", roster_result: "drop_required" },
+      helps: ["FG%"],
+      hurts_needs: [],
+      tradeoffs: [],
+      salary_2026_27: "$1,000,000",
+      injury: null,
+    }] : [])],
   };
 }
 

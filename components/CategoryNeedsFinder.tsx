@@ -15,6 +15,7 @@ import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
 type LeagueSlug = "ldl" | "bdb";
 type Availability = "all" | "free_agent" | "rostered";
 type Basis = "season" | "window";
+type ActionScope = "ready" | "all";
 
 export default function CategoryNeedsFinder({
   league,
@@ -30,6 +31,7 @@ export default function CategoryNeedsFinder({
   const [availability, setAvailability] = useState<Availability>("all");
   const [category, setCategory] = useState("");
   const [position, setPosition] = useState("");
+  const [actionScope, setActionScope] = useState<ActionScope>("ready");
   const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -74,22 +76,26 @@ export default function CategoryNeedsFinder({
   const filtersAreDefault = basis === "season"
     && availability === "all"
     && category === ""
-    && position === "";
+    && position === ""
+    && actionScope === "ready";
 
   async function applyFilters(next: {
     basis?: Basis;
     availability?: Availability;
     category?: string;
     position?: string;
+    actionScope?: ActionScope;
   }) {
     const selectedBasis = next.basis ?? basis;
     const selectedAvailability = next.availability ?? availability;
     const selectedCategory = next.category ?? category;
     const selectedPosition = next.position ?? position;
+    const selectedActionScope = next.actionScope ?? actionScope;
     setBasis(selectedBasis);
     setAvailability(selectedAvailability);
     setCategory(selectedCategory);
     setPosition(selectedPosition);
+    setActionScope(selectedActionScope);
     setLoading(true);
     setError(false);
     const requestId = ++requestSequence.current;
@@ -98,6 +104,7 @@ export default function CategoryNeedsFinder({
       window: "14",
       availability: selectedAvailability,
       limit: "24",
+      action_scope: selectedActionScope,
     });
     if (selectedCategory) params.set("category", selectedCategory);
     if (selectedPosition) params.set("position", selectedPosition);
@@ -125,6 +132,7 @@ export default function CategoryNeedsFinder({
       availability: "all",
       category: "",
       position: "",
+      actionScope: "ready",
     });
   }
 
@@ -205,10 +213,20 @@ export default function CategoryNeedsFinder({
         </div>
 
         <div className="px-5 py-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/30">
+            <div>
+              <p className="text-sm font-black text-slate-900 dark:text-white">{actionScope === "ready" ? "Feasible now" : "Options requiring changes or review"}</p>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{actionScope === "ready" ? "Free agents appear here only when role, NBA status, roster space and acquisition checks pass. A statistical fit alone is not enough." : "These players may help statistically, but a drop, cap room, tokens or an updated role check may still be needed."}</p>
+            </div>
+            <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready" })} disabled={loading}
+              className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-300">
+              {actionScope === "ready" ? "Show options requiring changes" : "Show feasible now"}
+            </button>
+          </div>
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="font-bold uppercase tracking-wide">Optimizing for</span>
             {targets.needs.map((need) => <span key={need.key} className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">{need.label}</span>)}
-            <span>· {targets.sample.filtered_candidates} eligible players</span>
+            <span>· {targets.sample.filtered_candidates} players in this view</span>
           </div>
           <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/40">
             <summary className="cursor-pointer font-bold text-blue-700 marker:text-slate-400 dark:text-blue-400">
@@ -220,7 +238,7 @@ export default function CategoryNeedsFinder({
               <p><strong className="text-slate-900 dark:text-white">Market rank:</strong> free agents and rostered trade targets are ranked separately from their absolute z-score.</p>
               <p><strong className="text-slate-900 dark:text-white">FG% and FT%:</strong> shooting impact accounts for attempt volume, not percentage alone.</p>
               <p><strong className="text-slate-900 dark:text-white">Turnovers:</strong> lower is better, so fewer turnovers produce a more positive score.</p>
-              <p><strong className="text-slate-900 dark:text-white">Overall fit:</strong> combines category scores and gives more weight to your team&apos;s deeper weaknesses. Sample confidence reflects games recorded, not expected future minutes.</p>
+              <p><strong className="text-slate-900 dark:text-white">Overall fit:</strong> combines category scores and gives more weight to your team&apos;s deeper weaknesses. Sample coverage reflects games recorded, not expected future minutes. Acquisition readiness is checked separately.</p>
             </div>
           </details>
           {targets.fallback_reason && (
@@ -393,6 +411,7 @@ function CandidateCard({
     : undefined;
   const categoryZ = categoryContribution?.absolute_z ?? categoryContribution?.player_z;
   const fit = player.fit_explanation;
+  const actionability = player.availability === "free_agent" ? player.actionability : undefined;
   const rankedContributions = [...(player.need_contributions ?? [])]
     .sort((a, b) => Math.abs(b.weighted_contribution) - Math.abs(a.weighted_contribution));
   return (
@@ -408,6 +427,12 @@ function CandidateCard({
           </div>
         </div>
       </div>
+      {actionability && (
+        <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${actionability.status === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"}`}>
+          <p className="font-black">{actionabilityLabel(actionability.status)}</p>
+          <p className="mt-1">{actionability.reasons.length > 0 ? actionability.reasons.map(actionabilityReason).join(" · ") : "Observed role, NBA status, roster and acquisition checks passed. Confirm the live claim before acting."}</p>
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{player.availability === "free_agent" ? "Fantasy free agent" : player.fantasy_team?.name ?? "Rostered"}</span>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{player.confidence} sample coverage</span>
@@ -439,7 +464,7 @@ function CandidateCard({
           {rankedContributions.length > 0 && <ul className="mt-2 space-y-1">
             {rankedContributions.map((item) => <li key={item.key} className="flex justify-between gap-2"><span>{item.label} · {item.player_z >= 0 ? "+" : ""}{item.player_z.toFixed(2)}z × {item.weight.toFixed(1)}</span><strong className={item.weighted_contribution >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>{item.weighted_contribution >= 0 ? "+" : ""}{item.weighted_contribution.toFixed(2)}</strong></li>)}
           </ul>}
-          <p className="mt-2 text-slate-500 dark:text-slate-400">Salary, tokens, future role and injury risk are not in this score. Review them separately; this model does not learn from saved player notes.</p>
+          <p className="mt-2 text-slate-500 dark:text-slate-400">Salary, tokens, future role and injury risk do not change the category-fit score. Acquisition checks are separate; the model does not learn from saved player notes.</p>
         </details>
       </div>}
       <DetailRow label="Helps" values={player.helps} tone="positive" />
@@ -467,6 +492,36 @@ function CandidateCard({
       </div>
     </article>
   );
+}
+
+function actionabilityLabel(status: NonNullable<FantasyTargetCandidate["actionability"]>["status"]): string {
+  if (status === "ready") return "Acquisition checks passed";
+  if (status === "requires_move") return "Requires a roster, cap or token change";
+  if (status === "needs_review") return "Role or acquisition needs review";
+  return "Statistical fit only";
+}
+
+const ACTIONABILITY_REASONS: Record<string, string> = {
+  current_role_unverified: "Current minutes and role unverified",
+  nba_role_or_status_unverified: "NBA status unverified",
+  injury_review_required: "Injury needs review",
+  roster_drop_required: "Roster spot or drop needed",
+  roster_limit_unknown: "Roster limit unknown",
+  roster_snapshot_stale_or_unverified: "Roster snapshot needs refreshing",
+  roster_salary_unavailable: "A roster salary is missing",
+  cap_provisional: "Cap figure is provisional",
+  salary_unavailable: "Player salary unknown",
+  cap_unavailable: "Cap figure unavailable",
+  cap_move_required: "Cap space or salary move needed",
+  claim_budget_unverified: "Claim-token balance unverified",
+  claim_budget_stale_or_unverified: "Claim-token balance needs refreshing",
+  claim_tokens_required: "Claim tokens needed",
+  weekly_claim_limit_unverified: "Weekly claim count unverified",
+  category_fit_not_actionable: "Statistical fit below the action threshold",
+};
+
+function actionabilityReason(code: string): string {
+  return ACTIONABILITY_REASONS[code] ?? code.replaceAll("_", " ");
 }
 
 function faFitConclusion(player: FantasyTargetCandidate): string {

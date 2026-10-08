@@ -10,6 +10,7 @@ const ALLOWED_PARAMS = [
   "position",
   "category",
   "limit",
+  "action_scope",
 ] as const;
 
 export async function GET(
