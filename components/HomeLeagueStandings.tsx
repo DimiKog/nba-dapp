@@ -6,12 +6,19 @@ import TeamLogo from "@/components/TeamLogo";
 import type { FantasyTeam } from "@/lib/api";
 import { leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
+type StandingsLeague = LeagueSlug | "gnfc";
+const STANDINGS_LEAGUES = [...LEAGUE_SLUGS, "gnfc"] as const;
+
+function standingsLeagueLabel(league: StandingsLeague) {
+  return league === "gnfc" ? "GNFC Γ5" : leagueLabel(league);
+}
+
 export default function HomeLeagueStandings({
   standings,
 }: {
-  standings: Array<{ league: LeagueSlug; teams: FantasyTeam[] }>;
+  standings: Array<{ league: StandingsLeague; teams: FantasyTeam[] }>;
 }) {
-  const [league, setLeague] = useState<LeagueSlug>(LEAGUE_SLUGS[0]);
+  const [league, setLeague] = useState<StandingsLeague>(LEAGUE_SLUGS[0]);
   const teams = (standings.find((panel) => panel.league === league)?.teams ?? []).slice(0, 5);
 
   return (
@@ -22,7 +29,7 @@ export default function HomeLeagueStandings({
             Fantasy standings
           </h2>
           <div className="mt-2 flex w-fit gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-            {LEAGUE_SLUGS.map((item) => (
+            {STANDINGS_LEAGUES.map((item) => (
               <button
                 key={item}
                 type="button"
@@ -33,7 +40,7 @@ export default function HomeLeagueStandings({
                     : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
                 }`}
               >
-                {leagueLabel(item)}
+                {standingsLeagueLabel(item)}
               </button>
             ))}
           </div>
@@ -50,7 +57,7 @@ export default function HomeLeagueStandings({
               <tr>
                 <th className="w-10 px-3 py-2 text-left">#</th>
                 <th className="px-3 py-2 text-left">Team</th>
-                <th className="px-3 py-2 text-right">Cap +/-</th>
+                {league !== "gnfc" && <th className="px-3 py-2 text-right">Cap +/-</th>}
                 <th className="px-3 py-2 text-center">W–L</th>
               </tr>
             </thead>
@@ -66,9 +73,11 @@ export default function HomeLeagueStandings({
                       </span>
                     </Link>
                   </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <CapDifference team={team} />
-                  </td>
+                  {league !== "gnfc" && (
+                    <td className="px-3 py-2.5 text-right">
+                      <CapDifference team={team} />
+                    </td>
+                  )}
                   <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums text-slate-700 dark:text-slate-300">
                     {team.wins ?? "—"}–{team.losses ?? "—"}
                   </td>
@@ -78,7 +87,7 @@ export default function HomeLeagueStandings({
           </table>
         ) : (
           <p className="p-6 text-center text-sm text-slate-400">
-            {leagueLabel(league)} standings are temporarily unavailable.
+            {standingsLeagueLabel(league)} standings are temporarily unavailable.
           </p>
         )}
       </div>

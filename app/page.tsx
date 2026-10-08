@@ -24,8 +24,11 @@ import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
-type LeagueStandingsPanel = { league: LeagueSlug; teams: FantasyTeam[] };
+type StandingsLeague = LeagueSlug | "gnfc";
+type LeagueStandingsPanel = { league: StandingsLeague; teams: FantasyTeam[] };
 type LeagueRadarPanel = { league: LeagueSlug; radar: FantasyFreeAgentRadar | null };
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const context = await loadCurrentFantasyContext().catch(() => ({
@@ -34,10 +37,11 @@ export default async function Home() {
     session: null,
   }));
   const session = context.session;
+  const gnfcMembership = session?.memberships.find((membership) => membership.league_slug === "gnfc") ?? null;
   const [games, news, standingsPanels, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
-    Promise.all(LEAGUE_SLUGS.map(async (league): Promise<LeagueStandingsPanel> => ({
+    Promise.all(([...LEAGUE_SLUGS, "gnfc"] as const).map(async (league): Promise<LeagueStandingsPanel> => ({
       league,
       teams: await fetchFantasyStandings(league).catch(() => []),
     }))),
@@ -92,13 +96,15 @@ export default async function Home() {
 
       <ManagerTodayHeader
         displayName={session?.user.display_name ?? null}
-        teamCount={personalTeams.length}
+        teamCount={personalTeams.length + (gnfcMembership ? 1 : 0)}
       />
 
       <NeedsAttention teams={personalTeams} />
 
       <PersonalTeamsGrid
         teams={personalTeams}
+        gnfcMembership={gnfcMembership}
+        gnfcTeamCount={standingsPanels.find((panel) => panel.league === "gnfc")?.teams.length ?? 0}
         hasAccessIdentity={Boolean(context.identity)}
         hasSession={Boolean(session)}
       />
@@ -380,10 +386,14 @@ type PersonalTeamDashboard = {
 
 function PersonalTeamsGrid({
   teams,
+  gnfcMembership,
+  gnfcTeamCount,
   hasAccessIdentity,
   hasSession,
 }: {
   teams: PersonalTeamDashboard[];
+  gnfcMembership: FantasyMembership | null;
+  gnfcTeamCount: number;
   hasAccessIdentity: boolean;
   hasSession: boolean;
 }) {
@@ -399,7 +409,10 @@ function PersonalTeamsGrid({
         {teams.map((team) => (
           <PersonalTeamCard key={team.league} dashboard={team} />
         ))}
-        {teams.length === 0 && (
+        {gnfcMembership && (
+          <GnfcHomeCard membership={gnfcMembership} teamCount={gnfcTeamCount} />
+        )}
+        {teams.length === 0 && !gnfcMembership && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
             <p className="font-bold text-slate-900 dark:text-white">
               {hasSession
@@ -419,6 +432,27 @@ function PersonalTeamsGrid({
         )}
       </div>
     </section>
+  );
+}
+
+function GnfcHomeCard({ membership, teamCount }: { membership: FantasyMembership; teamCount: number }) {
+  return (
+    <article className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-900 dark:from-amber-950/30 dark:to-slate-900">
+      <div className="border-b border-amber-200 px-5 py-4 dark:border-amber-900">
+        <span className="rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+          GNFC Γ5 · Preview
+        </span>
+        <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{membership.franchise_name}</h3>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Shared franchise · your account is linked separately</p>
+      </div>
+      <div className="space-y-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
+        <p>{teamCount ? `${teamCount} teams in the standings` : "Standings temporarily unavailable"}</p>
+        <p>Free-agent proposals await a verified 12-team roster snapshot. No cap or claim-token assumptions apply.</p>
+        <Link href="/fantasy/gnfc" className="inline-block font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          Open GNFC Γ5 →
+        </Link>
+      </div>
+    </article>
   );
 }
 

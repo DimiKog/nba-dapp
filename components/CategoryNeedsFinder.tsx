@@ -516,7 +516,6 @@ const ACTIONABILITY_REASONS: Record<string, string> = {
   claim_budget_unverified: "Claim-token balance unverified",
   claim_budget_stale_or_unverified: "Claim-token balance needs refreshing",
   claim_tokens_required: "Claim tokens needed",
-  weekly_claim_limit_unverified: "Weekly claim count unverified",
   category_fit_not_actionable: "Statistical fit below the action threshold",
 };
 
