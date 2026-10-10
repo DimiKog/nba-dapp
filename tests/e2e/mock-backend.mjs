@@ -279,7 +279,24 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    return send(response, 200, targetsFixture(league, membership, session.user.id, url.searchParams.get("action_scope")));
+    const fixture = targetsFixture(league, membership, session.user.id, url.searchParams.get("action_scope"));
+    if (url.searchParams.get("position") === "PG") {
+      const first = fixture.candidates[0];
+      const all = Array.from({ length: 25 }, (_, index) => ({
+        ...first,
+        nba_id: first.nba_id + 1001 + index,
+        player_id: first.player_id + 1001 + index,
+        name: `Paged candidate ${index + 1}`,
+        short_name: `Paged candidate ${index + 1}`,
+        position: "PG",
+      }));
+      const offset = Number(url.searchParams.get("offset") || 0);
+      fixture.candidates = all.slice(offset, offset + 24);
+      fixture.sample.filtered_candidates = all.length;
+      fixture.sample.returned = fixture.candidates.length;
+      fixture.filters.offset = offset;
+    }
+    return send(response, 200, fixture);
   }
   if (/^\/api\/fantasy\/(ldl|bdb)\/trade-suggestions$/.test(url.pathname)) {
     let rawBody = "";

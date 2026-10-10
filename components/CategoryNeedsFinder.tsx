@@ -19,6 +19,31 @@ type Availability = "all" | "free_agent" | "rostered";
 type Basis = "season" | "window";
 type ActionScope = "ready" | "all";
 type CapScope = "all" | "known_fit";
+type TargetFilters = {
+  basis: Basis;
+  availability: Availability;
+  category: string;
+  position: string;
+  actionScope: ActionScope;
+  capScope: CapScope;
+};
+
+const CANDIDATE_PAGE_SIZE = 24;
+
+function targetParams(filters: TargetFilters, offset = 0) {
+  const params = new URLSearchParams({
+    basis: filters.basis,
+    window: "14",
+    availability: filters.availability,
+    limit: String(CANDIDATE_PAGE_SIZE),
+    offset: String(offset),
+    action_scope: filters.actionScope,
+    cap_scope: filters.capScope,
+  });
+  if (filters.category) params.set("category", filters.category);
+  if (filters.position) params.set("position", filters.position);
+  return params;
+}
 
 export default function CategoryNeedsFinder({
   league,
@@ -30,6 +55,7 @@ export default function CategoryNeedsFinder({
   initialTargets: FantasyCategoryTargets;
 }) {
   const [targets, setTargets] = useState(initialTargets);
+  const [visibleCandidates, setVisibleCandidates] = useState(initialTargets.candidates);
   const [basis, setBasis] = useState<Basis>("season");
   const [availability, setAvailability] = useState<Availability>("all");
   const [category, setCategory] = useState("");
@@ -38,6 +64,8 @@ export default function CategoryNeedsFinder({
   const [capScope, setCapScope] = useState<CapScope>("all");
   const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const [error, setError] = useState(false);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
   const [watchlistReady, setWatchlistReady] = useState<boolean | null>(false);
@@ -73,7 +101,8 @@ export default function CategoryNeedsFinder({
   const recommendationLanes = targets.category_recommendations ?? [];
   const activeLane = recommendationLanes.find((lane) => lane.key === focusedLane)
     ?? recommendationLanes[0];
-  const candidateCopy = candidateListCopy(targets.candidates.length, targets.sample.filtered_candidates);
+  const candidateCopy = candidateListCopy(visibleCandidates.length, targets.sample.filtered_candidates);
+  const hasMoreCandidates = visibleCandidates.length < targets.sample.filtered_candidates;
   const filtersAreDefault = basis === "season"
     && availability === "all"
     && category === ""
@@ -102,32 +131,64 @@ export default function CategoryNeedsFinder({
     setActionScope(selectedActionScope);
     setCapScope(selectedCapScope);
     setLoading(true);
+    setLoadingMore(false);
+    setLoadMoreError(false);
     setError(false);
     const requestId = ++requestSequence.current;
-    const params = new URLSearchParams({
+    const params = targetParams({
       basis: selectedBasis,
-      window: "14",
       availability: selectedAvailability,
-      limit: "24",
-      action_scope: selectedActionScope,
-      cap_scope: selectedCapScope,
+      category: selectedCategory,
+      position: selectedPosition,
+      actionScope: selectedActionScope,
+      capScope: selectedCapScope,
     });
-    if (selectedCategory) params.set("category", selectedCategory);
-    if (selectedPosition) params.set("position", selectedPosition);
     try {
       const response = await fetch(
         `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
         { cache: "no-store" },
       );
       if (!response.ok) throw new Error();
-      const nextTargets = await response.json();
+      const nextTargets = await response.json() as FantasyCategoryTargets;
       if (requestId !== requestSequence.current) return;
       setTargets(nextTargets);
+      setVisibleCandidates(nextTargets.candidates);
       setFocusedLane("");
     } catch {
       if (requestId === requestSequence.current) setError(true);
     } finally {
       if (requestId === requestSequence.current) setLoading(false);
+    }
+  }
+
+  async function loadMoreCandidates() {
+    if (loading || loadingMore || !hasMoreCandidates) return;
+    setLoadingMore(true);
+    setLoadMoreError(false);
+    const requestId = requestSequence.current;
+    const offset = visibleCandidates.length;
+    const params = targetParams({
+      basis, availability, category, position, actionScope, capScope,
+    }, offset);
+    try {
+      const response = await fetch(
+        `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error();
+      const nextPage = await response.json() as FantasyCategoryTargets;
+      if (requestId !== requestSequence.current) return;
+      if (
+        nextPage.filters.offset !== offset
+        || !nextPage.candidates.length
+        || (targets.snapshot?.generated_at && nextPage.snapshot?.generated_at
+          && targets.snapshot.generated_at !== nextPage.snapshot.generated_at)
+      ) throw new Error();
+      setVisibleCandidates((current) => [...current, ...nextPage.candidates]);
+    } catch {
+      if (requestId === requestSequence.current) setLoadMoreError(true);
+    } finally {
+      if (requestId === requestSequence.current) setLoadingMore(false);
     }
   }
 
@@ -293,9 +354,16 @@ export default function CategoryNeedsFinder({
             </summary>
             <p className="mt-2 text-xs text-slate-500">{candidateCopy.description}</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} league={league} player={player} watched={watchedIds.has(player.nba_id)} watchlistReady={watchlistReady} pending={pendingWatchId === player.nba_id} onWatch={() => watchPlayer(player, "Recommendation candidate")} />)}
+              {visibleCandidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} league={league} player={player} watched={watchedIds.has(player.nba_id)} watchlistReady={watchlistReady} pending={pendingWatchId === player.nba_id} onWatch={() => watchPlayer(player, "Recommendation candidate")} />)}
             </div>
-            {!targets.candidates.length && !loading && <p className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No players match these filters.</p>}
+            {!visibleCandidates.length && !loading && <p className="mt-4 rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">No players match these filters.</p>}
+            {hasMoreCandidates && (
+              <button type="button" onClick={loadMoreCandidates} disabled={loading || loadingMore}
+                className="mt-5 rounded-lg border border-blue-300 bg-white px-4 py-2 text-sm font-bold text-blue-700 transition hover:bg-blue-50 disabled:cursor-wait disabled:opacity-60 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
+                {loadingMore ? "Loading more…" : `Load more (${visibleCandidates.length} of ${targets.sample.filtered_candidates} shown)`}
+              </button>
+            )}
+            {loadMoreError && <p role="alert" className="mt-3 text-sm font-semibold text-red-600 dark:text-red-400">More candidates could not be loaded. Retry, or reset the filters if the results changed.</p>}
           </details>
         </div>
       </div>
