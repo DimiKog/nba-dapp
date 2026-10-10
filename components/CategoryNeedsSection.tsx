@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FantasyCategoryTargets } from "@/lib/api";
 import CategoryNeedsFinder from "@/components/CategoryNeedsFinder";
 
-type LeagueSlug = "ldl" | "bdb";
+type LeagueSlug = "ldl" | "bdb" | "gnfc";
 
 export default function CategoryNeedsSection({
   league,
@@ -32,6 +32,8 @@ export default function CategoryNeedsSection({
         window: "14",
         availability: "all",
         limit: "24",
+        action_scope: "all",
+        cap_scope: "all",
       });
       const response = await fetch(
         `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,

@@ -1,7 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import GnfcAvailabilityNotice from "@/components/GnfcAvailabilityNotice";
-import { fetchFantasyLeagues, fetchFantasyRoster, fetchFantasyStandings, photoUrl, type FantasyPlayer } from "@/lib/api";
+import CategoryNeedsSection from "@/components/CategoryNeedsSection";
+import { fetchFantasyCategoryTargets, fetchFantasyLeagues, fetchFantasyRoster, fetchFantasyStandings, photoUrl, type FantasyPlayer } from "@/lib/api";
+import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 
 const ROSTER_SECTIONS = [
   { status: "Active", label: "Active" },
@@ -31,6 +33,12 @@ export default async function GnfcRosterPage({
   }
 
   const config = leagues.find((league) => league.slug === "gnfc");
+  const access = await loadCurrentFantasyAccess();
+  const isPersonalTeam = membershipFor(access?.session ?? null, "gnfc")?.fantrax_team_id === teamId;
+  const showTargets = isPersonalTeam && Boolean(config?.availability_ready) && roster.players.length > 0;
+  const initialTargets = showTargets
+    ? await fetchFantasyCategoryTargets("gnfc", teamId, { actionScope: "all" }, access?.identityHeaders).catch(() => null)
+    : null;
   const knownStatuses = new Set<string>(ROSTER_SECTIONS.map((section) => section.status));
   const otherPlayers = roster.players.filter((player) => !knownStatuses.has(player.status));
 
@@ -71,6 +79,15 @@ export default async function GnfcRosterPage({
           })}
           {otherPlayers.length > 0 && <RosterSection label="Other" players={otherPlayers} />}
         </div>
+      )}
+      {showTargets && (
+        <CategoryNeedsSection
+          league="gnfc"
+          teamId={teamId}
+          teamName={roster.team_name}
+          initialTargets={initialTargets}
+          isPersonalTeam
+        />
       )}
     </main>
   );

@@ -1,10 +1,10 @@
 import "server-only";
-import type { LeagueSlug } from "@/lib/leagues";
+import type { AvailabilityLeagueSlug } from "@/lib/availabilityLeagues";
 
 const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
 export async function readWatchlist(
-  league: LeagueSlug,
+  league: AvailabilityLeagueSlug,
   identityHeaders: HeadersInit,
   windowDays = 7,
 ): Promise<Response> {
@@ -15,7 +15,7 @@ export async function readWatchlist(
 }
 
 export async function mutateWatchlist(
-  league: LeagueSlug,
+  league: AvailabilityLeagueSlug,
   identityHeaders: HeadersInit,
   method: "POST" | "DELETE",
   body?: {

@@ -11,11 +11,13 @@ import {
   type FantasyWatchlist,
 } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
+import { roleEvidenceSummary } from "@/lib/faActionability";
 
-type LeagueSlug = "ldl" | "bdb";
+type LeagueSlug = "ldl" | "bdb" | "gnfc";
 type Availability = "all" | "free_agent" | "rostered";
 type Basis = "season" | "window";
 type ActionScope = "ready" | "all";
+type CapScope = "all" | "known_fit";
 
 export default function CategoryNeedsFinder({
   league,
@@ -31,7 +33,8 @@ export default function CategoryNeedsFinder({
   const [availability, setAvailability] = useState<Availability>("all");
   const [category, setCategory] = useState("");
   const [position, setPosition] = useState("");
-  const [actionScope, setActionScope] = useState<ActionScope>("ready");
+  const [actionScope, setActionScope] = useState<ActionScope>("all");
+  const [capScope, setCapScope] = useState<CapScope>("all");
   const [focusedLane, setFocusedLane] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -77,7 +80,8 @@ export default function CategoryNeedsFinder({
     && availability === "all"
     && category === ""
     && position === ""
-    && actionScope === "ready";
+    && actionScope === "all"
+    && capScope === "all";
 
   async function applyFilters(next: {
     basis?: Basis;
@@ -85,17 +89,20 @@ export default function CategoryNeedsFinder({
     category?: string;
     position?: string;
     actionScope?: ActionScope;
+    capScope?: CapScope;
   }) {
     const selectedBasis = next.basis ?? basis;
     const selectedAvailability = next.availability ?? availability;
     const selectedCategory = next.category ?? category;
     const selectedPosition = next.position ?? position;
     const selectedActionScope = next.actionScope ?? actionScope;
+    const selectedCapScope = next.capScope ?? capScope;
     setBasis(selectedBasis);
     setAvailability(selectedAvailability);
     setCategory(selectedCategory);
     setPosition(selectedPosition);
     setActionScope(selectedActionScope);
+    setCapScope(selectedCapScope);
     setLoading(true);
     setError(false);
     const requestId = ++requestSequence.current;
@@ -105,6 +112,7 @@ export default function CategoryNeedsFinder({
       availability: selectedAvailability,
       limit: "24",
       action_scope: selectedActionScope,
+      cap_scope: selectedCapScope,
     });
     if (selectedCategory) params.set("category", selectedCategory);
     if (selectedPosition) params.set("position", selectedPosition);
@@ -132,7 +140,8 @@ export default function CategoryNeedsFinder({
       availability: "all",
       category: "",
       position: "",
-      actionScope: "ready",
+      actionScope: "all",
+      capScope: "all",
     });
   }
 
@@ -215,13 +224,20 @@ export default function CategoryNeedsFinder({
         <div className="px-5 py-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/30">
             <div>
-              <p className="text-sm font-black text-slate-900 dark:text-white">{actionScope === "ready" ? "Feasible now" : "Options requiring changes or review"}</p>
-              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{actionScope === "ready" ? "Free agents appear here only when role, NBA status, roster space and acquisition checks pass. A statistical fit alone is not enough." : "These players may help statistically, but a drop, cap room, tokens or an updated role check may still be needed."}</p>
+              <p className="text-sm font-black text-slate-900 dark:text-white">{actionScope === "ready" ? "Only verified free-agent adds" : "Statistical fit and pickup readiness"}</p>
+              <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{actionScope === "ready" ? "Free agents appear here only when current role, NBA status, roster space and acquisition checks pass." : "See who helps your categories and what evidence is missing before a claim. Historical minutes describe the past, not the next role."}</p>
             </div>
-            <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready" })} disabled={loading}
+            <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready", availability: actionScope === "ready" ? "all" : "free_agent" })} disabled={loading}
               className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-300">
-              {actionScope === "ready" ? "Show options requiring changes" : "Show feasible now"}
+              {actionScope === "ready" ? "Show all candidates" : "Only verified adds"}
             </button>
+            {league !== "gnfc" && (
+              <button type="button" onClick={() => applyFilters({ capScope: capScope === "all" ? "known_fit" : "all" })} disabled={loading}
+                aria-pressed={capScope === "known_fit"}
+                className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${capScope === "known_fit" ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                {capScope === "known_fit" ? "Known cap fit only ✓" : "Filter to known cap fit"}
+              </button>
+            )}
           </div>
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="font-bold uppercase tracking-wide">Optimizing for</span>
@@ -317,7 +333,7 @@ function RecommendationLane({
   pendingWatchId,
   onWatch,
 }: {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   lane: FantasyCategoryRecommendation;
   watchedIds: Set<number>;
   watchlistReady: boolean | null;
@@ -356,7 +372,7 @@ function RecommendationGroup({
   onWatch,
   tone = "default",
 }: {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   title: string;
   description: string;
   players: FantasyTargetCandidate[];
@@ -395,7 +411,7 @@ function CandidateCard({
   pending = false,
   onWatch,
 }: {
-  league: "ldl" | "bdb";
+  league: LeagueSlug;
   player: FantasyTargetCandidate;
   categoryKey?: string;
   categoryLabel?: string;
@@ -423,14 +439,20 @@ function CandidateCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div><h3 className="truncate text-sm font-black text-slate-950 dark:text-white">{player.name}</h3><p className="text-xs text-slate-500">{player.nba_status?.recommendation_eligible === false ? `${player.nba_status.club} · NBA status review` : player.nba_team_short || player.nba_team || "NBA team unverified"} · {player.position}</p></div>
-            <div className="text-right"><p className="text-lg font-black tabular-nums text-blue-700 dark:text-blue-400">{player.fit_score > 0 ? "+" : ""}{player.fit_score.toFixed(2)}</p><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Fit #{player.fit_rank}</p></div>
+            <div className="text-right"><p className="text-lg font-black tabular-nums text-blue-700 dark:text-blue-400">{player.fit_score > 0 ? "+" : ""}{player.fit_score.toFixed(2)}</p><p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Category fit #{player.fit_rank}</p></div>
           </div>
         </div>
       </div>
       {actionability && (
-        <div className={`mt-3 rounded-lg border px-3 py-2 text-xs ${actionability.status === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"}`}>
-          <p className="font-black">{actionabilityLabel(actionability.status)}</p>
-          <p className="mt-1">{actionability.reasons.length > 0 ? actionability.reasons.map(actionabilityReason).join(" · ") : "Observed role, NBA status, roster and acquisition checks passed. Confirm the live claim before acting."}</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+            <p className="font-black">Playing-time evidence</p>
+            <p className="mt-1">{roleEvidenceSummary(actionability)}</p>
+          </div>
+          <div className={`rounded-lg border px-3 py-2 text-xs ${actionability.status === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"}`}>
+            <p className="font-black">{actionabilityLabel(actionability.status)}</p>
+            <p className="mt-1">{actionability.reasons.length > 0 ? actionability.reasons.map(actionabilityReason).join(" · ") : "Current role, NBA status, roster and acquisition checks passed. Confirm the live claim before acting."}</p>
+          </div>
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -475,7 +497,7 @@ function CandidateCard({
       </div>
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         {player.player_id && (
-          <Link href={`/players/${player.player_id}?league=${league}&from=recommendations`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-blue-300">
+          <Link href={`/players/${player.player_id}?${league === "gnfc" ? "" : `league=${league}&`}from=recommendations`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:text-slate-300 dark:hover:text-blue-300">
             View player
           </Link>
         )}
@@ -503,6 +525,8 @@ function actionabilityLabel(status: NonNullable<FantasyTargetCandidate["actionab
 
 const ACTIONABILITY_REASONS: Record<string, string> = {
   current_role_unverified: "Current minutes and role unverified",
+  historical_limited_minutes: "Limited minutes in the historical sample",
+  limited_current_minutes: "Current observed minutes are limited",
   nba_role_or_status_unverified: "NBA status unverified",
   injury_review_required: "Injury needs review",
   roster_drop_required: "Roster spot or drop needed",
