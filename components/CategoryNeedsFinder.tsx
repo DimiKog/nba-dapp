@@ -226,6 +226,9 @@ export default function CategoryNeedsFinder({
             <div>
               <p className="text-sm font-black text-slate-900 dark:text-white">{actionScope === "ready" ? "Only verified free-agent adds" : "Statistical fit and pickup readiness"}</p>
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">{actionScope === "ready" ? "Free agents appear here only when current role, NBA status, roster space and acquisition checks pass." : "See who helps your categories and what evidence is missing before a claim. Historical minutes describe the past, not the next role."}</p>
+              {capScope === "known_fit" && (
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">This filter applies only to free agents. Trade targets remain visible and are not cap-checked here.</p>
+              )}
             </div>
             <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready", availability: actionScope === "ready" ? "all" : "free_agent" })} disabled={loading}
               className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-300">
@@ -235,7 +238,7 @@ export default function CategoryNeedsFinder({
               <button type="button" onClick={() => applyFilters({ capScope: capScope === "all" ? "known_fit" : "all" })} disabled={loading}
                 aria-pressed={capScope === "known_fit"}
                 className={`rounded-lg border px-3 py-2 text-xs font-bold disabled:opacity-50 ${capScope === "known_fit" ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "border-slate-300 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
-                {capScope === "known_fit" ? "Known cap fit only ✓" : "Filter to known cap fit"}
+                {capScope === "known_fit" ? "FAs with verified cap fit ✓" : "Show FAs with verified cap fit"}
               </button>
             )}
           </div>
