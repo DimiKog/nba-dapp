@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   photoUrl,
   type FantasyCategoryRecommendation,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
 import { roleEvidenceSummary } from "@/lib/faActionability";
+import { candidateListCopy, PLAYER_POSITION_OPTIONS } from "@/lib/categoryTargetDiscovery";
 
 type LeagueSlug = "ldl" | "bdb" | "gnfc";
 type Availability = "all" | "free_agent" | "rostered";
@@ -72,10 +73,7 @@ export default function CategoryNeedsFinder({
   const recommendationLanes = targets.category_recommendations ?? [];
   const activeLane = recommendationLanes.find((lane) => lane.key === focusedLane)
     ?? recommendationLanes[0];
-  const positions = useMemo(() => Array.from(new Set(
-    targets.candidates.flatMap((player) => player.position.split(","))
-      .map((value) => value.trim()).filter(Boolean),
-  )).sort(), [targets.candidates]);
+  const candidateCopy = candidateListCopy(targets.candidates.length, targets.sample.filtered_candidates);
   const filtersAreDefault = basis === "season"
     && availability === "all"
     && category === ""
@@ -208,7 +206,7 @@ export default function CategoryNeedsFinder({
             </select>
             <select value={position} onChange={(event) => applyFilters({ position: event.target.value })} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800">
               <option value="">All positions</option>
-              {positions.map((value) => <option key={value} value={value}>{value}</option>)}
+              {PLAYER_POSITION_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}
             </select>
             <button
               type="button"
@@ -245,7 +243,7 @@ export default function CategoryNeedsFinder({
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span className="font-bold uppercase tracking-wide">Optimizing for</span>
             {targets.needs.map((need) => <span key={need.key} className="rounded-full bg-rose-100 px-2.5 py-1 font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">{need.label}</span>)}
-            <span>· {targets.sample.filtered_candidates} players in this view</span>
+            <span>· {targets.sample.filtered_candidates} matching players</span>
           </div>
           <details className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950/40">
             <summary className="cursor-pointer font-bold text-blue-700 marker:text-slate-400 dark:text-blue-400">
@@ -291,9 +289,9 @@ export default function CategoryNeedsFinder({
 
           <details className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-700">
             <summary className="cursor-pointer text-sm font-black text-blue-700 marker:text-slate-400 dark:text-blue-400">
-              Explore all {targets.candidates.length} eligible candidates
+              {candidateCopy.title}
             </summary>
-            <p className="mt-2 text-xs text-slate-500">The complete overall fit ranking is preserved for deeper research and comparison.</p>
+            <p className="mt-2 text-xs text-slate-500">{candidateCopy.description}</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {targets.candidates.map((player) => <CandidateCard key={`${player.availability}-${player.nba_id}`} league={league} player={player} watched={watchedIds.has(player.nba_id)} watchlistReady={watchlistReady} pending={pendingWatchId === player.nba_id} onWatch={() => watchPlayer(player, "Recommendation candidate")} />)}
             </div>
