@@ -10,6 +10,7 @@ const ALLOWED_PARAMS = [
   "position",
   "category",
   "limit",
+  "offset",
   "action_scope",
   "cap_scope",
 ] as const;

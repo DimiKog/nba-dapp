@@ -1257,10 +1257,12 @@ export interface FantasyCategoryTargets {
     filtered_candidates: number;
     returned: number;
   };
+  snapshot?: { generated_at: string };
   filters: {
     availability: "all" | "free_agent" | "rostered";
     position: string | null;
     limit: number;
+    offset?: number;
   };
   candidates: FantasyTargetCandidate[];
   category_recommendations?: FantasyCategoryRecommendation[];
@@ -1500,6 +1502,7 @@ export async function fetchFantasyCategoryTargets(
     position?: string;
     category?: string;
     limit?: number;
+    offset?: number;
     actionScope?: "ready" | "all";
     capScope?: "all" | "known_fit";
   } = {},
@@ -1515,6 +1518,7 @@ export async function fetchFantasyCategoryTargets(
   });
   if (options.position) params.set("position", options.position);
   if (options.category) params.set("category", options.category);
+  if (options.offset !== undefined) params.set("offset", String(options.offset));
   const res = await fetch(
     `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/targets?${params}`,
     { cache: "no-store", headers: identityHeaders },
