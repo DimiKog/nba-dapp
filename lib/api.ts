@@ -1187,6 +1187,13 @@ export interface FantasyTargetCandidate {
     stats_season?: string;
     observed_games?: number;
     observed_minutes?: number | null;
+    role_evidence?: {
+      season: string;
+      scope: "current" | "historical";
+      games: number;
+      minutes: number | null;
+      finding: "insufficient_sample" | "limited_observed_minutes" | "observed_rotation_minutes";
+    };
   };
   helps: string[];
   hurts_needs: string[];
@@ -1484,7 +1491,7 @@ export async function fetchFantasyTeamCategoryProfile(
 }
 
 export async function fetchFantasyCategoryTargets(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   teamId: string,
   options: {
     basis?: "season" | "window";
@@ -1494,6 +1501,7 @@ export async function fetchFantasyCategoryTargets(
     category?: string;
     limit?: number;
     actionScope?: "ready" | "all";
+    capScope?: "all" | "known_fit";
   } = {},
   identityHeaders?: HeadersInit,
 ): Promise<FantasyCategoryTargets> {
@@ -1503,6 +1511,7 @@ export async function fetchFantasyCategoryTargets(
     availability: options.availability ?? "all",
     limit: String(options.limit ?? 24),
     action_scope: options.actionScope ?? "all",
+    cap_scope: options.capScope ?? "all",
   });
   if (options.position) params.set("position", options.position);
   if (options.category) params.set("category", options.category);

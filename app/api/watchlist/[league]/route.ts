@@ -1,13 +1,13 @@
 import { mutateWatchlist, readWatchlist } from "@/lib/watchlistServer";
 import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
-import { isLeagueSlug } from "@/lib/leagues";
+import { isAvailabilityLeagueSlug } from "@/lib/availabilityLeagues";
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ league: string }> },
 ) {
   const { league } = await context.params;
-  if (!isLeagueSlug(league)) {
+  if (!isAvailabilityLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
   const rawWindow = new URL(request.url).searchParams.get("window") ?? "7";
@@ -32,7 +32,7 @@ export async function POST(
   context: { params: Promise<{ league: string }> },
 ) {
   const { league } = await context.params;
-  if (!isLeagueSlug(league)) {
+  if (!isAvailabilityLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
 

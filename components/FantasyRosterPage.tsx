@@ -49,7 +49,7 @@ export default async function FantasyRosterPage({
       initialTargets = await fetchFantasyCategoryTargets(
         league,
         teamId,
-        { actionScope: "ready" },
+        { actionScope: "all" },
         access?.identityHeaders,
       ).catch(() => null);
     }
