@@ -232,7 +232,8 @@ export default function RosterPerformanceTable({
                           <span className="mt-1 block truncate text-[11px] font-semibold tabular-nums text-violet-700 dark:text-violet-300">
                             {preseasonState === "loading" ? "2026–27 preseason · loading…" : preseasonState === "error" ? "Preseason temporarily unavailable" : (() => {
                               const sample = player.nba_id ? preseasonById[String(player.nba_id)] : null;
-                              if (!sample || sample.games === 0 || !sample.averages) return "2026–27 preseason · no recorded games";
+                              if (!sample) return "2026–27 preseason · data unavailable";
+                              if (sample.games === 0 || !sample.averages) return "2026–27 preseason · no recorded games";
                               return `2026–27 preseason · ${sample.games} GP · ${sample.averages.minutes.toFixed(1)} MIN · ${sample.averages.points.toFixed(1)} PTS · ${sample.averages.rebounds.toFixed(1)} REB · ${sample.averages.assists.toFixed(1)} AST`;
                             })()}
                           </span>
@@ -284,7 +285,7 @@ export default function RosterPerformanceTable({
 
           <details className="mx-5 my-4 rounded-xl border border-violet-200 px-3 py-2 dark:border-violet-900">
             <summary className="cursor-pointer text-xs font-bold text-violet-700 dark:text-violet-300">
-              2026–27 preseason · {selectedPreseason?.games ? `${selectedPreseason.games} games · ${selectedPreseason.averages?.minutes.toFixed(1) ?? "—"} MIN · ${selectedPreseason.averages?.points.toFixed(1) ?? "—"} PTS` : preseasonState === "loading" ? "loading…" : preseasonState === "error" ? "temporarily unavailable" : "no recorded games"} · all averages
+              2026–27 preseason · {selectedPreseason?.games ? `${selectedPreseason.games} games · ${selectedPreseason.averages?.minutes.toFixed(1) ?? "—"} MIN · ${selectedPreseason.averages?.points.toFixed(1) ?? "—"} PTS` : preseasonState === "loading" ? "loading…" : preseasonState === "error" || !selectedPreseason ? "data unavailable" : "no recorded games"} · all averages
             </summary>
             <PreseasonAveragesPanel data={selectedPreseason ?? null} />
           </details>
