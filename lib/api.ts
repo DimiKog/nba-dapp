@@ -223,13 +223,20 @@ export async function fetchRosterPreseasonAverages(nbaIds: number[]): Promise<{
   season: string;
   players: Record<string, PlayerPreseasonAverages | null>;
 }> {
-  const ids = [...new Set(nbaIds)].filter((id) => Number.isInteger(id) && id > 0).slice(0, 20);
-  const response = await fetch(
-    `${BASE}/api/nba/players/preseason-averages?nba_ids=${ids.join(",")}`,
-    { cache: "no-store" },
-  );
-  if (!response.ok) throw new Error("Roster preseason averages unavailable");
-  return response.json();
+  const ids = [...new Set(nbaIds)].filter((id) => Number.isInteger(id) && id > 0);
+  const players: Record<string, PlayerPreseasonAverages | null> = {};
+  let season = "";
+  for (let index = 0; index < ids.length; index += 20) {
+    const response = await fetch(
+      `${BASE}/api/nba/players/preseason-averages?nba_ids=${ids.slice(index, index + 20).join(",")}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) throw new Error("Roster preseason averages unavailable");
+    const batch = await response.json() as { season: string; players: Record<string, PlayerPreseasonAverages | null> };
+    season = batch.season;
+    Object.assign(players, batch.players);
+  }
+  return { season, players };
 }
 
 export async function fetchPlayerResearch(
