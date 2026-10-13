@@ -219,6 +219,19 @@ export async function fetchPlayerPreseasonAverages(nbaId: number): Promise<Playe
   return res.json();
 }
 
+export async function fetchRosterPreseasonAverages(nbaIds: number[]): Promise<{
+  season: string;
+  players: Record<string, PlayerPreseasonAverages | null>;
+}> {
+  const ids = [...new Set(nbaIds)].filter((id) => Number.isInteger(id) && id > 0).slice(0, 20);
+  const response = await fetch(
+    `${BASE}/api/nba/players/preseason-averages?nba_ids=${ids.join(",")}`,
+    { cache: "no-store" },
+  );
+  if (!response.ok) throw new Error("Roster preseason averages unavailable");
+  return response.json();
+}
+
 export async function fetchPlayerResearch(
   league: "ldl" | "bdb",
   nbaId: number,
@@ -1142,6 +1155,8 @@ export interface FantasyCategoryNeed {
 export interface FantasyTargetCandidate {
   player_id: number | null;
   nba_id: number;
+  season_average?: FantasyPlayerStats | null;
+  recent_average?: FantasyPlayerStats | null;
   name: string;
   short_name: string;
   nba_team: string;
