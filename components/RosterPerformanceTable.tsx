@@ -2,14 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import InjuryFlag from "@/components/InjuryFlag";
+import PreseasonAveragesPanel from "@/components/PreseasonAveragesPanel";
 import { leaguePresentation, type LeagueSlug } from "@/lib/leagues";
 import {
   FantasyPlayerPerformance,
   FantasyPlayerStats,
   FantasyRosterPerformance,
+  fetchRosterPreseasonAverages,
   photoUrl,
+  type PlayerPreseasonAverages,
 } from "@/lib/api";
 
 type View = "window" | "latest" | "season";
@@ -127,6 +130,26 @@ export default function RosterPerformanceTable({
   const [selectedKey, setSelectedKey] = useState(() => (
     performance.players[0] ? playerKey(performance.players[0]) : ""
   ));
+  const [preseasonById, setPreseasonById] = useState<Record<string, PlayerPreseasonAverages | null>>({});
+  const [preseasonState, setPreseasonState] = useState<"loading" | "ready" | "error">(
+    () => performance.players.some((player) => player.nba_id) ? "loading" : "ready",
+  );
+  const nbaIdKey = performance.players.flatMap((player) => player.nba_id ? [player.nba_id] : []).join(",");
+  useEffect(() => {
+    if (!nbaIdKey) {
+      return;
+    }
+    let active = true;
+    fetchRosterPreseasonAverages(nbaIdKey.split(",").map(Number))
+      .then((result) => {
+        if (active) {
+          setPreseasonById(result.players);
+          setPreseasonState("ready");
+        }
+      })
+      .catch(() => { if (active) setPreseasonState("error"); });
+    return () => { active = false; };
+  }, [nbaIdKey]);
   const selected = (
     performance.players.find((player) => playerKey(player) === selectedKey)
     ?? performance.players[0]
@@ -136,6 +159,7 @@ export default function RosterPerformanceTable({
 
   const selectedStats = statsFor(selected, view);
   const selectedPhoto = photoUrl(selected.photo, selected.nba_id);
+  const selectedPreseason = selected.nba_id ? preseasonById[String(selected.nba_id)] : null;
   const selectPlayer = (key: string) => {
     setSelectedKey(key);
     if (window.matchMedia("(max-width: 1023px)").matches) {
@@ -205,6 +229,14 @@ export default function RosterPerformanceTable({
                           <span className="mt-1 block truncate text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
                             {summary(player, view)}
                           </span>
+                          <span className="mt-1 block truncate text-[11px] font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+                            {preseasonState === "loading" ? "2026–27 preseason · loading…" : preseasonState === "error" ? "Preseason temporarily unavailable" : (() => {
+                              const sample = player.nba_id ? preseasonById[String(player.nba_id)] : null;
+                              if (!sample) return "2026–27 preseason · data unavailable";
+                              if (sample.games === 0 || !sample.averages) return "2026–27 preseason · no recorded games";
+                              return `2026–27 preseason · ${sample.games} GP · ${sample.averages.minutes.toFixed(1)} MIN · ${sample.averages.points.toFixed(1)} PTS · ${sample.averages.rebounds.toFixed(1)} REB · ${sample.averages.assists.toFixed(1)} AST`;
+                            })()}
+                          </span>
                         </span>
                         <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-lg ${isSelected ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200" : "text-slate-400"}`} aria-hidden="true">›</span>
                       </button>
@@ -250,6 +282,13 @@ export default function RosterPerformanceTable({
               </div>
             </div>
           </div>
+
+          <details className="mx-5 my-4 rounded-xl border border-violet-200 px-3 py-2 dark:border-violet-900">
+            <summary className="cursor-pointer text-xs font-bold text-violet-700 dark:text-violet-300">
+              2026–27 preseason · {selectedPreseason?.games ? `${selectedPreseason.games} games · ${selectedPreseason.averages?.minutes.toFixed(1) ?? "—"} MIN · ${selectedPreseason.averages?.points.toFixed(1) ?? "—"} PTS` : preseasonState === "loading" ? "loading…" : preseasonState === "error" || !selectedPreseason ? "data unavailable" : "no recorded games"} · all averages
+            </summary>
+            <PreseasonAveragesPanel data={selectedPreseason ?? null} />
+          </details>
 
           {selected.injury && (
             <div className="mx-5 mt-5 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 dark:border-red-900 dark:bg-red-950/40">
