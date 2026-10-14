@@ -77,6 +77,16 @@ test("home league panels keep LDL and BδB order and league-specific links", asy
   );
 });
 
+test("empty standings and a temporary roster outage show different states", async ({ page }) => {
+  await page.goto(app);
+  const standings = page.getByRole("heading", { name: "Fantasy standings" }).locator("xpath=ancestor::section[1]");
+  await expect(standings.getByText("No LDL standings have been published yet.")).toBeVisible();
+
+  await page.goto(`${app}/fantasy/ldl/roster/e2e-temporary`);
+  await expect(page.getByRole("heading", { name: "This page could not be loaded." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
 test("each manager receives only their own memberships", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import TradeAnalyzerWorkspace from "@/components/TradeAnalyzerWorkspace";
 import {
+  ApiResponseError,
   fetchFantasyRosterPerformance,
   fetchLeaguePlayerExplorer,
   type TradeBasis,
@@ -31,16 +32,17 @@ export default async function FantasyTradeAnalyzerPage({
   if (!membership?.fantrax_team_id || membership.fantrax_team_id !== teamId) {
     notFound();
   }
-  let performance;
-  let explorer;
-  try {
-    [performance, explorer] = await Promise.all([
-      fetchFantasyRosterPerformance(league, teamId, 14),
-      fetchLeaguePlayerExplorer(league, 14),
-    ]);
-  } catch {
-    notFound();
+  const [performanceResult, explorerResult] = await Promise.allSettled([
+    fetchFantasyRosterPerformance(league, teamId, 14),
+    fetchLeaguePlayerExplorer(league, 14),
+  ]);
+  if (performanceResult.status === "rejected") {
+    if (performanceResult.reason instanceof ApiResponseError && performanceResult.reason.status === 404) notFound();
+    throw performanceResult.reason;
   }
+  if (explorerResult.status === "rejected") throw explorerResult.reason;
+  const performance = performanceResult.value;
+  const explorer = explorerResult.value;
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-7xl px-4 py-8">

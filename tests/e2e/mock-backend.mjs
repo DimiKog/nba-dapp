@@ -236,6 +236,7 @@ const server = createServer((request, response) => {
   const rosterMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)$/);
   if (rosterMatch) {
     const [, league, teamId] = rosterMatch;
+    if (teamId === "e2e-temporary") return send(response, 503, { error: "Temporary roster outage" });
     const membership = membershipByTeam(league, teamId);
     if (!membership) return send(response, 404, { error: "Team not found" });
     return send(response, 200, {
