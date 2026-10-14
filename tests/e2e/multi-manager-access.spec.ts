@@ -57,6 +57,32 @@ test("trade analyzer tabs preserve their inputs and URL modes", async ({ page, r
   await expect(page).toHaveURL(/mode=suggestions/);
 });
 
+test("trade analyzer clears loading when a pending request is invalidated", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+
+  for (const action of ["Analyze trade", "Reset"]) {
+    await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a/trade?mode=suggestions&outgoing=10000`);
+    let releaseRequest: (() => void) | undefined;
+    const responseGate = new Promise<void>((resolve) => { releaseRequest = resolve; });
+    const requestPath = "**/api/fantasy/ldl/trade-suggestions";
+    await page.route(requestPath, async (route) => {
+      await responseGate;
+      await route.fulfill({ status: 503, contentType: "application/json", body: '{"error":"Delayed failure"}' });
+    });
+
+    await page.getByRole("button", { name: "Find suggested trades" }).click();
+    await expect(page.getByRole("button", { name: "Analyzing…" })).toBeVisible();
+    await page.getByRole("button", { name: action }).first().click();
+    await expect(page.getByRole("button", { name: "Analyzing…" })).toHaveCount(0);
+    const completed = page.waitForResponse((response) => response.url().endsWith("/trade-suggestions") && response.status() === 503);
+    releaseRequest?.();
+    await completed;
+    await expect(page.getByText("Delayed failure")).toHaveCount(0);
+    await page.unroute(requestPath);
+  }
+});
+
 test("home league panels keep LDL and BδB order and league-specific links", async ({ page }) => {
   await page.goto(app);
 

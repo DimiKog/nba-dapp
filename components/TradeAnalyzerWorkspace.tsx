@@ -165,8 +165,13 @@ export default function TradeAnalyzerWorkspace({
     router.replace(`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade?${params}`, { scroll: false });
   }
 
-  function changeMode(next: Mode) {
+  function invalidatePendingRequest() {
     requestSequence.current += 1;
+    setLoading(false);
+  }
+
+  function changeMode(next: Mode) {
+    invalidatePendingRequest();
     setMode(next);
     setAnalysis(null);
     setPartners(null);
@@ -188,7 +193,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeOutgoing(value: string) {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setOutgoing(value);
     setAnalysis(null);
     setPartners(null);
@@ -212,7 +217,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeIncoming(value: string) {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setIncoming(value);
     setAnalysis(null);
     setPackageAnalysis(null);
@@ -224,7 +229,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changePartnerTeam(value: string) {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setPartnerTeam(value);
     setIncoming("");
     setIncomingTwo("");
@@ -238,7 +243,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeBasis(value: TradeBasis) {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setBasis(value);
     setAnalysis(null);
     setPartners(null);
@@ -253,7 +258,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function changeSuggestionShape(next: SuggestionShape) {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setSuggestionShape(next);
     setSuggestions(null);
     setPackageSuggestions(null);
@@ -468,7 +473,7 @@ export default function TradeAnalyzerWorkspace({
   }
 
   function reset() {
-    requestSequence.current += 1;
+    invalidatePendingRequest();
     setMode("suggestions");
     setBasis("season");
     setOutgoing("");
