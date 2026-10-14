@@ -182,8 +182,15 @@ const server = createServer((request, response) => {
     return send(response, 200, []);
   }
   if (url.pathname === "/api/nba/players/preseason-averages") {
-    const ids = (url.searchParams.get("nba_ids") ?? "").split(",").map(Number);
     response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3102");
+    response.setHeader("Access-Control-Allow-Headers", "cf-access-jwt-assertion");
+    response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+    const ids = (url.searchParams.get("nba_ids") ?? "").split(",").map(Number);
     return send(response, 200, {
       season: "2026-27",
       players: Object.fromEntries(ids.map((id) => [String(id), id === 10000 ? {
