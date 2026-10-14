@@ -119,7 +119,7 @@ test("mobile roster keeps preseason essentials visible and leaves full averages 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  const row = page.getByRole("button", { name: /Fixture Player 1/ });
+  const row = page.getByRole("button", { name: /Fixture Player 1\b/ });
   await expect(row.getByTestId("preseason-mobile-summary")).toHaveText("Preseason · 2 GP · 22.5 MIN · 10.0 PTS");
   await expect(row.getByTestId("preseason-full-summary")).toBeHidden();
 

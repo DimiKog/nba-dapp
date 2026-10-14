@@ -480,6 +480,7 @@ function rosterPerformanceFixture(league, membership, incomplete) {
       player_id: 20_000 + index,
       name: `Fixture Player ${index + 1}`,
       short_name: `Player ${index + 1}`,
+      status: "Active",
       nba_team: index === 1 ? "Minnesota Timberwolves" : "Test Team",
       nba_team_short: index === 1 ? "MIN" : "TST",
       position: "G",
