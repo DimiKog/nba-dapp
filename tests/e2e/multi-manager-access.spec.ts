@@ -113,6 +113,27 @@ test("empty standings and a temporary roster outage show different states", asyn
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 
+test("mobile roster keeps preseason essentials visible and leaves full averages available", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+
+  const row = page.getByRole("button", { name: /Fixture Player 1/ });
+  await expect(row.getByTestId("preseason-mobile-summary")).toHaveText("Preseason · 2 GP · 22.5 MIN · 10.0 PTS");
+  await expect(row.getByTestId("preseason-full-summary")).toBeHidden();
+
+  await row.click();
+  await page.getByText(/all averages/).click();
+  const averages = page.getByRole("region", { name: "Preseason averages" });
+  await expect(averages.getByText("REB", { exact: true })).toBeVisible();
+  await expect(averages.getByText("AST", { exact: true })).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(row.getByTestId("preseason-mobile-summary")).toBeHidden();
+  await expect(row.getByTestId("preseason-full-summary")).toContainText("5.0 REB · 8.0 AST");
+});
+
 test("each manager receives only their own memberships", async ({ request }) => {
   const [tokenA, tokenB] = await Promise.all([
     tokenFor(request, "manager-a-subject"),

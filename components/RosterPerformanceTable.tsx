@@ -229,12 +229,15 @@ export default function RosterPerformanceTable({
                           <span className="mt-1 block truncate text-xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
                             {summary(player, view)}
                           </span>
-                          <span className="mt-1 block truncate text-[11px] font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+                          <span className="mt-1 block text-[11px] font-semibold leading-snug tabular-nums text-violet-700 dark:text-violet-300">
                             {preseasonState === "loading" ? "2026–27 preseason · loading…" : preseasonState === "error" ? "Preseason temporarily unavailable" : (() => {
                               const sample = player.nba_id ? preseasonById[String(player.nba_id)] : null;
                               if (!sample) return "2026–27 preseason · data unavailable";
                               if (sample.games === 0 || !sample.averages) return "2026–27 preseason · no recorded games";
-                              return `2026–27 preseason · ${sample.games} GP · ${sample.averages.minutes.toFixed(1)} MIN · ${sample.averages.points.toFixed(1)} PTS · ${sample.averages.rebounds.toFixed(1)} REB · ${sample.averages.assists.toFixed(1)} AST`;
+                              return <>
+                                <span data-testid="preseason-mobile-summary" className="sm:hidden">Preseason · {sample.games} GP · {sample.averages.minutes.toFixed(1)} MIN · {sample.averages.points.toFixed(1)} PTS</span>
+                                <span data-testid="preseason-full-summary" className="hidden sm:inline">2026–27 preseason · {sample.games} GP · {sample.averages.minutes.toFixed(1)} MIN · {sample.averages.points.toFixed(1)} PTS · {sample.averages.rebounds.toFixed(1)} REB · {sample.averages.assists.toFixed(1)} AST</span>
+                              </>;
                             })()}
                           </span>
                         </span>

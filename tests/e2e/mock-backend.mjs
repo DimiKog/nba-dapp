@@ -181,6 +181,21 @@ const server = createServer((request, response) => {
   if (url.pathname === "/api/nba/news") {
     return send(response, 200, []);
   }
+  if (url.pathname === "/api/nba/players/preseason-averages") {
+    const ids = (url.searchParams.get("nba_ids") ?? "").split(",").map(Number);
+    response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3102");
+    return send(response, 200, {
+      season: "2026-27",
+      players: Object.fromEntries(ids.map((id) => [String(id), id === 10000 ? {
+        season: "2026-27", games: 2, last_game_date: "2026-10-12",
+        status: "available", source: "ESPN",
+        averages: {
+          minutes: 22.5, fg_pct: 45, three_pm: 1, ft_pct: 80,
+          points: 10, rebounds: 5, assists: 8, steals: 1, blocks: 0, turnovers: 2,
+        },
+      } : null])),
+    });
+  }
   if (/^\/api\/fantasy\/(ldl|bdb)\/standings$/.test(url.pathname)) {
     return send(response, 200, []);
   }
