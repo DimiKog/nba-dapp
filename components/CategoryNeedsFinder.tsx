@@ -541,7 +541,6 @@ function CandidateCard({
       )}
       <div className="mt-3 flex flex-wrap gap-1.5">
         <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{player.availability === "free_agent" ? "Fantasy free agent" : player.fantasy_team?.name ?? "Rostered"}</span>
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{sampleGames} recorded games</span>
         {player.availability_rank && player.availability_of && (
           <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase text-blue-700 dark:bg-blue-950 dark:text-blue-300">Market #{player.availability_rank} of {player.availability_of}</span>
         )}
@@ -556,14 +555,10 @@ function CandidateCard({
       {categoryLabel && typeof categoryZ === "number" && (
         <div className="mt-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
           <span className="font-black">{categoryLabel} impact: {categoryZ > 0 ? "+" : ""}{categoryZ.toFixed(2)} z</span>
-          {player.availability_rank && player.availability_of && (
-            <span className="ml-1 text-blue-600 dark:text-blue-400">· market #{player.availability_rank} of {player.availability_of}</span>
-          )}
         </div>
       )}
       {fit && <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
         <p className="font-black text-slate-900 dark:text-white">Model: {faFitConclusion(player)}</p>
-        <p className="mt-1 text-slate-600 dark:text-slate-300">Weighted fit {player.fit_score >= 0 ? "+" : ""}{player.fit_score.toFixed(2)} · {fit.basis_used} sample, {fit.sample_games} games.</p>
         <details className="mt-2 border-t border-slate-200 pt-2 dark:border-slate-700">
           <summary className="cursor-pointer font-bold text-blue-700 dark:text-blue-300">How is this scored?</summary>
           <p className="mt-2 text-slate-600 dark:text-slate-300">Each need&apos;s player z-score is multiplied by its team-need weight; the sum is divided by the total weight. Market rank is separate.</p>
