@@ -523,6 +523,8 @@ function targetsFixture(league, membership, managerId, actionScope) {
       fantasy_team: null,
       fit_rank: 1,
       fit_score: managerId === 1 ? 1.25 : 0.85,
+      availability_rank: 1,
+      availability_of: 80,
       fit_explanation: {
         schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
         sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,

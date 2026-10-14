@@ -283,7 +283,14 @@ test("free-agent fit explains the weighted score without treating salary or risk
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
   await page.getByText("Explore all 2 matching candidates").click();
-  await expect(page.getByText("Model: statistical help for a selected need; future role and minutes unassessed")).toBeVisible();
+  const candidate = page.locator("article").filter({ has: page.getByRole("heading", { name: "LDL Manager A Target" }) });
+  await expect(candidate.getByText("+1.25", { exact: true })).toBeVisible();
+  await expect(candidate.getByText("Model: statistical help for a selected need; future role and minutes unassessed")).toBeVisible();
+  await expect(candidate.getByText(/Evidence first/)).toBeVisible();
+  await expect(candidate.getByText("12 games recorded")).toBeVisible();
+  await expect(candidate.getByText("Market #1 of 80", { exact: true })).toHaveCount(1);
+  await expect(candidate.getByText(/Weighted fit/)).toHaveCount(0);
+  await expect(candidate.getByText("Acquisition checks passed", { exact: true })).toBeVisible();
   await page.getByText("How is this scored?").click();
   await expect(page.getByText(/Salary, tokens, future role and injury risk do not change the category-fit score/)).toBeVisible();
 });
