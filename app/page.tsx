@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Suspense, cache } from "react";
 import {
   fetchScoreboard,
   fetchNews,
@@ -30,56 +31,94 @@ type LeagueRadarPanel = { league: LeagueSlug; radar: FantasyFreeAgentRadar | nul
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+const loadHomePersonal = cache(async () => {
   const context = await loadCurrentFantasyContext().catch(() => ({
     identity: null,
     identityHeaders: null,
     session: null,
   }));
   const session = context.session;
-  const gnfcMembership = session?.memberships.find((membership) => membership.league_slug === "gnfc") ?? null;
-  const [games, news, standingsPanels, personalTeams, radarPanels] = await Promise.all([
-    fetchScoreboard(),
-    fetchNews(6),
-    Promise.all(([...LEAGUE_SLUGS, "gnfc"] as const).map(async (league): Promise<LeagueStandingsPanel> => {
-      try {
-        return { league, teams: await fetchFantasyStandings(league), loadFailed: false };
-      } catch {
-        return { league, teams: [], loadFailed: true };
-      }
-    })),
-    Promise.all(
-      (session?.memberships ?? [])
-        .filter((membership): membership is FantasyMembership & {
-          league_slug: LeagueSlug;
-          fantrax_team_id: string;
-        } => isLeagueSlug(membership.league_slug) && Boolean(membership.fantrax_team_id))
-        .map(async (membership) => {
-            const slug = membership.league_slug;
-            const teamId = membership.fantrax_team_id;
-            const [matchup, performance, profile] = await Promise.all([
-              fetchFantasyMatchupsForTeam(slug, teamId).catch(() => null),
-              fetchFantasyRosterPerformance(slug, teamId).catch(() => null),
-              fetchFantasyTeamCategoryProfile(slug, teamId).catch(() => null),
-            ]);
-            return {
-              league: slug,
-              leagueName: leagueLabel(slug),
-              teamName: membership.franchise_name,
-              teamId,
-              matchup,
-              performance,
-              profile,
-            };
-          }),
-    ).catch(() => []),
-    Promise.all(LEAGUE_SLUGS.map(async (league): Promise<LeagueRadarPanel> => ({
-      league,
-      radar: await fetchFreeAgentRadar(league).catch(() => null),
-    }))),
-  ]);
+  const teams = await Promise.all(
+    (session?.memberships ?? [])
+      .filter((membership): membership is FantasyMembership & {
+        league_slug: LeagueSlug;
+        fantrax_team_id: string;
+      } => isLeagueSlug(membership.league_slug) && Boolean(membership.fantrax_team_id))
+      .map(async (membership) => {
+        const slug = membership.league_slug;
+        const teamId = membership.fantrax_team_id;
+        const [matchup, performance, profile] = await Promise.all([
+          fetchFantasyMatchupsForTeam(slug, teamId).catch(() => null),
+          fetchFantasyRosterPerformance(slug, teamId).catch(() => null),
+          fetchFantasyTeamCategoryProfile(slug, teamId).catch(() => null),
+        ]);
+        return {
+          league: slug,
+          leagueName: leagueLabel(slug),
+          teamName: membership.franchise_name,
+          teamId,
+          matchup,
+          performance,
+          profile,
+        };
+      }),
+  ).catch(() => []);
+  return { context, teams };
+});
 
-  const ownedByTeam = ownedPlayersByTeam(personalTeams);
+export default function Home() {
+  return (
+    <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
+      <Suspense fallback={<PersonalHomeFallback />}>
+        <PersonalHome />
+      </Suspense>
+
+      <Suspense fallback={<HomeSectionFallback title="NBA Scoreboard" />}>
+        <ScoreboardHome />
+      </Suspense>
+
+      <Suspense fallback={<HomeSectionFallback title="Free-agent trends" />}>
+        <RadarHome />
+      </Suspense>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Suspense fallback={<HomeSectionFallback title="Fantasy standings" />}>
+          <StandingsHome />
+        </Suspense>
+        <Suspense fallback={<HomeSectionFallback title="NBA News" />}>
+          <NewsHome />
+        </Suspense>
+      </div>
+    </main>
+  );
+}
+
+async function PersonalHome() {
+  const { context, teams } = await loadHomePersonal();
+  const session = context.session;
+  const gnfcMembership = session?.memberships.find((membership) => membership.league_slug === "gnfc") ?? null;
+
+  return (
+    <>
+      <ManagerTodayHeader
+        displayName={session?.user.display_name ?? null}
+        teamCount={teams.length + (gnfcMembership ? 1 : 0)}
+      />
+      <NeedsAttention teams={teams} />
+      <PersonalTeamsGrid
+        teams={teams}
+        gnfcMembership={gnfcMembership}
+        hasAccessIdentity={Boolean(context.identity)}
+        hasSession={Boolean(session)}
+      />
+    </>
+  );
+}
+
+async function ScoreboardHome() {
+  const [games, { teams }] = await Promise.all([fetchScoreboard(), loadHomePersonal()]);
+
+  const ownedByTeam = ownedPlayersByTeam(teams);
   const scoreboardItems: ScoreboardItem[] = games.map((g) => {
     const isLive = !g.completed && g.status !== "Scheduled";
     return {
@@ -94,67 +133,85 @@ export default async function Home() {
     };
   });
 
+  // Preseason games remain visible; scoreboard data does not feed the fantasy model.
   return (
-    <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
+    <HomeScoreboard
+      items={scoreboardItems}
+      slateDate={games.find((game) => !game.expires_at)?.date ?? null}
+      previousSlateDate={games.find((game) => game.expires_at)?.date ?? null}
+    />
+  );
+}
 
-      <ManagerTodayHeader
-        displayName={session?.user.display_name ?? null}
-        teamCount={personalTeams.length + (gnfcMembership ? 1 : 0)}
-      />
+async function RadarHome() {
+  const radars = await Promise.all(LEAGUE_SLUGS.map(async (league): Promise<LeagueRadarPanel> => ({
+    league,
+    radar: await fetchFreeAgentRadar(league).catch(() => null),
+  })));
+  return <HomeRadarPanels radars={radars} />;
+}
 
-      <NeedsAttention teams={personalTeams} />
+async function StandingsHome() {
+  const standings = await Promise.all(([...LEAGUE_SLUGS, "gnfc"] as const).map(async (league): Promise<LeagueStandingsPanel> => {
+    try {
+      return { league, teams: await fetchFantasyStandings(league), loadFailed: false };
+    } catch {
+      return { league, teams: [], loadFailed: true };
+    }
+  }));
+  return <HomeLeagueStandings standings={standings} />;
+}
 
-      <PersonalTeamsGrid
-        teams={personalTeams}
-        gnfcMembership={gnfcMembership}
-        gnfcTeamCount={standingsPanels.find((panel) => panel.league === "gnfc")?.teams.length ?? 0}
-        gnfcStandingsLoadFailed={standingsPanels.find((panel) => panel.league === "gnfc")?.loadFailed ?? true}
-        hasAccessIdentity={Boolean(context.identity)}
-        hasSession={Boolean(session)}
-      />
-
-      {/* Preseason games intentionally remain visible; scoreboard data is display-only and is not consumed by any fantasy model. */}
-      <HomeScoreboard
-        items={scoreboardItems}
-        slateDate={games.find((game) => !game.expires_at)?.date ?? null}
-        previousSlateDate={games.find((game) => game.expires_at)?.date ?? null}
-      />
-
-      <HomeRadarPanels radars={radarPanels} />
-
-      {/* Fantasy standings + News */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <HomeLeagueStandings standings={standingsPanels} />
-
-        {/* News */}
-        <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">NBA News</h2>
-          <div className="space-y-3">
-            {news.map((item, i) => (
-              <a
-                key={i}
-                href={item.link ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-sm hover:border-blue-300 dark:hover:border-blue-600 transition-all group"
-              >
-                {item.image && (
-                  <img src={item.image} alt="" className="h-14 w-20 shrink-0 rounded-lg object-cover" />
-                )}
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2 transition-colors">
-                    {item.headline}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-400">
-                    {item.published ? new Date(item.published).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
-                  </p>
-                </div>
-              </a>
-            ))}
-          </div>
-        </section>
+async function NewsHome() {
+  const news = await fetchNews(6);
+  return (
+    <section>
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">NBA News</h2>
+      <div className="space-y-3">
+        {news.map((item, i) => (
+          <a
+            key={i}
+            href={item.link ?? "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex gap-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-sm hover:border-blue-300 dark:hover:border-blue-600 transition-all group"
+          >
+            {item.image && (
+              <img src={item.image} alt="" className="h-14 w-20 shrink-0 rounded-lg object-cover" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 line-clamp-2 transition-colors">
+                {item.headline}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-400">
+                {item.published ? new Date(item.published).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+              </p>
+            </div>
+          </a>
+        ))}
       </div>
-    </main>
+    </section>
+  );
+}
+
+function HomeSectionFallback({ title }: { title: string }) {
+  return (
+    <section aria-label={`${title} loading`} className="animate-pulse">
+      <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-slate-500">{title}</h2>
+      <div className="h-32 rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-900" />
+    </section>
+  );
+}
+
+function PersonalHomeFallback() {
+  return (
+    <div aria-label="Your teams loading" className="space-y-8 animate-pulse">
+      <div className="flex h-36 items-center rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-700 px-6 text-sm font-semibold text-blue-100">
+        Loading your teams…
+      </div>
+      <HomeSectionFallback title="Needs attention" />
+      <HomeSectionFallback title="My teams" />
+    </div>
   );
 }
 
@@ -391,15 +448,11 @@ type PersonalTeamDashboard = {
 function PersonalTeamsGrid({
   teams,
   gnfcMembership,
-  gnfcTeamCount,
-  gnfcStandingsLoadFailed,
   hasAccessIdentity,
   hasSession,
 }: {
   teams: PersonalTeamDashboard[];
   gnfcMembership: FantasyMembership | null;
-  gnfcTeamCount: number;
-  gnfcStandingsLoadFailed: boolean;
   hasAccessIdentity: boolean;
   hasSession: boolean;
 }) {
@@ -416,7 +469,9 @@ function PersonalTeamsGrid({
           <PersonalTeamCard key={team.league} dashboard={team} />
         ))}
         {gnfcMembership && (
-          <GnfcHomeCard membership={gnfcMembership} teamCount={gnfcTeamCount} standingsLoadFailed={gnfcStandingsLoadFailed} />
+          <Suspense fallback={<HomeSectionFallback title="GNFC Γ5" />}>
+            <GnfcHomeCardWithStandings membership={gnfcMembership} />
+          </Suspense>
         )}
         {teams.length === 0 && !gnfcMembership && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
@@ -438,6 +493,17 @@ function PersonalTeamsGrid({
         )}
       </div>
     </section>
+  );
+}
+
+async function GnfcHomeCardWithStandings({ membership }: { membership: FantasyMembership }) {
+  const standings = await fetchFantasyStandings("gnfc").catch(() => null);
+  return (
+    <GnfcHomeCard
+      membership={membership}
+      teamCount={standings?.length ?? 0}
+      standingsLoadFailed={standings === null}
+    />
   );
 }
 

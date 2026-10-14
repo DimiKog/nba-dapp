@@ -20,16 +20,11 @@ export const metadata: Metadata = {
   description: "NBA fantasy decisions, player performance and payroll",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const context = await loadCurrentFantasyContext().catch(() => ({
-    identity: null,
-    identityHeaders: null,
-    session: null,
-  }));
   return (
     <html
       lang="en"
@@ -37,14 +32,25 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <Suspense fallback={<NavbarFallback />}>
-          <Navbar
-            session={context.session}
-            hasAccessIdentity={Boolean(context.identity)}
-          />
+          <NavbarWithSession />
         </Suspense>
         {children}
       </body>
     </html>
+  );
+}
+
+async function NavbarWithSession() {
+  const context = await loadCurrentFantasyContext().catch(() => ({
+    identity: null,
+    identityHeaders: null,
+    session: null,
+  }));
+  return (
+    <Navbar
+      session={context.session}
+      hasAccessIdentity={Boolean(context.identity)}
+    />
   );
 }
 

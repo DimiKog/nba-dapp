@@ -103,6 +103,35 @@ test("home league panels keep LDL and BδB order and league-specific links", asy
   );
 });
 
+test("home shows independent panels while a personal roster is slow", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  const delayed = await request.get("http://127.0.0.1:3101/test/delay-performance?team=ldl-team-a&ms=2500");
+  expect(delayed.ok()).toBeTruthy();
+
+  await page.goto(app, { waitUntil: "commit" });
+  await expect(page.getByLabel("Your teams loading")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open radar & watchlist →" })).toBeVisible();
+  await expect(page.getByLabel("Your teams loading")).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: /Alice/ })).toBeVisible();
+  await expect(page.getByLabel("Your teams loading")).toHaveCount(0);
+});
+
+test("home shows public panels while the private session is slow", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  const delayed = await request.get("http://127.0.0.1:3101/test/delay-session?subject=manager-a-subject&ms=2500");
+  expect(delayed.ok()).toBeTruthy();
+
+  await page.goto(app, { waitUntil: "commit" });
+  await expect(page.getByRole("link", { name: "Open radar & watchlist →" })).toBeVisible();
+  await expect(page.getByLabel("Your teams loading")).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: /Alice/ })).toBeVisible();
+  await expect(page.getByLabel("Your teams loading")).toHaveCount(0);
+});
+
 test("empty standings and a temporary roster outage show different states", async ({ page }) => {
   await page.goto(app);
   const standings = page.getByRole("heading", { name: "Fantasy standings" }).locator("xpath=ancestor::section[1]");
