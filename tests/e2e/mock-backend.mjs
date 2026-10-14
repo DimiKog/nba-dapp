@@ -56,6 +56,8 @@ const sessions = {
 };
 const privateTradeOutlooks = new Map();
 const reviewedInjuryReports = new Map();
+const performanceDelays = new Map();
+const sessionDelays = new Map();
 
 function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   return {
@@ -98,11 +100,35 @@ const server = createServer((request, response) => {
       ? send(response, 200, { token: accessToken(subject, session.user) })
       : send(response, 404, { error: "Unknown test identity" });
   }
+  if (url.pathname === "/test/delay-performance") {
+    const teamId = url.searchParams.get("team");
+    const delay = Number(url.searchParams.get("ms"));
+    if (!teamId || !Number.isInteger(delay) || delay < 0 || delay > 5000) {
+      return send(response, 400, { error: "Invalid delay" });
+    }
+    performanceDelays.set(teamId, delay);
+    return send(response, 200, { teamId, delay });
+  }
+  if (url.pathname === "/test/delay-session") {
+    const subject = url.searchParams.get("subject");
+    const delay = Number(url.searchParams.get("ms"));
+    if (!subject || !Number.isInteger(delay) || delay < 0 || delay > 5000) {
+      return send(response, 400, { error: "Invalid delay" });
+    }
+    sessionDelays.set(subject, delay);
+    return send(response, 200, { subject, delay });
+  }
   if (url.pathname === "/api/fantasy/session") {
     const session = sessionFor(request);
-    return session
-      ? send(response, 200, session)
-      : send(response, 401, { error: "Unknown test identity" });
+    if (!session) return send(response, 401, { error: "Unknown test identity" });
+    const subject = request.headers["x-fantasy-identity-subject"];
+    const delay = sessionDelays.get(subject) ?? 0;
+    sessionDelays.delete(subject);
+    if (delay) {
+      setTimeout(() => send(response, 200, session), delay);
+      return;
+    }
+    return send(response, 200, session);
   }
   const outlookMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/my-trade-outlook$/);
   if (outlookMatch) {
@@ -253,6 +279,12 @@ const server = createServer((request, response) => {
     const membership = membershipByTeam(league, teamId);
     if (!membership) return send(response, 403, { error: "Not your team" });
     const incomplete = teamId === "bdb-team-b";
+    const delay = performanceDelays.get(teamId) ?? 0;
+    performanceDelays.delete(teamId);
+    if (delay) {
+      setTimeout(() => send(response, 200, rosterPerformanceFixture(league, membership, incomplete)), delay);
+      return;
+    }
     return send(response, 200, rosterPerformanceFixture(league, membership, incomplete));
   }
   const rosterMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)$/);
