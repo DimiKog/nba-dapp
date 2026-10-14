@@ -1478,7 +1478,7 @@ export async function fetchFantasyStandings(league: "ldl" | "bdb" | "gnfc"): Pro
 
 export async function fetchFantasyRoster(league: "ldl" | "bdb" | "gnfc", teamId: string): Promise<FantasyRoster> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/roster/${teamId}`, { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to fetch roster");
+  if (!res.ok) throw new ApiResponseError("Failed to fetch roster", res.status);
   return res.json();
 }
 
@@ -1491,7 +1491,7 @@ export async function fetchFantasyRosterPerformance(
     `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/performance?window=${window}`,
     { cache: "no-store" },
   );
-  if (!res.ok) throw new Error("Failed to fetch roster performance");
+  if (!res.ok) throw new ApiResponseError("Failed to fetch roster performance", res.status);
   return res.json();
 }
 

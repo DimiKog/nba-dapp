@@ -25,7 +25,7 @@ import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnersh
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
 type StandingsLeague = LeagueSlug | "gnfc";
-type LeagueStandingsPanel = { league: StandingsLeague; teams: FantasyTeam[] };
+type LeagueStandingsPanel = { league: StandingsLeague; teams: FantasyTeam[]; loadFailed: boolean };
 type LeagueRadarPanel = { league: LeagueSlug; radar: FantasyFreeAgentRadar | null };
 
 export const dynamic = "force-dynamic";
@@ -41,10 +41,13 @@ export default async function Home() {
   const [games, news, standingsPanels, personalTeams, radarPanels] = await Promise.all([
     fetchScoreboard(),
     fetchNews(6),
-    Promise.all(([...LEAGUE_SLUGS, "gnfc"] as const).map(async (league): Promise<LeagueStandingsPanel> => ({
-      league,
-      teams: await fetchFantasyStandings(league).catch(() => []),
-    }))),
+    Promise.all(([...LEAGUE_SLUGS, "gnfc"] as const).map(async (league): Promise<LeagueStandingsPanel> => {
+      try {
+        return { league, teams: await fetchFantasyStandings(league), loadFailed: false };
+      } catch {
+        return { league, teams: [], loadFailed: true };
+      }
+    })),
     Promise.all(
       (session?.memberships ?? [])
         .filter((membership): membership is FantasyMembership & {
@@ -105,6 +108,7 @@ export default async function Home() {
         teams={personalTeams}
         gnfcMembership={gnfcMembership}
         gnfcTeamCount={standingsPanels.find((panel) => panel.league === "gnfc")?.teams.length ?? 0}
+        gnfcStandingsLoadFailed={standingsPanels.find((panel) => panel.league === "gnfc")?.loadFailed ?? true}
         hasAccessIdentity={Boolean(context.identity)}
         hasSession={Boolean(session)}
       />
@@ -388,12 +392,14 @@ function PersonalTeamsGrid({
   teams,
   gnfcMembership,
   gnfcTeamCount,
+  gnfcStandingsLoadFailed,
   hasAccessIdentity,
   hasSession,
 }: {
   teams: PersonalTeamDashboard[];
   gnfcMembership: FantasyMembership | null;
   gnfcTeamCount: number;
+  gnfcStandingsLoadFailed: boolean;
   hasAccessIdentity: boolean;
   hasSession: boolean;
 }) {
@@ -410,7 +416,7 @@ function PersonalTeamsGrid({
           <PersonalTeamCard key={team.league} dashboard={team} />
         ))}
         {gnfcMembership && (
-          <GnfcHomeCard membership={gnfcMembership} teamCount={gnfcTeamCount} />
+          <GnfcHomeCard membership={gnfcMembership} teamCount={gnfcTeamCount} standingsLoadFailed={gnfcStandingsLoadFailed} />
         )}
         {teams.length === 0 && !gnfcMembership && (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
@@ -435,7 +441,7 @@ function PersonalTeamsGrid({
   );
 }
 
-function GnfcHomeCard({ membership, teamCount }: { membership: FantasyMembership; teamCount: number }) {
+function GnfcHomeCard({ membership, teamCount, standingsLoadFailed }: { membership: FantasyMembership; teamCount: number; standingsLoadFailed: boolean }) {
   return (
     <article className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-900 dark:from-amber-950/30 dark:to-slate-900">
       <div className="border-b border-amber-200 px-5 py-4 dark:border-amber-900">
@@ -446,7 +452,7 @@ function GnfcHomeCard({ membership, teamCount }: { membership: FantasyMembership
         <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Shared franchise · your account is linked separately</p>
       </div>
       <div className="space-y-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
-        <p>{teamCount ? `${teamCount} teams in the standings` : "Standings temporarily unavailable"}</p>
+        <p>{standingsLoadFailed ? "Standings could not be loaded right now" : teamCount ? `${teamCount} teams in the standings` : "No teams in the standings yet"}</p>
         <p>Free-agent proposals await a verified 12-team roster snapshot. No cap or claim-token assumptions apply.</p>
         <Link href="/fantasy/gnfc" className="inline-block font-semibold text-blue-600 hover:underline dark:text-blue-400">
           Open GNFC Γ5 →

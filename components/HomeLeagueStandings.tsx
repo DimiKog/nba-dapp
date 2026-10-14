@@ -16,10 +16,11 @@ function standingsLeagueLabel(league: StandingsLeague) {
 export default function HomeLeagueStandings({
   standings,
 }: {
-  standings: Array<{ league: StandingsLeague; teams: FantasyTeam[] }>;
+  standings: Array<{ league: StandingsLeague; teams: FantasyTeam[]; loadFailed: boolean }>;
 }) {
   const [league, setLeague] = useState<StandingsLeague>(LEAGUE_SLUGS[0]);
-  const teams = (standings.find((panel) => panel.league === league)?.teams ?? []).slice(0, 5);
+  const panel = standings.find((item) => item.league === league);
+  const teams = (panel?.teams ?? []).slice(0, 5);
 
   return (
     <section>
@@ -87,7 +88,9 @@ export default function HomeLeagueStandings({
           </table>
         ) : (
           <p className="p-6 text-center text-sm text-slate-400">
-            {standingsLeagueLabel(league)} standings are temporarily unavailable.
+            {panel?.loadFailed
+              ? `${standingsLeagueLabel(league)} standings could not be loaded right now. Try refreshing the page.`
+              : `No ${standingsLeagueLabel(league)} standings have been published yet.`}
           </p>
         )}
       </div>

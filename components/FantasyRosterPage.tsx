@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import {
+  ApiResponseError,
   fetchFantasyRoster,
   fetchFantasyRosterPerformance,
   fetchFantasyCategoryTargets,
@@ -53,8 +54,9 @@ export default async function FantasyRosterPage({
         access?.identityHeaders,
       ).catch(() => null);
     }
-  } catch {
-    notFound();
+  } catch (error) {
+    if (error instanceof ApiResponseError && error.status === 404) notFound();
+    throw error;
   }
 
   const active  = roster.players.filter((p) => p.status === "Active");
