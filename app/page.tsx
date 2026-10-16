@@ -70,7 +70,7 @@ const loadHomePersonal = cache(async () => {
 
 export default function Home() {
   return (
-    <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8">
+    <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8 xl:max-w-7xl 2xl:max-w-[1500px]">
       <Suspense fallback={<PersonalHomeFallback />}>
         <PersonalHome />
       </Suspense>
