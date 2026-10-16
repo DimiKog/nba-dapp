@@ -1797,6 +1797,33 @@ export async function fetchScoreboard(): Promise<Game[]> {
   return res.json();
 }
 
+export interface NbaHotFive {
+  season: string;
+  window: { start: string | null; end: string | null };
+  status: "awaiting_games" | "awaiting_boxscores" | "insufficient_sample" | "partial_coverage" | "recorded_sample" | "stale";
+  coverage: { games: number; partial_games: number; source_players: number; mapped_players: number };
+  criteria: { minimum_games: number; minimum_minutes_per_game: number };
+  note: string;
+  players: Array<{
+    nba_id: number;
+    player_id: number;
+    name: string;
+    photo: string | null;
+    team: string | null;
+    games: number;
+    minutes: number;
+    form_score: number;
+    drivers: Array<{ category: string; z: number }>;
+    stats: { points: number; rebounds: number; assists: number; three_pm: number; steals: number; blocks: number };
+  }>;
+}
+
+export async function fetchNbaHotFive(): Promise<NbaHotFive> {
+  const res = await fetch(`${BASE}/api/nba/hot-five`, { next: { revalidate: 300 } });
+  if (!res.ok) throw new Error("Failed to fetch NBA Hot 5");
+  return res.json();
+}
+
 export async function fetchNews(limit = 8): Promise<NewsItem[]> {
   const res = await fetch(`${BASE}/api/nba/news?limit=${limit}`, { next: { revalidate: 300 } });
   if (!res.ok) return [];
