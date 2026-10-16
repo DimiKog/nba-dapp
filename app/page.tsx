@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, cache } from "react";
 import {
   fetchScoreboard,
+  fetchNbaHotFive,
   fetchNews,
   fetchFantasyStandings,
   fetchFantasyMatchupsForTeam,
@@ -22,6 +23,7 @@ import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation"
 import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
+import HomeHotFive from "@/components/HomeHotFive";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
@@ -75,6 +77,10 @@ export default function Home() {
 
       <Suspense fallback={<HomeSectionFallback title="NBA Scoreboard" />}>
         <ScoreboardHome />
+      </Suspense>
+
+      <Suspense fallback={<HomeSectionFallback title="Hot 5" />}>
+        <HotFiveHome />
       </Suspense>
 
       <Suspense fallback={<HomeSectionFallback title="Free-agent trends" />}>
@@ -141,6 +147,11 @@ async function ScoreboardHome() {
       previousSlateDate={games.find((game) => game.expires_at)?.date ?? null}
     />
   );
+}
+
+async function HotFiveHome() {
+  const data = await fetchNbaHotFive().catch(() => null);
+  return <HomeHotFive data={data} />;
 }
 
 async function RadarHome() {
