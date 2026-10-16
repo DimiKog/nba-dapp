@@ -56,7 +56,8 @@ export default function HomeHotFive({ data }: { data: NbaHotFive | null }) {
                 </div>
                 <p className="mt-3 text-sm font-bold tabular-nums text-slate-900 dark:text-slate-100">{player.stats.points.toFixed(1)} PTS <span className="text-slate-400">·</span> {player.stats.rebounds.toFixed(1)} REB</p>
                 <p className="mt-1 text-xs tabular-nums text-slate-600 dark:text-slate-300">{player.stats.assists.toFixed(1)} AST · {player.minutes.toFixed(1)} MIN</p>
-                <p className="mt-3 truncate text-[11px] font-semibold text-blue-700 dark:text-blue-300">{player.drivers.map((driver) => driver.category === "three_pm" ? "3PTM" : driver.category === "fg_pct" ? "FG%" : driver.category === "ft_pct" ? "FT%" : driver.category.toUpperCase()).join(" · ") || "Balanced production"} →</p>
+                <p className="mt-2 text-xs font-bold tabular-nums text-blue-700 dark:text-blue-300">Form {player.form_score > 0 ? "+" : ""}{player.form_score.toFixed(2)}</p>
+                <p className="mt-1 truncate text-[11px] font-semibold text-slate-500 dark:text-slate-400">{player.drivers.map((driver) => `${driver.category === "three_pm" ? "3PTM" : driver.category === "fg_pct" ? "FG%" : driver.category === "ft_pct" ? "FT%" : driver.category.toUpperCase()} +${driver.z.toFixed(1)}z`).join(" · ") || "Balanced production"}</p>
               </Link>
             );
           })}
@@ -65,7 +66,7 @@ export default function HomeHotFive({ data }: { data: NbaHotFive | null }) {
 
       <details className="border-t border-slate-200 px-4 py-3 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300 sm:px-5">
         <summary className="cursor-pointer font-semibold text-blue-700 dark:text-blue-300">How is Hot 5 ranked?</summary>
-        <p className="mt-2 leading-relaxed">Last seven recorded NBA dates, regular season only. Nine standard categories are compared per game; turnovers count negatively and shooting percentages account for attempts. Players need at least {data?.criteria.minimum_games ?? 2} games and {data?.criteria.minimum_minutes_per_game ?? 15} minutes per game. A two-game sample receives a reliability discount. Current role, fantasy availability and your team needs do not affect this list.</p>
+        <p className="mt-2 leading-relaxed">Seven calendar dates through the latest recorded NBA game, regular season only. Form is the sum of nine pool-relative category z-scores, with a two-game reliability discount. Turnovers count negatively and shooting percentages account for attempts. Players need at least {data?.criteria.minimum_games ?? 2} games and {data?.criteria.minimum_minutes_per_game ?? 15} minutes per game. Current role, fantasy availability and your team needs do not affect this list.</p>
         <p className="mt-1 leading-relaxed">{data?.coverage.games ?? 0} recorded games · {data?.coverage.mapped_players ?? 0}/{data?.coverage.source_players ?? 0} played player rows mapped. {partial ? "Some players are missing; rankings may change after identity review." : "This does not independently verify that every scheduled game was captured."}</p>
       </details>
     </section>
