@@ -1150,6 +1150,30 @@ export interface FantasyTeamCategoryProfile {
   };
 }
 
+export interface FantasyTeamPowerRow {
+  team: { id: string; name: string; logo: string | null; owner: string | null };
+  rank: number | null;
+  tier: "top_third" | "middle_third" | "bottom_third" | null;
+  all_play_share: number | null;
+  categories_scored: number;
+  categories_total: number;
+  players_included: number;
+  players_missing_stats: number;
+  strengths: string[];
+  weaknesses: string[];
+}
+
+export interface FantasyTeamPowerOutlook {
+  status: "ready" | "incomplete_league" | "insufficient_stats";
+  basis: "historical_roster_rate";
+  stats_season: string;
+  snapshot: { captured_at: string | null; generated_at: string; source: string } | null;
+  teams_expected: number | null;
+  teams_found: number;
+  teams: FantasyTeamPowerRow[];
+  method: string;
+}
+
 export interface FantasyCategoryNeed {
   key: string;
   label: string;
@@ -1511,6 +1535,16 @@ export async function fetchFantasyTeamCategoryProfile(
     { next: { revalidate: 300 } },
   );
   if (!res.ok) throw new Error("Failed to fetch team category profile");
+  return res.json();
+}
+
+export async function fetchFantasyTeamPowerOutlook(
+  league: "ldl" | "bdb",
+): Promise<FantasyTeamPowerOutlook> {
+  const res = await fetch(`${BASE}/api/fantasy/${league}/team-power-outlook`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch team power outlook");
   return res.json();
 }
 

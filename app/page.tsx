@@ -9,6 +9,7 @@ import {
   fetchFantasyMatchupsForTeam,
   fetchFantasyRosterPerformance,
   fetchFantasyTeamCategoryProfile,
+  fetchFantasyTeamPowerOutlook,
   fetchFreeAgentRadar,
   photoUrl,
   type FantasyFreeAgentRadar,
@@ -17,6 +18,7 @@ import {
   type FantasyRosterPerformance,
   type FantasyTeam,
   type FantasyTeamCategoryProfile,
+  type FantasyTeamPowerOutlook,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
@@ -632,20 +634,33 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
               Full analysis →
             </Link>
           </div>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <HomeProfileLine
-              label="Strengths"
-              values={dashboard.profile.strengths}
-              tone="strength"
-              empty="No top-third categories"
-            />
-            <HomeProfileLine
-              label="Weaknesses"
-              values={dashboard.profile.weaknesses}
-              tone="weakness"
-              empty="No bottom-third categories"
-            />
-          </div>
+          <Suspense fallback={<p className="mt-3 text-xs text-slate-500">Loading roster comparison…</p>}>
+            <HomeTeamPowerSummaryAsync teamId={teamId} league={league} />
+          </Suspense>
+          {dashboard.profile.sample.players_included > 0 ? (
+            <div className="mt-3">
+              <p className="mb-2 text-[11px] text-slate-500">
+                {dashboard.profile.window.season} current-season profile · {dashboard.profile.sample.players_included} players with stats
+                {dashboard.profile.sample.players_missing_stats > 0 ? ` · ${dashboard.profile.sample.players_missing_stats} without stats; provisional` : ""}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <HomeProfileLine
+                  label="Strengths"
+                  values={dashboard.profile.strengths}
+                  tone="strength"
+                  empty="No top-third categories"
+                />
+                <HomeProfileLine
+                  label="Weaknesses"
+                  values={dashboard.profile.weaknesses}
+                  tone="weakness"
+                  empty="No bottom-third categories"
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">Current-season category profile awaits recorded games.</p>
+          )}
         </div>
       )}
 
@@ -697,6 +712,54 @@ function QuickAction({ href, label }: { href: string; label: string }) {
     >
       {label}
     </Link>
+  );
+}
+
+async function HomeTeamPowerSummaryAsync({ teamId, league }: { teamId: string; league: LeagueSlug }) {
+  const outlook = await fetchFantasyTeamPowerOutlook(league).catch(() => null);
+  return <HomeTeamPowerSummary outlook={outlook} teamId={teamId} league={league} />;
+}
+
+function HomeTeamPowerSummary({
+  outlook,
+  teamId,
+  league,
+}: {
+  outlook: FantasyTeamPowerOutlook | null;
+  teamId: string;
+  league: LeagueSlug;
+}) {
+  if (!outlook || outlook.status !== "ready") return null;
+  const row = outlook.teams.find((item) => item.team.id === teamId);
+  if (!row) return null;
+  const tier = row.tier === "top_third"
+    ? "top third"
+    : row.tier === "bottom_third"
+      ? "bottom third"
+      : "middle third";
+
+  return (
+    <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/80 p-3 text-xs dark:border-indigo-800 dark:bg-indigo-950/40">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-bold text-indigo-950 dark:text-indigo-100">
+          Provisional roster strength · {row.rank == null ? "not ranked" : `#${row.rank} of ${outlook.teams_found} · ${tier}`}
+        </p>
+        <Link href={`/power-ranking#${league}`} className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          League comparison →
+        </Link>
+      </div>
+      {row.rank != null && (
+        <ul className="mt-2 space-y-1 text-slate-700 dark:text-slate-300">
+          <li>• Strongest relative categories: {row.strengths.join(" · ") || "none in the top third"}.</li>
+          <li>• Main gaps: {row.weaknesses.join(" · ") || "none in the bottom third"}.</li>
+        </ul>
+      )}
+      <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+        Current roster · {outlook.stats_season} historical stats · not a final-standings forecast
+        {row.players_missing_stats > 0 ? ` · ${row.players_missing_stats} without stats` : ""}
+        {outlook.snapshot?.captured_at ? ` · roster sync ${outlook.snapshot.captured_at.slice(0, 10)}` : ""}
+      </p>
+    </div>
   );
 }
 
