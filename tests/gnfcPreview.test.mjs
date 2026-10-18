@@ -12,10 +12,11 @@ test("partial league does not present free agents as available", () => {
 test("twelve teams alone do not turn on free-agent proposals", () => {
   const status = gnfcPreviewStatus(12, 12, false);
   assert.equal(status.remainingTeams, 0);
-  assert.match(status.title, /draft and roster verification/);
+  assert.match(status.title, /await verification/);
+  assert.match(status.description, /Rosters can be viewed now/);
 });
 
-test("an activated backend still does not imply a finished preview frontend", () => {
+test("an activated backend presents free-agent proposals as enabled", () => {
   const status = gnfcPreviewStatus(12, 12, true);
-  assert.match(status.title, /not shown in this preview/);
+  assert.match(status.title, /enabled/);
 });

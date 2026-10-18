@@ -50,7 +50,7 @@ export default async function GnfcRosterPage({
       <header className="mt-5 flex items-center gap-4">
         {roster.logo && <Image src={roster.logo} alt="" width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />}
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">GNFC Γ5 · roster preview</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">GNFC Γ5 · roster</p>
           <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">{roster.team_name}</h1>
           {roster.owner && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fantrax owner: {roster.owner}</p>}
         </div>
