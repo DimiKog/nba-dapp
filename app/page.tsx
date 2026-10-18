@@ -558,15 +558,12 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
   const rosterMinimum = performance?.league.roster_rules?.minimum_players;
   const rosterIncomplete = rosterCount != null && rosterMinimum != null && rosterCount < rosterMinimum;
   const rosterShortfall = rosterIncomplete ? rosterMinimum - rosterCount : null;
-  const resourceLabel = claimBudget != null ? "UFA tokens" : "Cap position";
-  const resourceValue = claimBudget != null
-    ? String(claimBudget)
-    : capPosition == null
-      ? "Unavailable"
-      : capPosition < 0
-        ? `${compactMoney(Math.abs(capPosition))} over`
-        : `${compactMoney(capPosition)} under`;
-  const resourceTone = claimBudget != null || (capPosition != null && capPosition >= 0)
+  const capValue = capPosition == null
+    ? "Unavailable"
+    : capPosition < 0
+      ? `${compactMoney(Math.abs(capPosition))} over`
+      : `${compactMoney(capPosition)} under`;
+  const capTone = capPosition != null && capPosition >= 0
     ? "text-emerald-600 dark:text-emerald-400"
     : capPosition != null
       ? "text-red-600 dark:text-red-400"
@@ -605,10 +602,16 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
           </p>
         </div>
         <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{resourceLabel}</p>
-          <p className={`mt-1 truncate text-xs font-black tabular-nums ${resourceTone}`}>
-            {resourceValue}
-          </p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Cap position</p>
+          <p className={`mt-1 text-xs font-black tabular-nums ${capTone}`}>{capValue}</p>
+          {league === "bdb" && (
+            <div className="mt-2 border-t border-blue-100 pt-2 dark:border-blue-900/70">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">UFA tokens</p>
+              <p className="mt-1 text-xs font-black tabular-nums text-emerald-600 dark:text-emerald-400">
+                {claimBudget == null ? "Unavailable" : claimBudget}
+              </p>
+            </div>
+          )}
         </div>
         <div className="min-w-0 px-2 py-4 min-[360px]:px-4">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Injuries</p>
