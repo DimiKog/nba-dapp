@@ -7,6 +7,7 @@ import {
   fetchNews,
   fetchFantasyStandings,
   fetchFantasyMatchupsForTeam,
+  fetchFantasyRoster,
   fetchFantasyRosterPerformance,
   fetchFantasyTeamCategoryProfile,
   fetchFantasyTeamPowerOutlook,
@@ -16,6 +17,7 @@ import {
   type FantasyMatchup,
   type FantasyMatchupPeriod,
   type FantasyRosterPerformance,
+  type FantasyRoster,
   type FantasyTeam,
   type FantasyTeamCategoryProfile,
   type FantasyTeamPowerOutlook,
@@ -477,13 +479,13 @@ function PersonalTeamsGrid({
         </h2>
         <p className="text-xs text-slate-400">Status, best move and quick actions</p>
       </div>
-      <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className={`grid items-start gap-5 lg:grid-cols-2 ${teams.length + Number(Boolean(gnfcMembership)) >= 3 ? "2xl:grid-cols-3" : ""}`}>
         {teams.map((team) => (
           <PersonalTeamCard key={team.league} dashboard={team} />
         ))}
         {gnfcMembership && (
           <Suspense fallback={<HomeSectionFallback title="GNFC Γ5" />}>
-            <GnfcHomeCardWithStandings membership={gnfcMembership} />
+            <GnfcHomeCardWithRoster membership={gnfcMembership} />
           </Suspense>
         )}
         {teams.length === 0 && !gnfcMembership && (
@@ -509,33 +511,68 @@ function PersonalTeamsGrid({
   );
 }
 
-async function GnfcHomeCardWithStandings({ membership }: { membership: FantasyMembership }) {
-  const standings = await fetchFantasyStandings("gnfc").catch(() => null);
-  return (
-    <GnfcHomeCard
-      membership={membership}
-      teamCount={standings?.length ?? 0}
-      standingsLoadFailed={standings === null}
-    />
-  );
+async function GnfcHomeCardWithRoster({ membership }: { membership: FantasyMembership }) {
+  const teamId = membership.fantrax_team_id;
+  const [roster, matchup] = await Promise.all([
+    teamId ? fetchFantasyRoster("gnfc", teamId).catch(() => null) : Promise.resolve(null),
+    teamId ? fetchFantasyMatchupsForTeam("gnfc", teamId).catch(() => null) : Promise.resolve(null),
+  ]);
+  return <GnfcHomeCard membership={membership} roster={roster} matchup={matchup} />;
 }
 
-function GnfcHomeCard({ membership, teamCount, standingsLoadFailed }: { membership: FantasyMembership; teamCount: number; standingsLoadFailed: boolean }) {
+function GnfcHomeCard({
+  membership,
+  roster,
+  matchup,
+}: {
+  membership: FantasyMembership;
+  roster: FantasyRoster | null;
+  matchup: FantasyMatchupPeriod | null;
+}) {
+  const teamId = membership.fantrax_team_id;
+  const rosterHref = teamId ? `/fantasy/gnfc/roster/${encodeURIComponent(teamId)}` : "/fantasy/gnfc";
+  const injuries = roster?.players.filter((player) => player.injury) ?? [];
   return (
-    <article className="overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white shadow-sm dark:border-amber-900 dark:from-amber-950/30 dark:to-slate-900">
-      <div className="border-b border-amber-200 px-5 py-4 dark:border-amber-900">
-        <span className="rounded-full bg-amber-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
-          GNFC Γ5 · Preview
+    <article className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-sm dark:border-blue-900 dark:from-blue-950/60 dark:via-slate-900 dark:to-indigo-950/50">
+      <div className="border-b border-blue-100 px-5 py-4 dark:border-blue-900/70">
+        <span className="rounded-full bg-blue-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-white">
+          GNFC Γ5
         </span>
-        <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{membership.franchise_name}</h3>
-        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Shared franchise · your account is linked separately</p>
+        <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{roster?.team_name ?? membership.franchise_name}</h3>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Shared team with a separate membership for each manager</p>
       </div>
-      <div className="space-y-3 px-5 py-4 text-sm text-slate-700 dark:text-slate-300">
-        <p>{standingsLoadFailed ? "Standings could not be loaded right now" : teamCount ? `${teamCount} teams in the standings` : "No teams in the standings yet"}</p>
-        <p>Free-agent proposals await a verified 12-team roster snapshot. No cap or claim-token assumptions apply.</p>
-        <Link href="/fantasy/gnfc" className="inline-block font-semibold text-blue-600 hover:underline dark:text-blue-400">
-          Open GNFC Γ5 →
-        </Link>
+      <div className="grid grid-cols-2 divide-x divide-blue-100 border-b border-blue-100 bg-white/60 dark:divide-blue-900/70 dark:border-blue-900/70 dark:bg-slate-950/20">
+        <div className="px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Roster</p>
+          <p className="mt-1 text-sm font-black text-slate-950 dark:text-white">{roster ? `${roster.players.length} players` : "Unavailable"}</p>
+          <p className="text-[11px] text-slate-500">Fantrax roster</p>
+        </div>
+        <div className="px-4 py-4">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Injuries</p>
+          <p className={`mt-1 text-sm font-black ${injuries.length ? "text-red-600 dark:text-red-400" : "text-slate-950 dark:text-white"}`}>{roster ? injuries.length : "—"}</p>
+          <p className="truncate text-[11px] text-slate-500">{roster ? (injuries.map((player) => player.short_name).join(", ") || "No alerts") : "Roster unavailable"}</p>
+        </div>
+      </div>
+      <div className="px-4 py-4">
+        {matchup ? (
+          <>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{matchup.period.caption}</p>
+              <p className="truncate text-[11px] text-slate-500">{matchup.period.date_range}</p>
+            </div>
+            <div className="space-y-3">
+              {matchup.matchups.map((item) => (
+                <PersonalMatchupCard key={item.matchup_id} matchup={item} personalTeamId={matchup.team_id} />
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">Current matchup is not available yet.</p>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2 border-t border-blue-100 bg-white/70 p-4 dark:border-blue-900/70 dark:bg-slate-950/20">
+        <QuickAction href={rosterHref} label="Roster" />
+        <QuickAction href="/fantasy/gnfc" label="Standings" />
       </div>
     </article>
   );
@@ -552,6 +589,9 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
 
   const currentPayroll = performance?.payroll?.seasons[0];
   const injured = performance?.players.filter((player) => player.injury) ?? [];
+  const franchisePlayer = league === "ldl"
+    ? performance?.players.find((player) => player.tenure?.franchise_player)
+    : null;
   const capPosition = currentPayroll?.remaining;
   const claimBudget = performance?.team.claim_budget?.remaining;
   const rosterCount = performance?.players.length;
@@ -577,6 +617,11 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
             {leagueName}
           </span>
           <h3 className="mt-2 text-xl font-black text-slate-950 dark:text-white">{teamName}</h3>
+          {franchisePlayer && (
+            <p className="mt-1 text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+              Franchise player: {franchisePlayer.name}
+            </p>
+          )}
         </div>
         {rosterIncomplete && (
           <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-800 dark:bg-amber-950 dark:text-amber-300">

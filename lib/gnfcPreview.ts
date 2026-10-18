@@ -19,14 +19,14 @@ export function gnfcPreviewStatus(
   }
   if (!availabilityReady) {
     return {
-      title: "Waiting for draft and roster verification",
-      description: "All teams have joined. Free-agent proposals remain closed until the draft is complete and the backend verifies a full league snapshot.",
+      title: "Free-agent proposals await verification",
+      description: "All teams have joined. Rosters can be viewed now; free-agent proposals remain closed until the full league snapshot is verified and the separate feature is enabled.",
       remainingTeams: 0,
     };
   }
   return {
-    title: "Free-agent proposals are not shown in this preview",
-    description: "The backend activation flag is on, but this preview does not expose proposals. The dedicated free-agent view still needs a separate release and verification.",
+    title: "Free-agent proposal access enabled",
+    description: "Results still require a complete current roster snapshot. If that check fails, proposals remain unavailable.",
     remainingTeams: 0,
   };
 }
