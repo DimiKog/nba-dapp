@@ -304,6 +304,8 @@ async function NeedsAttentionWithGnfc({
   }
 
   const items = buildHomeAttentionItems(attentionTeams);
+  const priorityItems = items.filter((item) => item.kind !== "injury");
+  const injuryItems = items.filter((item) => item.kind === "injury");
   if (teams.length === 0 && !gnfcMembership) return null;
 
   return (
@@ -318,23 +320,40 @@ async function NeedsAttentionWithGnfc({
         </span>
       </div>
       {items.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {items.map((item) => (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`rounded-2xl border p-4 transition-transform hover:-translate-y-0.5 ${
-                item.tone === "critical"
-                  ? "border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30"
-                  : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
-              }`}
-            >
-              <p className={`text-sm font-black ${item.tone === "critical" ? "text-rose-800 dark:text-rose-300" : "text-amber-800 dark:text-amber-300"}`}>
-                {item.title}
-              </p>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{item.detail}</p>
-            </Link>
-          ))}
+        <div className="space-y-3">
+          {priorityItems.length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {priorityItems.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  className="rounded-2xl border border-rose-200 bg-rose-50 p-4 transition-transform hover:-translate-y-0.5 dark:border-rose-900 dark:bg-rose-950/30"
+                >
+                  <p className="text-sm font-black text-rose-800 dark:text-rose-300">{item.title}</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{item.detail}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+          {injuryItems.length > 0 && (
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" role="group" aria-label="Injury alerts by league">
+              {injuryItems.map((item) => (
+                <Link
+                  key={item.key}
+                  href={item.href}
+                  aria-label={`${item.title}: ${item.detail}`}
+                  title={`${item.title}: ${item.detail}`}
+                  className="flex min-w-0 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-900 transition-colors hover:border-amber-400 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50"
+                >
+                  <span className="shrink-0 rounded-md bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-black uppercase dark:bg-amber-900/70">
+                    {item.league === "gnfc" ? "GNFC Γ5" : leagueLabel(item.league)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-semibold">{item.detail}</span>
+                  <span className="shrink-0 text-[10px] font-bold">{item.injuryCount} {item.injuryCount === 1 ? "alert" : "alerts"}</span>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/30">
