@@ -1,0 +1,64 @@
+export type HomeAttentionTeam = {
+  league: "ldl" | "bdb" | "gnfc";
+  teamId: string;
+  teamName: string;
+  rosterCount: number | null;
+  rosterMinimum: number | null;
+  capRemaining: number | null;
+  injuredPlayerNames: string[];
+};
+
+export type HomeAttentionItem = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  tone: "critical" | "warning";
+};
+
+function compactMoney(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  return `$${value.toLocaleString("en-US")}`;
+}
+
+export function buildHomeAttentionItems(teams: HomeAttentionTeam[]): HomeAttentionItem[] {
+  const rosterItems: HomeAttentionItem[] = [];
+  const capItems: HomeAttentionItem[] = [];
+  const injuryItems: HomeAttentionItem[] = [];
+
+  for (const team of teams) {
+    const rosterHref = `/fantasy/${team.league}/roster/${encodeURIComponent(team.teamId)}`;
+    if (team.rosterMinimum != null && team.rosterCount != null && team.rosterCount < team.rosterMinimum) {
+      rosterItems.push({
+        key: `${team.league}-roster`,
+        title: `${team.teamName} roster is incomplete`,
+        detail: `${team.rosterCount} of at least ${team.rosterMinimum} players. Recommendations remain provisional.`,
+        href: `/watchlist?league=${team.league}`,
+        tone: "critical",
+      });
+    }
+
+    if (team.capRemaining != null && team.capRemaining < 0) {
+      capItems.push({
+        key: `${team.league}-cap`,
+        title: `${team.teamName} is ${compactMoney(Math.abs(team.capRemaining))} over the cap`,
+        detail: "Review salaries before the next roster decision.",
+        href: rosterHref,
+        tone: "critical",
+      });
+    }
+
+    if (team.injuredPlayerNames.length > 0) {
+      injuryItems.push({
+        key: `${team.league}-injuries`,
+        title: `${team.injuredPlayerNames.length} injury ${team.injuredPlayerNames.length === 1 ? "alert" : "alerts"} on ${team.teamName}`,
+        detail: team.injuredPlayerNames.slice(0, 3).join(" · "),
+        href: rosterHref,
+        tone: "warning",
+      });
+    }
+  }
+
+  return [...rosterItems, ...capItems, ...injuryItems];
+}

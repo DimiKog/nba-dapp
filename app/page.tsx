@@ -31,8 +31,10 @@ import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
 import HomeHotFive from "@/components/HomeHotFive";
+import HomeCategoryOutlook from "@/components/HomeCategoryOutlook";
 import GnfcPowerSummary from "@/components/GnfcPowerSummary";
 import { gnfcFaMarketSummary } from "@/lib/gnfcFaMarketSummary";
+import { buildHomeAttentionItems, type HomeAttentionTeam } from "@/lib/homeAttention";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
@@ -77,6 +79,10 @@ const loadHomePersonal = cache(async () => {
   return { context, teams };
 });
 
+const loadGnfcHomeRoster = cache(async (teamId: string) =>
+  fetchFantasyRoster("gnfc", teamId).catch(() => null),
+);
+
 export default function Home() {
   return (
     <main className="mx-auto w-full min-w-0 max-w-5xl space-y-8 px-4 py-8 xl:max-w-7xl 2xl:max-w-[1500px]">
@@ -119,7 +125,9 @@ async function PersonalHome() {
         displayName={session?.user.display_name ?? null}
         teamCount={teams.length + (gnfcMembership ? 1 : 0)}
       />
-      <NeedsAttention teams={teams} />
+      <Suspense fallback={<HomeSectionFallback title="Needs attention" />}>
+        <NeedsAttentionWithGnfc teams={teams} gnfcMembership={gnfcMembership} />
+      </Suspense>
       <PersonalTeamsGrid
         teams={teams}
         gnfcMembership={gnfcMembership}
@@ -260,59 +268,38 @@ function ManagerTodayHeader({
   );
 }
 
-type AttentionItem = {
-  key: string;
-  title: string;
-  detail: string;
-  href: string;
-  tone: "critical" | "warning";
-};
-
-function NeedsAttention({ teams }: { teams: PersonalTeamDashboard[] }) {
-  const rosterItems: AttentionItem[] = [];
-  const capItems: AttentionItem[] = [];
-  const injuryItems: AttentionItem[] = [];
-
-  for (const dashboard of teams) {
-    const performance = dashboard.performance;
-    const rosterHref = `/fantasy/${dashboard.league}/roster/${encodeURIComponent(dashboard.teamId)}`;
-    const minimum = performance?.league.roster_rules?.minimum_players;
-    const rosterCount = performance?.players.length;
-    if (minimum != null && rosterCount != null && rosterCount < minimum) {
-      rosterItems.push({
-        key: `${dashboard.league}-roster`,
-        title: `${dashboard.teamName} roster is incomplete`,
-        detail: `${rosterCount} of at least ${minimum} players. Recommendations remain provisional.`,
-        href: `/watchlist?league=${dashboard.league}`,
-        tone: "critical",
-      });
-    }
-
-    const remaining = performance?.payroll?.seasons[0]?.remaining;
-    if (remaining != null && remaining < 0) {
-      capItems.push({
-        key: `${dashboard.league}-cap`,
-        title: `${dashboard.teamName} is ${compactMoney(Math.abs(remaining))} over the cap`,
-        detail: "Review salaries before the next roster decision.",
-        href: rosterHref,
-        tone: "critical",
-      });
-    }
-
-    const injuries = performance?.players.filter((player) => player.injury) ?? [];
-    if (injuries.length > 0) {
-      injuryItems.push({
-        key: `${dashboard.league}-injuries`,
-        title: `${injuries.length} injury ${injuries.length === 1 ? "alert" : "alerts"} on ${dashboard.teamName}`,
-        detail: injuries.slice(0, 3).map((player) => player.short_name).join(" · "),
-        href: rosterHref,
-        tone: "warning",
-      });
-    }
+async function NeedsAttentionWithGnfc({
+  teams,
+  gnfcMembership,
+}: {
+  teams: PersonalTeamDashboard[];
+  gnfcMembership: FantasyMembership | null;
+}) {
+  const gnfcTeamId = gnfcMembership?.fantrax_team_id;
+  const gnfcRoster = gnfcTeamId ? await loadGnfcHomeRoster(gnfcTeamId) : null;
+  const attentionTeams: HomeAttentionTeam[] = teams.map((dashboard) => ({
+    league: dashboard.league,
+    teamId: dashboard.teamId,
+    teamName: dashboard.performance?.team.name ?? dashboard.teamName,
+    rosterCount: dashboard.performance?.players.length ?? null,
+    rosterMinimum: dashboard.performance?.league.roster_rules?.minimum_players ?? null,
+    capRemaining: dashboard.performance?.payroll?.seasons[0]?.remaining ?? null,
+    injuredPlayerNames: dashboard.performance?.players.filter((player) => player.injury).map((player) => player.short_name) ?? [],
+  }));
+  if (gnfcTeamId && gnfcRoster) {
+    attentionTeams.push({
+      league: "gnfc",
+      teamId: gnfcTeamId,
+      teamName: gnfcRoster.team_name,
+      rosterCount: gnfcRoster.players.length,
+      rosterMinimum: null,
+      capRemaining: null,
+      injuredPlayerNames: gnfcRoster.players.filter((player) => player.injury).map((player) => player.short_name),
+    });
   }
 
-  const items = [...rosterItems, ...capItems, ...injuryItems];
-  if (teams.length === 0) return null;
+  const items = buildHomeAttentionItems(attentionTeams);
+  if (teams.length === 0 && !gnfcMembership) return null;
 
   return (
     <section>
@@ -521,17 +508,18 @@ function PersonalTeamsGrid({
 
 async function GnfcHomeCardWithRoster({ membership, identityHeaders }: { membership: FantasyMembership; identityHeaders: Headers | null }) {
   const teamId = membership.fantrax_team_id;
-  const [roster, matchup, outlook, leagues] = await Promise.all([
-    teamId ? fetchFantasyRoster("gnfc", teamId).catch(() => null) : Promise.resolve(null),
+  const [roster, matchup, outlook, profile, leagues] = await Promise.all([
+    teamId ? loadGnfcHomeRoster(teamId) : Promise.resolve(null),
     teamId ? fetchFantasyMatchupsForTeam("gnfc", teamId).catch(() => null) : Promise.resolve(null),
     fetchFantasyTeamPowerOutlook("gnfc").catch(() => null),
+    teamId ? fetchFantasyTeamCategoryProfile("gnfc", teamId).catch(() => null) : Promise.resolve(null),
     fetchFantasyLeagues().catch(() => []),
   ]);
   const availabilityReady = leagues.find((league) => league.slug === "gnfc")?.availability_ready ?? false;
   const targets = teamId && identityHeaders && availabilityReady
     ? await fetchFantasyCategoryTargets("gnfc", teamId, { availability: "free_agent", limit: 1, actionScope: "all" }, identityHeaders).catch(() => null)
     : null;
-  return <GnfcHomeCard membership={membership} roster={roster} matchup={matchup} outlook={outlook} targets={targets} availabilityReady={availabilityReady} />;
+  return <GnfcHomeCard membership={membership} roster={roster} matchup={matchup} outlook={outlook} profile={profile} targets={targets} availabilityReady={availabilityReady} />;
 }
 
 function GnfcHomeCard({
@@ -539,6 +527,7 @@ function GnfcHomeCard({
   roster,
   matchup,
   outlook,
+  profile,
   targets,
   availabilityReady,
 }: {
@@ -546,6 +535,7 @@ function GnfcHomeCard({
   roster: FantasyRoster | null;
   matchup: FantasyMatchupPeriod | null;
   outlook: FantasyTeamPowerOutlook | null;
+  profile: FantasyTeamCategoryProfile | null;
   targets: FantasyCategoryTargets | null;
   availabilityReady: boolean;
 }) {
@@ -573,8 +563,13 @@ function GnfcHomeCard({
           <p className="truncate text-[11px] text-slate-500">{roster ? (injuries.map((player) => player.short_name).join(", ") || "No alerts") : "Roster unavailable"}</p>
         </div>
       </div>
-      <div className="space-y-3 border-b border-blue-100 px-4 py-4 dark:border-blue-900/70">
-        <GnfcPowerSummary outlook={outlook} teamId={teamId ?? ""} detailHref={`${rosterHref}#team-analysis`} />
+      <HomeCategoryOutlook
+        analysisHref={`${rosterHref}#team-analysis`}
+        profile={profile}
+        profileContext="historical profile"
+        summary={<GnfcPowerSummary outlook={outlook} teamId={teamId ?? ""} />}
+      />
+      <div className="border-b border-blue-100 px-4 py-4 dark:border-blue-900/70">
         <div className="rounded-xl border border-slate-200 bg-white/70 p-3 text-xs dark:border-slate-700 dark:bg-slate-950/20">
           <p className="font-bold uppercase tracking-wide text-slate-500">Free-agent move check</p>
           <p className="mt-1 font-bold text-slate-900 dark:text-white">
@@ -703,46 +698,15 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
       </div>
 
       {dashboard.profile && (
-        <div className="border-b border-blue-100 bg-white/80 px-5 py-4 dark:border-blue-900/70 dark:bg-slate-950/30">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              Category outlook
-            </p>
-            <Link
-              href={analysisHref}
-              className="text-[11px] font-semibold text-blue-600 hover:underline dark:text-blue-400"
-            >
-              Full analysis →
-            </Link>
-          </div>
-          <Suspense fallback={<p className="mt-3 text-xs text-slate-500">Loading roster comparison…</p>}>
-            <HomeTeamPowerSummaryAsync teamId={teamId} league={league} />
-          </Suspense>
-          {dashboard.profile.sample.players_included > 0 ? (
-            <div className="mt-3">
-              <p className="mb-2 text-[11px] text-slate-500">
-                {dashboard.profile.window.season} current-season profile · {dashboard.profile.sample.players_included} players with stats
-                {dashboard.profile.sample.players_missing_stats > 0 ? ` · ${dashboard.profile.sample.players_missing_stats} without stats; provisional` : ""}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <HomeProfileLine
-                  label="Strengths"
-                  values={dashboard.profile.strengths}
-                  tone="strength"
-                  empty="No top-third categories"
-                />
-                <HomeProfileLine
-                  label="Weaknesses"
-                  values={dashboard.profile.weaknesses}
-                  tone="weakness"
-                  empty="No bottom-third categories"
-                />
-              </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-slate-500">Current-season category profile awaits recorded games.</p>
-          )}
-        </div>
+        <HomeCategoryOutlook
+          analysisHref={analysisHref}
+          profile={dashboard.profile}
+          summary={
+            <Suspense fallback={<p className="mt-3 text-xs text-slate-500">Loading roster comparison…</p>}>
+              <HomeTeamPowerSummaryAsync teamId={teamId} league={league} />
+            </Suspense>
+          }
+        />
       )}
 
       <div className="border-b border-blue-100 bg-white/70 px-4 py-4 dark:border-blue-900/70 dark:bg-slate-950/20">
@@ -839,36 +803,6 @@ function HomeTeamPowerSummary({
         Current roster · {outlook.stats_season} historical stats · not a final-standings forecast
         {row.players_missing_stats > 0 ? ` · ${row.players_missing_stats} without stats` : ""}
         {outlook.snapshot?.captured_at ? ` · roster sync ${outlook.snapshot.captured_at.slice(0, 10)}` : ""}
-      </p>
-    </div>
-  );
-}
-
-function HomeProfileLine({
-  label,
-  values,
-  tone,
-  empty,
-}: {
-  label: string;
-  values: string[];
-  tone: "strength" | "weakness";
-  empty: string;
-}) {
-  const color =
-    tone === "strength"
-      ? "text-emerald-700 dark:text-emerald-400"
-      : "text-rose-700 dark:text-rose-400";
-  const visible = values.slice(0, 3);
-  const remaining = Math.max(values.length - visible.length, 0);
-  const summary = remaining
-    ? `${visible.join(" · ")} · +${remaining} more`
-    : visible.join(" · ");
-  return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-0.5 truncate text-xs font-bold ${values.length ? color : "text-slate-400"}`}>
-        {summary || empty}
       </p>
     </div>
   );
