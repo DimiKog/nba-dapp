@@ -17,6 +17,9 @@ test("GNFC injuries appear in the same Home alerts without cap assumptions", () 
 
   assert.deepEqual(items, [{
     key: "gnfc-injuries",
+    kind: "injury",
+    league: "gnfc",
+    injuryCount: 1,
     title: "1 injury alert on Athens BrickLayers",
     detail: "J. Holiday",
     href: "/fantasy/gnfc/roster/team-1",
@@ -38,5 +41,6 @@ test("shared Home alerts keep roster and cap checks ahead of injuries", () => {
   ]);
 
   assert.deepEqual(items.map((item) => item.key), ["ldl-roster", "ldl-cap", "ldl-injuries"]);
+  assert.deepEqual(items.map((item) => item.kind), ["roster", "cap", "injury"]);
   assert.match(items[1].title, /\$5\.7M over the cap/);
 });

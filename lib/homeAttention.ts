@@ -10,10 +10,13 @@ export type HomeAttentionTeam = {
 
 export type HomeAttentionItem = {
   key: string;
+  kind: "roster" | "cap" | "injury";
+  league: HomeAttentionTeam["league"];
   title: string;
   detail: string;
   href: string;
   tone: "critical" | "warning";
+  injuryCount?: number;
 };
 
 function compactMoney(value: number): string {
@@ -32,6 +35,8 @@ export function buildHomeAttentionItems(teams: HomeAttentionTeam[]): HomeAttenti
     if (team.rosterMinimum != null && team.rosterCount != null && team.rosterCount < team.rosterMinimum) {
       rosterItems.push({
         key: `${team.league}-roster`,
+        kind: "roster",
+        league: team.league,
         title: `${team.teamName} roster is incomplete`,
         detail: `${team.rosterCount} of at least ${team.rosterMinimum} players. Recommendations remain provisional.`,
         href: `/watchlist?league=${team.league}`,
@@ -42,6 +47,8 @@ export function buildHomeAttentionItems(teams: HomeAttentionTeam[]): HomeAttenti
     if (team.capRemaining != null && team.capRemaining < 0) {
       capItems.push({
         key: `${team.league}-cap`,
+        kind: "cap",
+        league: team.league,
         title: `${team.teamName} is ${compactMoney(Math.abs(team.capRemaining))} over the cap`,
         detail: "Review salaries before the next roster decision.",
         href: rosterHref,
@@ -52,6 +59,9 @@ export function buildHomeAttentionItems(teams: HomeAttentionTeam[]): HomeAttenti
     if (team.injuredPlayerNames.length > 0) {
       injuryItems.push({
         key: `${team.league}-injuries`,
+        kind: "injury",
+        league: team.league,
+        injuryCount: team.injuredPlayerNames.length,
         title: `${team.injuredPlayerNames.length} injury ${team.injuredPlayerNames.length === 1 ? "alert" : "alerts"} on ${team.teamName}`,
         detail: team.injuredPlayerNames.slice(0, 3).join(" · "),
         href: rosterHref,
