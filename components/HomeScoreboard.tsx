@@ -145,7 +145,7 @@ function ScoreboardCard({ item }: { item: ScoreboardItem }) {
 
 function OwnedPlayersLine({ players }: { players: OwnedPlayer[] }) {
   if (players.length === 0) return null;
-  const leagues = LEAGUE_SLUGS
+  const leagues = [...LEAGUE_SLUGS, "gnfc" as const]
     .map((league) => ({ league, players: players.filter((player) => player.league === league) }))
     .filter((group) => group.players.length > 0);
   return (
@@ -156,7 +156,9 @@ function OwnedPlayersLine({ players }: { players: OwnedPlayer[] }) {
             <span
               key={`${player.name}-${index}`}
               aria-label={`${player.leagueName}: ${player.name}${player.injured ? ", injured" : ""}`}
-              className={`rounded-md border-l-2 px-2 py-1 text-[11px] font-medium leading-tight ${LEAGUE_PRESENTATION[league].scoreboardPlayerClasses}`}
+              className={`rounded-md border-l-2 px-2 py-1 text-[11px] font-medium leading-tight ${league === "gnfc"
+                ? "border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200"
+                : LEAGUE_PRESENTATION[league].scoreboardPlayerClasses}`}
             >
               {player.name}{player.injured && <span aria-hidden="true" className="ml-1 text-rose-500">●</span>}
             </span>

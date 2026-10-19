@@ -66,6 +66,24 @@ test("owned players are grouped by NBA team across both leagues", () => {
   assert.deepEqual(byTeam.get("MIN").map((p) => [p.name, p.leagueName]), [["Edwards", "LDL"], ["Gobert", "BδB"]]);
 });
 
+test("GNFC players join scheduled games alongside LDL and BδB without showing IR", () => {
+  const byTeam = ownedPlayersByTeam([
+    { league: "ldl", leagueName: "LDL", performance: { players: [player({ short_name: "L. Markkanen", nba_team_short: "UTA" })] } },
+    { league: "bdb", leagueName: "BδB", performance: { players: [player({ short_name: "D. DeRozan", nba_team_short: "DEN" })] } },
+    { league: "gnfc", leagueName: "GNFC Γ5", performance: { players: [
+      player({ short_name: "N. Jokic", nba_team_short: "Denver Nuggets", status: "Reserve" }),
+      player({ short_name: "J. Holiday", nba_team_short: "Portland Trailblazers", status: "IR" }),
+    ] } },
+  ]);
+
+  assert.deepEqual(ownedPlayersForGame(byTeam, game("DEN", "UTAH")).map((p) => [p.name, p.league]), [
+    ["D. DeRozan", "bdb"],
+    ["N. Jokic", "gnfc"],
+    ["L. Markkanen", "ldl"],
+  ]);
+  assert.deepEqual(ownedPlayersForGame(byTeam, game("POR", "GS")).map((p) => p.name), []);
+});
+
 test("IR players are excluded and injured players are flagged", () => {
   const byTeam = ownedPlayersByTeam([{
     league: "ldl",

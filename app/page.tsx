@@ -140,9 +140,14 @@ async function PersonalHome() {
 }
 
 async function ScoreboardHome() {
-  const [games, { teams }] = await Promise.all([fetchScoreboard(), loadHomePersonal()]);
+  const [games, { teams, context }] = await Promise.all([fetchScoreboard(), loadHomePersonal()]);
+  const gnfcTeamId = context.session?.memberships.find((membership) => membership.league_slug === "gnfc")?.fantrax_team_id;
+  const gnfcRoster = gnfcTeamId ? await loadGnfcHomeRoster(gnfcTeamId) : null;
 
-  const ownedByTeam = ownedPlayersByTeam(teams);
+  const ownedByTeam = ownedPlayersByTeam([
+    ...teams,
+    ...(gnfcRoster ? [{ league: "gnfc" as const, leagueName: "GNFC Γ5", performance: { players: gnfcRoster.players } }] : []),
+  ]);
   const scoreboardItems: ScoreboardItem[] = games.map((g) => {
     const isLive = !g.completed && g.status !== "Scheduled";
     return {

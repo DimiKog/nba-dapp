@@ -1,7 +1,9 @@
 import type { LeagueSlug } from "@/lib/leagues";
 
+export type ScoreboardLeagueSlug = LeagueSlug | "gnfc";
+
 export type OwnedPlayer = {
-  league: LeagueSlug;
+  league: ScoreboardLeagueSlug;
   leagueName: string;
   name: string;
   injured: boolean;
@@ -17,7 +19,7 @@ type RosterPlayerLike = {
 };
 
 type PersonalTeamLike = {
-  league: LeagueSlug;
+  league: ScoreboardLeagueSlug;
   leagueName: string;
   performance: { players: RosterPlayerLike[] } | null;
 };
