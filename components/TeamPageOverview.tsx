@@ -7,9 +7,11 @@ import { leaguePresentation } from "@/lib/leagues";
 export default function TeamPageOverview({
   performance,
   profile,
+  showCap = true,
 }: {
   performance: FantasyRosterPerformance;
   profile: FantasyTeamCategoryProfile | null;
+  showCap?: boolean;
 }) {
   const injured = performance.players.filter((player) => player.injury);
   const current = performance.payroll?.seasons[0] ?? null;
@@ -32,7 +34,7 @@ export default function TeamPageOverview({
 
   return (
     <section id="overview" className="mt-6 scroll-mt-32">
-      <div className={`grid gap-3 sm:grid-cols-2 ${claimBudget || showTenure ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
+      <div className={`grid gap-3 sm:grid-cols-2 ${!showCap ? "lg:grid-cols-3" : claimBudget || showTenure ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
         <SummaryCard label="Roster" value={`${performance.players.length}`} detail="Active, Reserve and IR" />
         <SummaryCard
           label="Injury alerts"
@@ -40,14 +42,16 @@ export default function TeamPageOverview({
           detail={injured.map((player) => player.short_name).join(", ") || "No active alerts"}
           tone={injured.length ? "danger" : "default"}
         />
-        <SummaryCard
-          label="Current cap"
-          value={current?.remaining == null ? "Not configured" : formatCapPosition(current.remaining)}
-          detail={current?.cap == null
-            ? "Payroll unavailable"
-            : `Cap ${formatCompactMoney(current.cap)} · Payroll ${formatCompactMoney(current.total)}${current.cap_provisional ? " · provisional" : ""}`}
-          tone={current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger"}
-        />
+        {showCap && (
+          <SummaryCard
+            label="Current cap"
+            value={current?.remaining == null ? "Not configured" : formatCapPosition(current.remaining)}
+            detail={current?.cap == null
+              ? "Payroll unavailable"
+              : `Cap ${formatCompactMoney(current.cap)} · Payroll ${formatCompactMoney(current.total)}${current.cap_provisional ? " · provisional" : ""}`}
+            tone={current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger"}
+          />
+        )}
         {showTenure && (
           <SummaryCard
             label="Tenure alerts"
