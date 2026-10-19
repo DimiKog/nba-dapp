@@ -5,6 +5,9 @@ import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import GnfcPowerSummary from "@/components/GnfcPowerSummary";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
+import TeamPageOverview from "@/components/TeamPageOverview";
+import TeamSectionNav from "@/components/TeamSectionNav";
+import RefreshDataButton from "@/components/RefreshDataButton";
 import {
   fetchFantasyCategoryTargets,
   fetchFantasyLeagues,
@@ -64,13 +67,16 @@ export default async function GnfcRosterPage({
       <Link href="/fantasy/gnfc" className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400">
         ← GNFC Γ5 standings
       </Link>
-      <header className="mt-5 flex items-center gap-4">
-        {roster.logo && <Image src={roster.logo} alt="" width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />}
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">GNFC Γ5 · roster</p>
-          <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">{roster.team_name}</h1>
-          {roster.owner && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fantrax owner: {roster.owner}</p>}
+      <header className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          {roster.logo && <Image src={roster.logo} alt="" width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />}
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">GNFC Γ5 · roster</p>
+            <h1 className="mt-1 text-2xl font-bold text-slate-950 dark:text-white">{roster.team_name}</h1>
+            {roster.owner && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Fantrax owner: {roster.owner}</p>}
+          </div>
         </div>
+        <RefreshDataButton />
       </header>
 
       {!config?.availability_ready && (
@@ -83,6 +89,8 @@ export default async function GnfcRosterPage({
         </div>
       )}
 
+      {performance && <TeamPageOverview performance={performance} profile={seasonProfile} showCap={false} />}
+
       <section className="mt-7 space-y-4" aria-label="Provisional team outlook">
         <GnfcPowerSummary outlook={outlook} teamId={teamId} />
         <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -90,7 +98,15 @@ export default async function GnfcRosterPage({
         </p>
       </section>
 
-      <section id="roster" className="mt-8 scroll-mt-24">
+      <TeamSectionNav
+        hasOverview={Boolean(performance)}
+        hasPayroll={false}
+        hasAnalysis={Boolean(seasonProfile)}
+        hasTargets={showTargets}
+        targetsLabel="Free-agent targets"
+      />
+
+      <section id="roster" className="mt-8 scroll-mt-32">
         {performance?.players.length ? (
           <RosterPerformanceTable performance={performance} league="gnfc" />
         ) : roster.players.length === 0 ? (

@@ -97,7 +97,12 @@ export default async function FantasyRosterPage({
       </div>
 
       {performance && <TeamPageOverview performance={performance} profile={seasonProfile} />}
-      <TeamSectionNav hasPayroll={Boolean(performance?.payroll)} />
+      <TeamSectionNav
+        hasOverview={Boolean(performance)}
+        hasPayroll={Boolean(performance?.payroll)}
+        hasAnalysis={Boolean(seasonProfile)}
+        hasTargets={isPersonalTeam}
+      />
 
       <section id="roster" className="scroll-mt-32">
         {performance ? (
