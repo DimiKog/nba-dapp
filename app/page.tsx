@@ -34,7 +34,7 @@ import HomeHotFive from "@/components/HomeHotFive";
 import HomeCategoryOutlook from "@/components/HomeCategoryOutlook";
 import GnfcPowerSummary from "@/components/GnfcPowerSummary";
 import { gnfcFaMarketSummary } from "@/lib/gnfcFaMarketSummary";
-import { buildHomeAttentionItems, type HomeAttentionTeam } from "@/lib/homeAttention";
+import { buildHomeAttentionItems, type HomeAttentionItem, type HomeAttentionTeam } from "@/lib/homeAttention";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
@@ -305,7 +305,7 @@ async function NeedsAttentionWithGnfc({
 
   const items = buildHomeAttentionItems(attentionTeams);
   const priorityItems = items.filter((item) => item.kind !== "injury");
-  const injuryItems = items.filter((item) => item.kind === "injury");
+  const injuryItems = items.filter((item): item is Extract<HomeAttentionItem, { kind: "injury" }> => item.kind === "injury");
   if (teams.length === 0 && !gnfcMembership) return null;
 
   return (
@@ -327,9 +327,15 @@ async function NeedsAttentionWithGnfc({
                 <Link
                   key={item.key}
                   href={item.href}
-                  className="rounded-2xl border border-rose-200 bg-rose-50 p-4 transition-transform hover:-translate-y-0.5 dark:border-rose-900 dark:bg-rose-950/30"
+                  className={`rounded-2xl border p-4 transition-transform hover:-translate-y-0.5 ${
+                    item.tone === "critical"
+                      ? "border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30"
+                      : "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+                  }`}
                 >
-                  <p className="text-sm font-black text-rose-800 dark:text-rose-300">{item.title}</p>
+                  <p className={`text-sm font-black ${item.tone === "critical" ? "text-rose-800 dark:text-rose-300" : "text-amber-800 dark:text-amber-300"}`}>
+                    {item.title}
+                  </p>
                   <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{item.detail}</p>
                 </Link>
               ))}
