@@ -49,7 +49,7 @@ export default function Navbar({
     getServerLeagueSnapshot,
   );
   const league = resolveNavbarLeague(pathname, searchParams.get("league"), storedLeague);
-  const gnfcPreview = pathname === "/fantasy/gnfc" || pathname.startsWith("/fantasy/gnfc/");
+  const gnfcPage = pathname === "/fantasy/gnfc" || pathname.startsWith("/fantasy/gnfc/");
 
   useEffect(() => {
     storeLeague(league);
@@ -57,17 +57,19 @@ export default function Navbar({
 
   const membership = session?.memberships.find((item) => item.league_slug === league);
   const links: NavLink[] = [
-    ...(!gnfcPreview ? [
+    ...(!gnfcPage ? [
       { href: `/players?league=${league}`, path: "/players", label: "Player Explorer" },
       { href: `/watchlist?league=${league}`, path: "/watchlist", label: "Watchlist" },
       { href: `/draft-assets?league=${league}`, path: "/draft-assets", label: "Draft Assets" },
     ] : []),
-    ...(!gnfcPreview && membership?.commissioner
+    ...(!gnfcPage && membership?.commissioner
       ? [{ href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" }]
       : []),
     ...LEAGUE_SLUGS.filter((slug) => session?.memberships.some((item) => item.league_slug === slug && item.fantrax_team_id))
       .map((slug) => ({ href: `/fantasy/${slug}/my-team`, path: `/fantasy/${slug}`, label: `My ${leagueLabel(slug)}` })),
-    { href: "/fantasy/gnfc", path: "/fantasy/gnfc", label: "GNFC Γ5 preview" },
+    ...(session?.memberships.some((item) => item.league_slug === "gnfc" && item.fantrax_team_id)
+      ? [{ href: "/fantasy/gnfc/my-team", path: "/fantasy/gnfc", label: "My GNFC Γ5" }]
+      : [{ href: "/fantasy/gnfc", path: "/fantasy/gnfc", label: "GNFC Γ5" }]),
   ];
 
   return (

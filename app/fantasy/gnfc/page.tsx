@@ -32,13 +32,13 @@ export default async function GnfcPage() {
       active="gnfc"
       teams={teams}
       showMyTeamLink={Boolean(membership?.fantrax_team_id)}
-      intro={
+      intro={!config?.availability_ready ? (
         <GnfcAvailabilityNotice
           joinedTeams={teams.length}
           expectedTeams={config?.expected_team_count ?? 12}
           availabilityReady={config?.availability_ready ?? false}
         />
-      }
+      ) : null}
     />
   );
 }

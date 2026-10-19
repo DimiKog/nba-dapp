@@ -11,6 +11,8 @@ import {
   fetchFantasyRosterPerformance,
   fetchFantasyTeamCategoryProfile,
   fetchFantasyTeamPowerOutlook,
+  fetchFantasyCategoryTargets,
+  fetchFantasyLeagues,
   fetchFreeAgentRadar,
   photoUrl,
   type FantasyFreeAgentRadar,
@@ -21,6 +23,7 @@ import {
   type FantasyTeam,
   type FantasyTeamCategoryProfile,
   type FantasyTeamPowerOutlook,
+  type FantasyCategoryTargets,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
@@ -28,6 +31,7 @@ import { loadCurrentFantasyContext } from "@/lib/fantasySessionServer";
 import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
 import HomeHotFive from "@/components/HomeHotFive";
+import GnfcPowerSummary from "@/components/GnfcPowerSummary";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
@@ -118,6 +122,7 @@ async function PersonalHome() {
       <PersonalTeamsGrid
         teams={teams}
         gnfcMembership={gnfcMembership}
+        identityHeaders={context.identityHeaders}
         hasAccessIdentity={Boolean(context.identity)}
         hasSession={Boolean(session)}
       />
@@ -463,11 +468,13 @@ type PersonalTeamDashboard = {
 function PersonalTeamsGrid({
   teams,
   gnfcMembership,
+  identityHeaders,
   hasAccessIdentity,
   hasSession,
 }: {
   teams: PersonalTeamDashboard[];
   gnfcMembership: FantasyMembership | null;
+  identityHeaders: Headers | null;
   hasAccessIdentity: boolean;
   hasSession: boolean;
 }) {
@@ -485,7 +492,7 @@ function PersonalTeamsGrid({
         ))}
         {gnfcMembership && (
           <Suspense fallback={<HomeSectionFallback title="GNFC Γ5" />}>
-            <GnfcHomeCardWithRoster membership={gnfcMembership} />
+            <GnfcHomeCardWithRoster membership={gnfcMembership} identityHeaders={identityHeaders} />
           </Suspense>
         )}
         {teams.length === 0 && !gnfcMembership && (
@@ -511,23 +518,35 @@ function PersonalTeamsGrid({
   );
 }
 
-async function GnfcHomeCardWithRoster({ membership }: { membership: FantasyMembership }) {
+async function GnfcHomeCardWithRoster({ membership, identityHeaders }: { membership: FantasyMembership; identityHeaders: Headers | null }) {
   const teamId = membership.fantrax_team_id;
-  const [roster, matchup] = await Promise.all([
+  const [roster, matchup, outlook, leagues] = await Promise.all([
     teamId ? fetchFantasyRoster("gnfc", teamId).catch(() => null) : Promise.resolve(null),
     teamId ? fetchFantasyMatchupsForTeam("gnfc", teamId).catch(() => null) : Promise.resolve(null),
+    fetchFantasyTeamPowerOutlook("gnfc").catch(() => null),
+    fetchFantasyLeagues().catch(() => []),
   ]);
-  return <GnfcHomeCard membership={membership} roster={roster} matchup={matchup} />;
+  const availabilityReady = leagues.find((league) => league.slug === "gnfc")?.availability_ready ?? false;
+  const targets = teamId && identityHeaders && availabilityReady
+    ? await fetchFantasyCategoryTargets("gnfc", teamId, { availability: "free_agent", limit: 1, actionScope: "all" }, identityHeaders).catch(() => null)
+    : null;
+  return <GnfcHomeCard membership={membership} roster={roster} matchup={matchup} outlook={outlook} targets={targets} availabilityReady={availabilityReady} />;
 }
 
 function GnfcHomeCard({
   membership,
   roster,
   matchup,
+  outlook,
+  targets,
+  availabilityReady,
 }: {
   membership: FantasyMembership;
   roster: FantasyRoster | null;
   matchup: FantasyMatchupPeriod | null;
+  outlook: FantasyTeamPowerOutlook | null;
+  targets: FantasyCategoryTargets | null;
+  availabilityReady: boolean;
 }) {
   const teamId = membership.fantrax_team_id;
   const rosterHref = teamId ? `/fantasy/gnfc/roster/${encodeURIComponent(teamId)}` : "/fantasy/gnfc";
@@ -551,6 +570,19 @@ function GnfcHomeCard({
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Injuries</p>
           <p className={`mt-1 text-sm font-black ${injuries.length ? "text-red-600 dark:text-red-400" : "text-slate-950 dark:text-white"}`}>{roster ? injuries.length : "—"}</p>
           <p className="truncate text-[11px] text-slate-500">{roster ? (injuries.map((player) => player.short_name).join(", ") || "No alerts") : "Roster unavailable"}</p>
+        </div>
+      </div>
+      <div className="space-y-3 border-b border-blue-100 px-4 py-4 dark:border-blue-900/70">
+        <GnfcPowerSummary outlook={outlook} teamId={teamId ?? ""} detailHref={`${rosterHref}#team-analysis`} />
+        <div className="rounded-xl border border-slate-200 bg-white/70 p-3 text-xs dark:border-slate-700 dark:bg-slate-950/20">
+          <p className="font-bold uppercase tracking-wide text-slate-500">Free-agent move check</p>
+          <p className="mt-1 font-bold text-slate-900 dark:text-white">
+            {targets
+              ? `${targets.sample.filtered_candidates} statistical FA candidates for ${targets.needs.map((need) => need.label).join(" · ") || "team needs"}`
+              : availabilityReady ? "Free-agent analysis is temporarily unavailable" : "Free-agent analysis is not active yet"}
+          </p>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">Historical category fit is not a pickup recommendation. Check role, availability and the roster slot before claiming.</p>
+          {availabilityReady && <Link href={`${rosterHref}#player-targets`} className="mt-2 inline-block font-bold text-blue-600 hover:underline dark:text-blue-400">Review FA analysis →</Link>}
         </div>
       </div>
       <div className="px-4 py-4">
