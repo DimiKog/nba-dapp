@@ -30,7 +30,7 @@ export default function CategoryNeedsSection({
       const params = new URLSearchParams({
         basis: "season",
         window: "14",
-        availability: "all",
+        availability: league === "gnfc" ? "free_agent" : "all",
         limit: "24",
         action_scope: "all",
         cap_scope: "all",

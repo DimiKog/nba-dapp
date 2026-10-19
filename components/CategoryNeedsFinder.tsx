@@ -57,7 +57,8 @@ export default function CategoryNeedsFinder({
   const [targets, setTargets] = useState(initialTargets);
   const [visibleCandidates, setVisibleCandidates] = useState(initialTargets.candidates);
   const [basis, setBasis] = useState<Basis>("season");
-  const [availability, setAvailability] = useState<Availability>("all");
+  const defaultAvailability: Availability = league === "gnfc" ? "free_agent" : "all";
+  const [availability, setAvailability] = useState<Availability>(initialTargets.filters.availability);
   const [category, setCategory] = useState("");
   const [position, setPosition] = useState("");
   const [actionScope, setActionScope] = useState<ActionScope>("all");
@@ -104,7 +105,7 @@ export default function CategoryNeedsFinder({
   const candidateCopy = candidateListCopy(visibleCandidates.length, targets.sample.filtered_candidates);
   const hasMoreCandidates = visibleCandidates.length < targets.sample.filtered_candidates;
   const filtersAreDefault = basis === "season"
-    && availability === "all"
+    && availability === defaultAvailability
     && category === ""
     && position === ""
     && actionScope === "all"
@@ -196,7 +197,7 @@ export default function CategoryNeedsFinder({
     setFocusedLane("");
     void applyFilters({
       basis: "season",
-      availability: "all",
+      availability: defaultAvailability,
       category: "",
       position: "",
       actionScope: "all",
@@ -289,7 +290,7 @@ export default function CategoryNeedsFinder({
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">This filter applies only to free agents. Trade targets remain visible and are not cap-checked here.</p>
               )}
             </div>
-            <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready", availability: actionScope === "ready" ? "all" : "free_agent" })} disabled={loading}
+            <button type="button" onClick={() => applyFilters({ actionScope: actionScope === "ready" ? "all" : "ready", availability: actionScope === "ready" ? defaultAvailability : "free_agent" })} disabled={loading}
               className="rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-300">
               {actionScope === "ready" ? "Show all candidates" : "Only verified adds"}
             </button>
@@ -534,7 +535,7 @@ function CandidateCard({
             <p className="mt-1">{roleEvidenceSummary(actionability)}</p>
           </div>
           <div className={`rounded-lg border px-3 py-2 text-xs ${actionability.status === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"}`}>
-            <p className="font-black">{actionabilityLabel(actionability.status)}</p>
+            <p className="font-black">{actionabilityLabel(actionability.status, league)}</p>
             <p className="mt-1">{actionability.reasons.length > 0 ? actionability.reasons.map(actionabilityReason).join(" · ") : "Current role, NBA status, roster and acquisition checks passed. Confirm the live claim before acting."}</p>
           </div>
         </div>
@@ -565,13 +566,15 @@ function CandidateCard({
           {rankedContributions.length > 0 && <ul className="mt-2 space-y-1">
             {rankedContributions.map((item) => <li key={item.key} className="flex justify-between gap-2"><span>{item.label} · {item.player_z >= 0 ? "+" : ""}{item.player_z.toFixed(2)}z × {item.weight.toFixed(1)}</span><strong className={item.weighted_contribution >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}>{item.weighted_contribution >= 0 ? "+" : ""}{item.weighted_contribution.toFixed(2)}</strong></li>)}
           </ul>}
-          <p className="mt-2 text-slate-500 dark:text-slate-400">Salary, tokens, future role and injury risk do not change the category-fit score. Acquisition checks are separate; the model does not learn from saved player notes.</p>
+          <p className="mt-2 text-slate-500 dark:text-slate-400">{league === "gnfc" ? "Future role and injury risk do not change the category-fit score. Roster space and acquisition checks are separate; the model does not learn from saved player notes." : "Salary, tokens, future role and injury risk do not change the category-fit score. Acquisition checks are separate; the model does not learn from saved player notes."}</p>
         </details>
       </div>}
       <DetailRow label="Helps" values={player.helps} tone="positive" />
       <DetailRow label="Trade-offs" values={player.tradeoffs} tone="negative" />
       <div className="mt-3 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
+        {league !== "gnfc" && (
         <div className="flex justify-between gap-3"><span className="text-slate-400">2026–27 salary</span><span className="font-bold text-slate-700 dark:text-slate-200">{player.salary_2026_27 ?? "$0 · Free agent"}</span></div>
+        )}
         {injury && <p className="mt-2 text-rose-600 dark:text-rose-400">{injury}</p>}
       </div>
       <div className="mt-3 flex flex-wrap justify-end gap-2">
@@ -595,9 +598,9 @@ function CandidateCard({
   );
 }
 
-function actionabilityLabel(status: NonNullable<FantasyTargetCandidate["actionability"]>["status"]): string {
+function actionabilityLabel(status: NonNullable<FantasyTargetCandidate["actionability"]>["status"], league: LeagueSlug): string {
   if (status === "ready") return "Acquisition checks passed";
-  if (status === "requires_move") return "Requires a roster, cap or token change";
+  if (status === "requires_move") return league === "gnfc" ? "Requires a roster change" : "Requires a roster, cap or token change";
   if (status === "needs_review") return "Role or acquisition needs review";
   return "Statistical fit only";
 }

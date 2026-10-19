@@ -1520,7 +1520,7 @@ export async function fetchFantasyRosterPerformance(
 }
 
 export async function fetchFantasyTeamCategoryProfile(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   teamId: string,
   basis: "season" | "window" = "season",
   window = 14,
@@ -1539,7 +1539,7 @@ export async function fetchFantasyTeamCategoryProfile(
 }
 
 export async function fetchFantasyTeamPowerOutlook(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
 ): Promise<FantasyTeamPowerOutlook> {
   const res = await fetch(`${BASE}/api/fantasy/${league}/team-power-outlook`, {
     cache: "no-store",

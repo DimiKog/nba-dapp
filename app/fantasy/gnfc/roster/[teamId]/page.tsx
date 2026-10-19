@@ -2,7 +2,20 @@ import Image from "next/image";
 import Link from "next/link";
 import GnfcAvailabilityNotice from "@/components/GnfcAvailabilityNotice";
 import CategoryNeedsSection from "@/components/CategoryNeedsSection";
-import { fetchFantasyCategoryTargets, fetchFantasyLeagues, fetchFantasyRoster, fetchFantasyStandings, photoUrl, type FantasyPlayer } from "@/lib/api";
+import GnfcPowerSummary from "@/components/GnfcPowerSummary";
+import RosterPerformanceTable from "@/components/RosterPerformanceTable";
+import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
+import {
+  fetchFantasyCategoryTargets,
+  fetchFantasyLeagues,
+  fetchFantasyRoster,
+  fetchFantasyRosterPerformance,
+  fetchFantasyStandings,
+  fetchFantasyTeamCategoryProfile,
+  fetchFantasyTeamPowerOutlook,
+  photoUrl,
+  type FantasyPlayer,
+} from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 
 const ROSTER_SECTIONS = [
@@ -17,10 +30,14 @@ export default async function GnfcRosterPage({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  const [roster, teams, leagues] = await Promise.all([
+  const [roster, teams, leagues, performance, seasonProfile, windowProfile, outlook] = await Promise.all([
     fetchFantasyRoster("gnfc", teamId).catch(() => null),
     fetchFantasyStandings("gnfc").catch(() => []),
     fetchFantasyLeagues().catch(() => []),
+    fetchFantasyRosterPerformance("gnfc", teamId).catch(() => null),
+    fetchFantasyTeamCategoryProfile("gnfc", teamId).catch(() => null),
+    fetchFantasyTeamCategoryProfile("gnfc", teamId, "window", 14).catch(() => null),
+    fetchFantasyTeamPowerOutlook("gnfc").catch(() => null),
   ]);
 
   if (!roster) {
@@ -37,13 +54,13 @@ export default async function GnfcRosterPage({
   const isPersonalTeam = membershipFor(access?.session ?? null, "gnfc")?.fantrax_team_id === teamId;
   const showTargets = isPersonalTeam && Boolean(config?.availability_ready) && roster.players.length > 0;
   const initialTargets = showTargets
-    ? await fetchFantasyCategoryTargets("gnfc", teamId, { actionScope: "all" }, access?.identityHeaders).catch(() => null)
+    ? await fetchFantasyCategoryTargets("gnfc", teamId, { availability: "free_agent", actionScope: "all" }, access?.identityHeaders).catch(() => null)
     : null;
   const knownStatuses = new Set<string>(ROSTER_SECTIONS.map((section) => section.status));
   const otherPlayers = roster.players.filter((player) => !knownStatuses.has(player.status));
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-10">
       <Link href="/fantasy/gnfc" className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400">
         ← GNFC Γ5 standings
       </Link>
@@ -56,30 +73,44 @@ export default async function GnfcRosterPage({
         </div>
       </header>
 
-      <div className="mt-7">
-        <GnfcAvailabilityNotice
-          joinedTeams={teams.length}
-          expectedTeams={config?.expected_team_count ?? 12}
-          availabilityReady={config?.availability_ready ?? false}
-        />
-      </div>
-
-      {roster.players.length === 0 ? (
-        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900">
-          <h2 className="text-lg font-black text-slate-950 dark:text-white">No drafted players yet</h2>
-          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
-            Fantrax currently shows an empty roster. This page will show players as the draft and roster updates arrive.
-          </p>
-        </section>
-      ) : (
-        <div className="space-y-6">
-          {ROSTER_SECTIONS.map(({ status, label }) => {
-            const players = roster.players.filter((player) => player.status === status);
-            return players.length ? <RosterSection key={status} label={label} players={players} /> : null;
-          })}
-          {otherPlayers.length > 0 && <RosterSection label="Other" players={otherPlayers} />}
+      {!config?.availability_ready && (
+        <div className="mt-7">
+          <GnfcAvailabilityNotice
+            joinedTeams={teams.length}
+            expectedTeams={config?.expected_team_count ?? 12}
+            availabilityReady={config?.availability_ready ?? false}
+          />
         </div>
       )}
+
+      <section className="mt-7 space-y-4" aria-label="Provisional team outlook">
+        <GnfcPowerSummary outlook={outlook} teamId={teamId} />
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Category comparison uses the current Fantrax roster and 2025–26 historical NBA production. It does not predict final standings or next-season roles.
+        </p>
+      </section>
+
+      <section id="roster" className="mt-8 scroll-mt-24">
+        {performance?.players.length ? (
+          <RosterPerformanceTable performance={performance} league="gnfc" />
+        ) : roster.players.length === 0 ? (
+          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900">
+            <h2 className="text-lg font-black text-slate-950 dark:text-white">No drafted players yet</h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+              Fantrax currently shows an empty roster. This page will show players as the draft and roster updates arrive.
+            </p>
+          </section>
+        ) : (
+          <div className="space-y-6">
+            {ROSTER_SECTIONS.map(({ status, label }) => {
+              const players = roster.players.filter((player) => player.status === status);
+              return players.length ? <RosterSection key={status} label={label} players={players} /> : null;
+            })}
+            {otherPlayers.length > 0 && <RosterSection label="Other" players={otherPlayers} />}
+          </div>
+        )}
+      </section>
+      {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} />}
       {showTargets && (
         <CategoryNeedsSection
           league="gnfc"

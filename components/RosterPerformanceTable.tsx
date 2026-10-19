@@ -122,8 +122,9 @@ export default function RosterPerformanceTable({
   league,
 }: {
   performance: FantasyRosterPerformance;
-  league: LeagueSlug;
+  league: LeagueSlug | "gnfc";
 }) {
+  const showContracts = league !== "gnfc";
   const showTenure = leaguePresentation(league)?.showTenure ?? false;
   const hasWindowGames = performance.players.some((player) => player.window_stats.games > 0);
   const [view, setView] = useState<View>(hasWindowGames ? "window" : "season");
@@ -277,7 +278,7 @@ export default function RosterPerformanceTable({
                 <p className="mt-1 text-sm text-slate-500">
                   {selected.nba_team_short || selected.nba_team || "N/A"} · {selected.position}
                 </p>
-                {selected.player_id && (
+                {selected.player_id && showContracts && (
                   <Link href={`/players/${selected.player_id}?league=${league}&from=roster`} className="mt-1 inline-block text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
                     Full intelligence →
                   </Link>
@@ -302,8 +303,8 @@ export default function RosterPerformanceTable({
             </div>
           )}
 
-          <div className="grid sm:grid-cols-[minmax(160px,0.78fr)_minmax(0,1.6fr)]">
-            <div className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-950/20 sm:border-r sm:border-b-0">
+          <div className={`grid ${showContracts ? "sm:grid-cols-[minmax(160px,0.78fr)_minmax(0,1.6fr)]" : ""}`}>
+            {showContracts && <div className="border-b border-slate-200 bg-slate-50/70 p-5 dark:border-slate-700 dark:bg-slate-950/20 sm:border-r sm:border-b-0">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">2026–27 salary</p>
               <p className="mt-1 break-all text-lg font-black tabular-nums text-slate-900 dark:text-white">{selected.salary_2026_27 ?? "—"}</p>
               {showTenure && <TenureDetail player={selected} />}
@@ -320,7 +321,7 @@ export default function RosterPerformanceTable({
                   ))}
                 </dl>
               </div>
-            </div>
+            </div>}
 
             <div className="min-w-0 p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
