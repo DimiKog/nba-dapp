@@ -32,6 +32,7 @@ import type { FantasyMembership } from "@/lib/fantasySessionTypes";
 import HomeScoreboard, { type ScoreboardItem } from "@/components/HomeScoreboard";
 import HomeHotFive from "@/components/HomeHotFive";
 import GnfcPowerSummary from "@/components/GnfcPowerSummary";
+import { gnfcFaMarketSummary } from "@/lib/gnfcFaMarketSummary";
 import { ownedPlayersByTeam, ownedPlayersForGame } from "@/lib/scoreboardOwnership";
 import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
@@ -578,7 +579,7 @@ function GnfcHomeCard({
           <p className="font-bold uppercase tracking-wide text-slate-500">Free-agent move check</p>
           <p className="mt-1 font-bold text-slate-900 dark:text-white">
             {targets
-              ? `${targets.sample.filtered_candidates} statistical FA candidates for ${targets.needs.map((need) => need.label).join(" · ") || "team needs"}`
+              ? gnfcFaMarketSummary(targets)
               : availabilityReady ? "Free-agent analysis is temporarily unavailable" : "Free-agent analysis is not active yet"}
           </p>
           <p className="mt-1 text-slate-500 dark:text-slate-400">Historical category fit is not a pickup recommendation. Check role, availability and the roster slot before claiming.</p>
