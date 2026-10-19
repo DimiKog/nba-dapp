@@ -1,14 +1,11 @@
-import Link from "next/link";
 import type { FantasyTeamPowerOutlook } from "@/lib/api";
 
 export default function GnfcPowerSummary({
   outlook,
   teamId,
-  detailHref,
 }: {
   outlook: FantasyTeamPowerOutlook | null;
   teamId: string;
-  detailHref?: string;
 }) {
   const row = outlook?.status === "ready"
     ? outlook.teams.find((team) => team.team.id === teamId)
@@ -34,7 +31,6 @@ export default function GnfcPowerSummary({
         {row.players_missing_stats ? ` · ${row.players_missing_stats} without stats` : ""}
         {outlook.snapshot?.captured_at ? ` · roster sync ${outlook.snapshot.captured_at.slice(0, 10)}` : ""}
       </p>
-      {detailHref && <Link href={detailHref} className="mt-2 inline-block text-xs font-bold text-blue-600 hover:underline dark:text-blue-400">Full category analysis →</Link>}
     </section>
   );
 }
