@@ -131,15 +131,19 @@ test("mobile Home keeps team essentials and direct actions without long card sec
   await expect(team.getByText("Roster", { exact: true }).first()).toBeVisible();
   await expect(team.getByText("Cap position")).toBeVisible();
   await expect(team.getByText("Injuries")).toBeVisible();
-  await expect(team.getByRole("link", { name: "Full analysis →" })).toHaveAttribute(
-    "href", "/fantasy/ldl/roster/ldl-team-a#team-analysis",
+  await expect(team.getByRole("link", { name: "Open team" })).toHaveAttribute(
+    "href", "/fantasy/ldl/roster/ldl-team-a",
   );
   await expect(team.getByText(/Free-agent (move check|candidate to review)/)).toBeVisible();
-  await expect(team.getByText("Current matchup is temporarily unavailable.")).toBeHidden();
+  await expect(team.getByText("Current matchup is temporarily unavailable.")).toHaveCount(0);
   await expect(team.getByRole("link", { name: "Free agents" })).toBeVisible();
 
+  const matchups = page.getByRole("heading", { name: "Your matchups" }).locator("xpath=ancestor::section[1]");
+  await expect(matchups.getByText("Current matchup is temporarily unavailable.").first()).toBeVisible();
+
   await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(team.getByText("Current matchup is temporarily unavailable.")).toBeVisible();
+  await expect(team.getByText("Current matchup is temporarily unavailable.")).toHaveCount(0);
+  await expect(matchups.getByText("Current matchup is temporarily unavailable.").first()).toBeVisible();
 });
 
 test("home shows public panels while the private session is slow", async ({ page, request }) => {
