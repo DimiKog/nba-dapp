@@ -96,7 +96,7 @@ export default async function FantasyRosterPage({
         </div>
       </div>
 
-      {performance && <TeamPageOverview performance={performance} profile={seasonProfile} />}
+      {performance && <TeamPageOverview performance={performance} />}
       <TeamSectionNav
         hasOverview={Boolean(performance)}
         hasPayroll={Boolean(performance?.payroll)}

@@ -1,16 +1,11 @@
-import type {
-  FantasyRosterPerformance,
-  FantasyTeamCategoryProfile,
-} from "@/lib/api";
+import type { FantasyRosterPerformance } from "@/lib/api";
 import { leaguePresentation } from "@/lib/leagues";
 
 export default function TeamPageOverview({
   performance,
-  profile,
   showCap = true,
 }: {
   performance: FantasyRosterPerformance;
-  profile: FantasyTeamCategoryProfile | null;
   showCap?: boolean;
 }) {
   const injured = performance.players.filter((player) => player.injury);
@@ -32,111 +27,115 @@ export default function TeamPageOverview({
     .sort()
     .at(-1) ?? null;
 
+  const injuryNames = injured.map((player) => player.short_name).join(", ");
+  const cells: StatusCell[] = [
+    {
+      label: "Roster",
+      value: `${performance.players.length}`,
+      detail: "Active · Reserve · IR",
+    },
+    {
+      label: "Injuries",
+      value: `${injured.length}`,
+      detail: injuryNames || "No active alerts",
+      title: injuryNames || undefined,
+      tone: injured.length ? "danger" : "default",
+    },
+  ];
+
+  if (showCap) {
+    cells.push({
+      label: "Cap",
+      value: current?.remaining == null ? "—" : formatCapPosition(current.remaining),
+      detail: current?.cap == null
+        ? "Payroll unavailable"
+        : `Cap ${formatCompactMoney(current.cap)}${current.cap_provisional ? " · provisional" : ""}`,
+      tone: current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger",
+    });
+  }
+
+  if (showTenure) {
+    cells.push({
+      label: "Tenure",
+      value: expired ? `${expired} must drop` : finalYear ? `${finalYear} final-year` : "Clear",
+      detail: `${expired} expired · ${franchise} Franchise`,
+      tone: expired ? "danger" : finalYear ? "accent" : "positive",
+    });
+  }
+
+  if (claimBudget) {
+    cells.push({
+      label: "Tokens",
+      value: formatTokenBalance(claimBudget.remaining),
+      detail: `${presentation?.label} claim balance`,
+      tone: "accent",
+    });
+  }
+
+  cells.push({
+    label: "Data",
+    value: freshnessLabel(freshest),
+    detail: `${performance.window.from} – ${performance.window.to}`,
+  });
+
   return (
     <section id="overview" className="mt-6 scroll-mt-32">
-      <div className={`grid gap-3 sm:grid-cols-2 ${!showCap ? "lg:grid-cols-3" : claimBudget || showTenure ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
-        <SummaryCard label="Roster" value={`${performance.players.length}`} detail="Active, Reserve and IR" />
-        <SummaryCard
-          label="Injury alerts"
-          value={`${injured.length}`}
-          detail={injured.map((player) => player.short_name).join(", ") || "No active alerts"}
-          tone={injured.length ? "danger" : "default"}
-        />
-        {showCap && (
-          <SummaryCard
-            label="Current cap"
-            value={current?.remaining == null ? "Not configured" : formatCapPosition(current.remaining)}
-            detail={current?.cap == null
-              ? "Payroll unavailable"
-              : `Cap ${formatCompactMoney(current.cap)} · Payroll ${formatCompactMoney(current.total)}${current.cap_provisional ? " · provisional" : ""}`}
-            tone={current?.remaining == null ? "default" : current.remaining >= 0 ? "positive" : "danger"}
-          />
-        )}
-        {showTenure && (
-          <SummaryCard
-            label="Tenure alerts"
-            value={expired ? `${expired} must drop` : finalYear ? `${finalYear} final-year` : "No urgent cases"}
-            detail={`${expired} expired · ${franchise} Franchise`}
-            tone={expired ? "danger" : finalYear ? "accent" : "positive"}
-          />
-        )}
-        {claimBudget && (
-          <SummaryCard
-            label="Claim tokens"
-            value={formatTokenBalance(claimBudget.remaining)}
-            detail={`Current ${presentation?.label} balance`}
-            tone="accent"
-          />
-        )}
-        <SummaryCard label="Data freshness" value={freshnessLabel(freshest)} detail={`${performance.window.from} – ${performance.window.to}`} />
-      </div>
-
-      {profile && (
-        <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 md:grid-cols-2">
-          <CategorySummary label="Strengths" values={profile.strengths} tone="positive" empty="No top-third categories" />
-          <CategorySummary label="Weaknesses" values={profile.weaknesses} tone="danger" empty="No bottom-third categories" />
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-wrap divide-x divide-slate-100 dark:divide-slate-800">
+          {cells.map((cell) => (
+            <StatusStripCell key={cell.label} {...cell} />
+          ))}
         </div>
-      )}
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+        Category strengths and gaps are in{" "}
+        <a href="#team-analysis" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          Category analysis
+        </a>
+        .
+      </p>
     </section>
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  detail,
-  tone = "default",
-}: {
+type StatusCell = {
   label: string;
   value: string;
   detail: string;
+  title?: string;
   tone?: "default" | "positive" | "danger" | "accent";
-}) {
-  const styles = tone === "danger"
-    ? "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30"
-    : tone === "positive"
-      ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30"
-      : tone === "accent"
-        ? "border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/30"
-      : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900";
+};
+
+function StatusStripCell({
+  label,
+  value,
+  detail,
+  title,
+  tone = "default",
+}: StatusCell) {
   const valueStyle = tone === "danger"
     ? "text-red-700 dark:text-red-300"
     : tone === "positive"
       ? "text-emerald-700 dark:text-emerald-300"
       : tone === "accent"
         ? "text-blue-700 dark:text-blue-300"
-      : "text-slate-900 dark:text-slate-100";
-  return (
-    <div className={`min-w-0 rounded-xl border p-4 ${styles}`}>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className={`mt-1 truncate text-xl font-black tabular-nums ${valueStyle}`}>{value}</p>
-      <p className="mt-0.5 truncate text-xs text-slate-500">{detail}</p>
-    </div>
-  );
-}
+        : "text-slate-950 dark:text-white";
+  const shell = tone === "danger"
+    ? "bg-red-50/80 dark:bg-red-950/20"
+    : tone === "positive"
+      ? "bg-emerald-50/50 dark:bg-emerald-950/15"
+      : tone === "accent"
+        ? "bg-blue-50/60 dark:bg-blue-950/20"
+        : "bg-transparent";
 
-function CategorySummary({
-  label,
-  values,
-  tone,
-  empty,
-}: {
-  label: string;
-  values: string[];
-  tone: "positive" | "danger";
-  empty: string;
-}) {
-  const chip = tone === "positive"
-    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-    : "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300";
   return (
-    <div>
+    <div
+      title={title}
+      className={`min-w-[7.5rem] flex-1 px-3 py-2.5 ${shell}`}
+    >
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {values.length ? values.map((value) => (
-          <span key={value} className={`rounded-full px-2.5 py-1 text-xs font-bold ${chip}`}>{value}</span>
-        )) : <span className="text-sm text-slate-400">{empty}</span>}
-      </div>
+      <p className={`mt-0.5 truncate text-sm font-black tabular-nums ${valueStyle}`}>{value}</p>
+      <p className="mt-0.5 truncate text-[11px] text-slate-500">{detail}</p>
     </div>
   );
 }

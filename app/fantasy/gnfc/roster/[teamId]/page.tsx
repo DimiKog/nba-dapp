@@ -89,14 +89,7 @@ export default async function GnfcRosterPage({
         </div>
       )}
 
-      {performance && <TeamPageOverview performance={performance} profile={seasonProfile} showCap={false} />}
-
-      <section className="mt-7 space-y-4" aria-label="Provisional team outlook">
-        <GnfcPowerSummary outlook={outlook} teamId={teamId} />
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Category comparison uses the current Fantrax roster and 2025–26 historical NBA production. It does not predict final standings or next-season roles.
-        </p>
-      </section>
+      {performance && <TeamPageOverview performance={performance} showCap={false} />}
 
       <TeamSectionNav
         hasOverview={Boolean(performance)}
@@ -126,7 +119,15 @@ export default async function GnfcRosterPage({
           </div>
         )}
       </section>
-      {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} />}
+      {(seasonProfile || outlook) && (
+        <div className="mt-8 space-y-4">
+          <GnfcPowerSummary outlook={outlook} teamId={teamId} />
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Category comparison uses the current Fantrax roster and 2025–26 historical NBA production. It does not predict final standings or next-season roles.
+          </p>
+          {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} />}
+        </div>
+      )}
       {showTargets && (
         <CategoryNeedsSection
           league="gnfc"
