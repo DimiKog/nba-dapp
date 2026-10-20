@@ -24,6 +24,7 @@ import {
   type FantasyTeamCategoryProfile,
   type FantasyTeamPowerOutlook,
   type FantasyCategoryTargets,
+  type Game,
 } from "@/lib/api";
 import HomeLeagueStandings from "@/components/HomeLeagueStandings";
 import ManagerTodayRecommendation from "@/components/ManagerTodayRecommendation";
@@ -140,7 +141,20 @@ async function PersonalHome() {
 }
 
 async function ScoreboardHome() {
-  const [games, { teams, context }] = await Promise.all([fetchScoreboard(), loadHomePersonal()]);
+  const personalPromise = loadHomePersonal();
+  const games = await fetchScoreboard();
+  return (
+    <Suspense fallback={<ScoreboardGames games={games} />}>
+      <PersonalScoreboardGames games={games} personalPromise={personalPromise} />
+    </Suspense>
+  );
+}
+
+async function PersonalScoreboardGames({ games, personalPromise }: {
+  games: Game[];
+  personalPromise: ReturnType<typeof loadHomePersonal>;
+}) {
+  const { teams, context } = await personalPromise;
   const gnfcTeamId = context.session?.memberships.find((membership) => membership.league_slug === "gnfc")?.fantrax_team_id;
   const gnfcRoster = gnfcTeamId ? await loadGnfcHomeRoster(gnfcTeamId) : null;
 
@@ -148,6 +162,13 @@ async function ScoreboardHome() {
     ...teams,
     ...(gnfcRoster ? [{ league: "gnfc" as const, leagueName: "GNFC Γ5", performance: { players: gnfcRoster.players } }] : []),
   ]);
+  return <ScoreboardGames games={games} ownedByTeam={ownedByTeam} />;
+}
+
+function ScoreboardGames({ games, ownedByTeam }: {
+  games: Game[];
+  ownedByTeam?: ReturnType<typeof ownedPlayersByTeam>;
+}) {
   const scoreboardItems: ScoreboardItem[] = games.map((g) => {
     const isLive = !g.completed && g.status !== "Scheduled";
     return {
@@ -157,7 +178,7 @@ async function ScoreboardHome() {
       completed: g.completed,
       showScore: g.completed || isLive,
       displayStatus: g.completed || isLive ? g.status : formatGameDate(g.date) ?? g.status,
-      ownedPlayers: ownedPlayersForGame(ownedByTeam, g),
+      ownedPlayers: ownedByTeam ? ownedPlayersForGame(ownedByTeam, g) : [],
       expiresAt: g.expires_at ?? null,
     };
   });
@@ -593,12 +614,15 @@ function GnfcHomeCard({
           <p className="truncate text-[11px] text-slate-500">{roster ? (injuries.map((player) => player.short_name).join(", ") || "No alerts") : "Roster unavailable"}</p>
         </div>
       </div>
-      <HomeCategoryOutlook
-        analysisHref={`${rosterHref}#team-analysis`}
-        profile={profile}
-        profileContext="historical profile"
-        summary={<GnfcPowerSummary outlook={outlook} teamId={teamId ?? ""} />}
-      />
+      <MobileTeamOutlook profile={profile} analysisHref={`${rosterHref}#team-analysis`} />
+      <div className="hidden lg:block">
+        <HomeCategoryOutlook
+          analysisHref={`${rosterHref}#team-analysis`}
+          profile={profile}
+          profileContext="historical profile"
+          summary={<GnfcPowerSummary outlook={outlook} teamId={teamId ?? ""} />}
+        />
+      </div>
       <div className="border-b border-blue-100 px-4 py-4 dark:border-blue-900/70">
         <div className="rounded-xl border border-slate-200 bg-white/70 p-3 text-xs dark:border-slate-700 dark:bg-slate-950/20">
           <p className="font-bold uppercase tracking-wide text-slate-500">Free-agent move check</p>
@@ -611,22 +635,24 @@ function GnfcHomeCard({
           {availabilityReady && <Link href={`${rosterHref}#player-targets`} className="mt-2 inline-block font-bold text-blue-600 hover:underline dark:text-blue-400">Review FA analysis →</Link>}
         </div>
       </div>
-      <div className="px-4 py-4">
-        {matchup ? (
-          <>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{matchup.period.caption}</p>
-              <p className="truncate text-[11px] text-slate-500">{matchup.period.date_range}</p>
-            </div>
-            <div className="space-y-3">
-              {matchup.matchups.map((item) => (
-                <PersonalMatchupCard key={item.matchup_id} matchup={item} personalTeamId={matchup.team_id} />
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">Current matchup is not available yet.</p>
-        )}
+      <div className="hidden lg:block">
+        <div className="px-4 py-4">
+          {matchup ? (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{matchup.period.caption}</p>
+                <p className="truncate text-[11px] text-slate-500">{matchup.period.date_range}</p>
+              </div>
+              <div className="space-y-3">
+                {matchup.matchups.map((item) => (
+                  <PersonalMatchupCard key={item.matchup_id} matchup={item} personalTeamId={matchup.team_id} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">Current matchup is not available yet.</p>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-2 border-t border-blue-100 bg-white/70 p-4 dark:border-blue-900/70 dark:bg-slate-950/20">
         <QuickAction href={rosterHref} label="Roster" />
@@ -727,17 +753,20 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         </div>
       </div>
 
-      {dashboard.profile && (
-        <HomeCategoryOutlook
-          analysisHref={analysisHref}
-          profile={dashboard.profile}
-          summary={
-            <Suspense fallback={<p className="mt-3 text-xs text-slate-500">Loading roster comparison…</p>}>
-              <HomeTeamPowerSummaryAsync teamId={teamId} league={league} />
-            </Suspense>
-          }
-        />
-      )}
+      <MobileTeamOutlook profile={dashboard.profile} analysisHref={analysisHref} />
+      <div className="hidden lg:block">
+        {dashboard.profile && (
+          <HomeCategoryOutlook
+            analysisHref={analysisHref}
+            profile={dashboard.profile}
+            summary={
+              <Suspense fallback={<p className="mt-3 text-xs text-slate-500">Loading roster comparison…</p>}>
+                <HomeTeamPowerSummaryAsync teamId={teamId} league={league} />
+              </Suspense>
+            }
+          />
+        )}
+      </div>
 
       <div className="border-b border-blue-100 bg-white/70 px-4 py-4 dark:border-blue-900/70 dark:bg-slate-950/20">
         <ManagerTodayRecommendation
@@ -747,26 +776,28 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         />
       </div>
 
-      <div className="p-4">
-        {matchup ? (
-          <>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{matchup.period.caption}</p>
-              <p className="truncate text-[11px] text-slate-500">{matchup.period.date_range}</p>
-            </div>
-            <div className="space-y-3">
-              {matchup.matchups.map((item) => (
-                <PersonalMatchupCard
-                  key={item.matchup_id}
-                  matchup={item}
-                  personalTeamId={matchup.team_id}
-                />
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="text-sm text-slate-500">Current matchup is temporarily unavailable.</p>
-        )}
+      <div className="hidden lg:block">
+        <div className="p-4">
+          {matchup ? (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-300">{matchup.period.caption}</p>
+                <p className="truncate text-[11px] text-slate-500">{matchup.period.date_range}</p>
+              </div>
+              <div className="space-y-3">
+                {matchup.matchups.map((item) => (
+                  <PersonalMatchupCard
+                    key={item.matchup_id}
+                    matchup={item}
+                    personalTeamId={matchup.team_id}
+                  />
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">Current matchup is temporarily unavailable.</p>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-2 border-t border-blue-100 bg-white/70 p-4 dark:border-blue-900/70 dark:bg-slate-950/20 sm:grid-cols-4">
@@ -776,6 +807,27 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
         <QuickAction href={`/draft-assets?league=${league}`} label="Draft assets" />
       </div>
     </article>
+  );
+}
+
+function MobileTeamOutlook({ profile, analysisHref }: {
+  profile: FantasyTeamCategoryProfile | null;
+  analysisHref: string;
+}) {
+  return (
+    <div className="border-b border-blue-100 bg-white/70 px-4 py-3 text-xs dark:border-blue-900/70 dark:bg-slate-950/20 lg:hidden">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-bold uppercase tracking-wide text-slate-500">Category outlook</p>
+        <Link href={analysisHref} className="shrink-0 font-bold text-blue-600 dark:text-blue-400">Full analysis →</Link>
+      </div>
+      {profile?.sample.players_included ? (
+        <p className="mt-1 text-slate-600 dark:text-slate-300">
+          Strengths: {profile.strengths.slice(0, 2).join(" · ") || "—"} · Gaps: {profile.weaknesses.slice(0, 2).join(" · ") || "—"}
+        </p>
+      ) : (
+        <p className="mt-1 text-slate-500">Category details are available on the team page.</p>
+      )}
+    </div>
   );
 }
 

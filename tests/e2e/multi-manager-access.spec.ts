@@ -112,10 +112,34 @@ test("home shows independent panels while a personal roster is slow", async ({ p
   await page.goto(app, { waitUntil: "commit" });
   await expect(page.getByLabel("Your teams loading")).toBeVisible();
   await expect(page.getByRole("link", { name: "Open radar & watchlist →" })).toBeVisible();
+  const scoreboard = page.getByRole("heading", { name: "NBA Scoreboard" }).locator("xpath=ancestor::section[1]");
+  await expect(scoreboard.getByText("NO", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Your teams loading")).toBeVisible();
 
   await expect(page.getByRole("heading", { name: /Alice/ })).toBeVisible();
   await expect(page.getByLabel("Your teams loading")).toHaveCount(0);
+  await expect(scoreboard.getByRole("button", { name: "Mine only (1)" })).toBeVisible();
+});
+
+test("mobile Home keeps team essentials and direct actions without long card sections", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(app);
+
+  const team = page.locator("article", { has: page.getByRole("heading", { name: "Manager A LDL" }) });
+  await expect(team.getByText("Roster", { exact: true }).first()).toBeVisible();
+  await expect(team.getByText("Cap position")).toBeVisible();
+  await expect(team.getByText("Injuries")).toBeVisible();
+  await expect(team.getByRole("link", { name: "Full analysis →" })).toHaveAttribute(
+    "href", "/fantasy/ldl/roster/ldl-team-a#team-analysis",
+  );
+  await expect(team.getByText(/Free-agent (move check|candidate to review)/)).toBeVisible();
+  await expect(team.getByText("Current matchup is temporarily unavailable.")).toBeHidden();
+  await expect(team.getByRole("link", { name: "Free agents" })).toBeVisible();
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(team.getByText("Current matchup is temporarily unavailable.")).toBeVisible();
 });
 
 test("home shows public panels while the private session is slow", async ({ page, request }) => {
