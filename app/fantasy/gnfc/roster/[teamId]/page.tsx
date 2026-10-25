@@ -107,7 +107,7 @@ export default async function GnfcRosterPage({
 
       <section id="roster" className="mt-8 scroll-mt-32">
         {performance?.players.length ? (
-          <RosterPerformanceTable performance={performance} league="gnfc" />
+          <RosterPerformanceTable performance={performance} league="gnfc" showWatch={isPersonalTeam} />
         ) : roster.players.length === 0 ? (
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900">
             <h2 className="text-lg font-black text-slate-950 dark:text-white">No drafted players yet</h2>

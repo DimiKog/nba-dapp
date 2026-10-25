@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import InjuryFlag from "@/components/InjuryFlag";
 import PreseasonAveragesPanel from "@/components/PreseasonAveragesPanel";
+import RosterWatchBadges from "@/components/RosterWatchBadges";
 import { leaguePresentation, type LeagueSlug } from "@/lib/leagues";
 import {
   FantasyPlayerPerformance,
@@ -120,9 +121,11 @@ function tenureBadge(player: FantasyPlayerPerformance) {
 export default function RosterPerformanceTable({
   performance,
   league,
+  showWatch = false,
 }: {
   performance: FantasyRosterPerformance;
   league: LeagueSlug | "gnfc";
+  showWatch?: boolean;
 }) {
   const showContracts = league !== "gnfc";
   const showTenure = leaguePresentation(league)?.showTenure ?? false;
@@ -215,9 +218,10 @@ export default function RosterPerformanceTable({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex min-w-0 flex-wrap items-center gap-2">
                             <span className="truncate font-semibold text-slate-900 dark:text-slate-100">{player.name}</span>
                             {player.injury && <InjuryFlag />}
+                            {showWatch && <RosterWatchBadges watch={player.roster_watch} />}
                             {tenure && (
                               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide ${tenure.classes}`}>
                                 {tenure.label}
@@ -274,6 +278,7 @@ export default function RosterPerformanceTable({
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="truncate text-xl font-bold text-slate-900 dark:text-slate-100">{selected.name}</h2>
+                  {showWatch && <RosterWatchBadges watch={selected.roster_watch} />}
                 </div>
                 <p className="mt-1 text-sm text-slate-500">
                   {selected.nba_team_short || selected.nba_team || "N/A"} · {selected.position}

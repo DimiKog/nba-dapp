@@ -112,7 +112,7 @@ export default async function FantasyRosterPage({
 
       <section id="roster" className="scroll-mt-32">
         {performance ? (
-          <RosterPerformanceTable performance={performance} league={league} />
+          <RosterPerformanceTable performance={performance} league={league} showWatch={isPersonalTeam} />
       ) : (
       <div className="mt-8 space-y-6">
         {[

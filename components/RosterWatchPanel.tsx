@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { FantasyPlayerPerformance } from "@/lib/api";
+import RosterWatchBadges from "@/components/RosterWatchBadges";
 
 const CATEGORY_LABELS: Record<string, string> = {
   points: "PTS", three_pm: "3PTM", rebounds: "REB", oreb: "OREB",
@@ -58,10 +59,6 @@ export default function RosterWatchPanel({
           {flagged.map((player) => {
             const watch = player.roster_watch!;
             const roleFlag = ["watch", "early_watch", "limited_observed"].includes(watch.role.state);
-            const title = watch.role.state === "watch" ? "Lower minutes"
-              : watch.role.state === "early_watch" ? "Possible minutes drop"
-              : watch.role.state === "limited_observed" ? "Limited observed role"
-              : "Category production to review";
             return (
               <article key={player.nba_id ?? player.name} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
                 <div className="flex items-start justify-between gap-2">
@@ -69,7 +66,7 @@ export default function RosterWatchPanel({
                     <p className="truncate text-sm font-bold text-slate-950 dark:text-white">{player.name}</p>
                     <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{watch.season_games} recorded games · through {watch.latest_game_date ?? "—"}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${watch.role.state === "watch" ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200" : "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200"}`}>{title}</span>
+                  <RosterWatchBadges watch={watch} />
                 </div>
                 {roleFlag && <p className="mt-2 text-xs tabular-nums text-slate-700 dark:text-slate-300">{roleDescription(player)}</p>}
                 {watch.production.state === "review" && (
