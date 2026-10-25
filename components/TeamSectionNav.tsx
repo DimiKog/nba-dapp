@@ -1,5 +1,6 @@
 const LINKS = [
   ["overview", "Overview"],
+  ["roster-watch", "Roster watch"],
   ["roster", "Roster"],
   ["payroll", "Payroll"],
   ["team-analysis", "Category analysis"],
@@ -8,12 +9,14 @@ const LINKS = [
 
 export default function TeamSectionNav({
   hasPayroll,
+  hasWatch = false,
   hasOverview = true,
   hasAnalysis = true,
   hasTargets = true,
   targetsLabel = "Player targets",
 }: {
   hasPayroll: boolean;
+  hasWatch?: boolean;
   hasOverview?: boolean;
   hasAnalysis?: boolean;
   hasTargets?: boolean;
@@ -21,6 +24,7 @@ export default function TeamSectionNav({
 }) {
   const links = LINKS.filter(([id]) =>
     (hasOverview || id !== "overview") &&
+    (hasWatch || id !== "roster-watch") &&
     (hasPayroll || id !== "payroll") &&
     (hasAnalysis || id !== "team-analysis") &&
     (hasTargets || id !== "player-targets"),

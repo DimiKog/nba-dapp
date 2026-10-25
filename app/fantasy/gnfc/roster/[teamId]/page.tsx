@@ -4,6 +4,7 @@ import GnfcAvailabilityNotice from "@/components/GnfcAvailabilityNotice";
 import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import GnfcPowerSummary from "@/components/GnfcPowerSummary";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
+import RosterWatchPanel from "@/components/RosterWatchPanel";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
 import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamSectionNav from "@/components/TeamSectionNav";
@@ -93,11 +94,16 @@ export default async function GnfcRosterPage({
 
       <TeamSectionNav
         hasOverview={Boolean(performance)}
+        hasWatch={isPersonalTeam && Boolean(performance?.players.some((player) => player.roster_watch))}
         hasPayroll={false}
         hasAnalysis={Boolean(seasonProfile)}
         hasTargets={showTargets}
         targetsLabel="Free-agent targets"
       />
+
+      {isPersonalTeam && performance && (
+        <RosterWatchPanel league="gnfc" players={performance.players} hasTargets={showTargets} />
+      )}
 
       <section id="roster" className="mt-8 scroll-mt-32">
         {performance?.players.length ? (

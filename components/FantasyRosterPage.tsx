@@ -9,6 +9,7 @@ import {
   photoUrl,
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
+import RosterWatchPanel from "@/components/RosterWatchPanel";
 import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
 import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import TeamPageOverview from "@/components/TeamPageOverview";
@@ -99,10 +100,15 @@ export default async function FantasyRosterPage({
       {performance && <TeamPageOverview performance={performance} />}
       <TeamSectionNav
         hasOverview={Boolean(performance)}
+        hasWatch={isPersonalTeam && Boolean(performance?.players.some((player) => player.roster_watch))}
         hasPayroll={Boolean(performance?.payroll)}
         hasAnalysis={Boolean(seasonProfile)}
         hasTargets={isPersonalTeam}
       />
+
+      {isPersonalTeam && performance && (
+        <RosterWatchPanel league={league} players={performance.players} hasTargets />
+      )}
 
       <section id="roster" className="scroll-mt-32">
         {performance ? (
