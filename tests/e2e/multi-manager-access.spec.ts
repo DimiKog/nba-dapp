@@ -65,6 +65,7 @@ test("personal roster shows evidence-only watch and FA navigation", async ({ pag
   const watch = page.getByRole("heading", { name: "Players to review" }).locator("xpath=ancestor::section[1]");
   await expect(watch).toBeVisible();
   await expect(watch.getByText("Lower minutes")).toBeVisible();
+  await expect(page.locator("#roster").getByText("Lower minutes").first()).toBeVisible();
   await expect(watch.getByText("15.0 MIN / 3 GP · 28.0 MIN / 70 GP in 2025-26")).toBeVisible();
   await expect(watch.getByText(/not drop recommendations/i)).toBeVisible();
   await expect(watch.getByRole("link", { name: "Explore free agents" })).toHaveAttribute("href", "#player-targets");
