@@ -242,6 +242,11 @@ const server = createServer((request, response) => {
         position: "G", photo: null, salary_2026_27: null,
         window_stats: { games: 4 }, season_average: { games: 20 }, recent_average: { games: 4 },
         trend_rank: 1, trend_score: 1.25, trend_confidence: "medium",
+        minutes_trend: {
+          basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
+          state: "increase", sample_games: 4, minutes: 24, previous_minutes: 16,
+          delta_minutes: 8, delta_percent: 50, previous_games: 65, latest_game_date: "2026-10-24",
+        },
         trend_strengths: ["PTS"], category_trends: { PTS: { recent: 18, season: 14, delta: 4, improved: true } },
         trend_explanation: {
           schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",

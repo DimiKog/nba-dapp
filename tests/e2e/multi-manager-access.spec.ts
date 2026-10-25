@@ -417,6 +417,8 @@ test("free-agent radar distinguishes recent trend from team fit", async ({ page,
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/watchlist?league=ldl`);
   await expect(page.getByText("Recent trend +1.25 · 4 recent games")).toBeVisible();
+  await page.locator('summary[aria-label="Minutes ↑, show minutes evidence"]').click();
+  await expect(page.getByText(/24\.0 MIN in the latest 4 recorded games vs 16\.0 MIN across 65 games in 2025-26/)).toBeVisible();
   await expect(page.getByText(/Not a team-fit or pickup recommendation/)).toBeVisible();
   await page.getByText("Which categories drive the trend?").click();
   await expect(page.getByText("PTS: 14.00 → 18.00")).toBeVisible();

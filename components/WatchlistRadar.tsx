@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import MinutesTrendEvidence from "@/components/MinutesTrendEvidence";
 import { useRouter } from "next/navigation";
 import {
   fetchFantasyWatchlist,
@@ -51,6 +52,10 @@ export default function WatchlistRadar({
   const watchedIds = useMemo(
     () => new Set(watchlist?.entries.map((entry) => entry.nba_player_id) ?? []),
     [watchlist],
+  );
+  const radarByNbaId = useMemo(
+    () => new Map((radar?.players ?? []).flatMap((player) => player.nba_id == null ? [] : [[player.nba_id, player] as const])),
+    [radar],
   );
   const positions = useMemo(
     () => Array.from(new Set(
@@ -233,6 +238,7 @@ export default function WatchlistRadar({
                 key={entry.id}
                 league={league}
                 entry={entry}
+                minutesTrend={entry.player?.availability === "free_agent" ? radarByNbaId.get(entry.nba_player_id)?.minutes_trend : undefined}
                 windowDays={watchlist.window_days}
                 pending={pendingId === entry.nba_player_id}
                 onSave={savePlayer}
@@ -255,6 +261,7 @@ export default function WatchlistRadar({
             <p className="text-sm text-slate-500">
               Recent per-game change versus season average · {radar?.categories.length ?? 0} categories.
             </p>
+            <p className="mt-1 text-xs text-slate-500">Minutes badges compare completed games with last season; they do not predict future role or affect the trend rank.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
@@ -336,6 +343,7 @@ export default function WatchlistRadar({
 function WatchlistCard({
   league,
   entry,
+  minutesTrend,
   windowDays,
   pending,
   onSave,
@@ -343,6 +351,7 @@ function WatchlistCard({
 }: {
   league: LeagueSlug;
   entry: FantasyWatchlistEntry;
+  minutesTrend?: FantasyRadarPlayer["minutes_trend"];
   windowDays: number;
   pending: boolean;
   onSave: (id: number, notes: string, priority: 1 | 2 | 3) => Promise<void>;
@@ -386,6 +395,7 @@ function WatchlistCard({
             </span>
           </div>
           {player && <TrendChips trends={player.category_trends} />}
+          {player?.availability === "free_agent" && <MinutesTrendEvidence trend={minutesTrend} />}
         </div>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -506,6 +516,7 @@ function RadarCard({
               ))}
             </div>
           )}
+          <MinutesTrendEvidence trend={player.minutes_trend} />
           {player.trend_explanation && <RadarScoreExplanation player={player} />}
           <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
             <span>

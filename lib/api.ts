@@ -1392,6 +1392,19 @@ export interface FantasyCategoryTrend {
 
 export interface FantasyRadarPlayer extends FantasyPlayerPerformance {
   availability?: "rostered" | "free_agent";
+  minutes_trend?: {
+    basis: "completed_game_logs";
+    season: string;
+    previous_season: string;
+    state: "increase" | "early_increase" | "decrease" | "early_decrease" | "steady" | "insufficient_sample" | "no_baseline" | "no_games" | "stale_evidence";
+    sample_games: number;
+    minutes: number | null;
+    previous_minutes: number | null;
+    delta_minutes: number | null;
+    delta_percent: number | null;
+    previous_games: number;
+    latest_game_date: string | null;
+  };
   recent_average: FantasyPlayerStats;
   trend_score: number | null;
   trend_rank: number | null;
