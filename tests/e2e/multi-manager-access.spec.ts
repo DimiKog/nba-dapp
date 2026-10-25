@@ -57,6 +57,20 @@ test("trade analyzer tabs preserve their inputs and URL modes", async ({ page, r
   await expect(page).toHaveURL(/mode=suggestions/);
 });
 
+test("personal roster shows evidence-only watch and FA navigation", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+
+  const watch = page.getByRole("heading", { name: "Players to review" }).locator("xpath=ancestor::section[1]");
+  await expect(watch).toBeVisible();
+  await expect(watch.getByText("Lower minutes")).toBeVisible();
+  await expect(watch.getByText("15.0 MIN in 3 games · 28.0 MIN last season")).toBeVisible();
+  await expect(watch.getByText(/not drop recommendations/i)).toBeVisible();
+  await expect(watch.getByRole("link", { name: "Explore free agents" })).toHaveAttribute("href", "#player-targets");
+  await expect(watch.getByRole("link", { name: "Player details" })).toHaveAttribute("href", "/players/20000?league=ldl&from=roster");
+});
+
 test("trade analyzer clears loading when a pending request is invalidated", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });

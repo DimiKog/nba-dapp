@@ -374,6 +374,27 @@ export interface FantasyPlayerPerformance extends Omit<FantasyPlayer, "injury"> 
   } | null;
   window_stats: FantasyPlayerStats;
   season_average: FantasyPlayerStats | null;
+  roster_watch?: {
+    basis: "completed_game_logs";
+    season: string;
+    previous_season: string;
+    season_games: number;
+    latest_game_date: string | null;
+    role: {
+      state: "watch" | "early_watch" | "limited_observed" | "steady" | "insufficient_sample" | "no_baseline" | "no_games" | "stale_evidence";
+      sample_games: number;
+      minutes: number | null;
+      previous_minutes: number | null;
+      delta_minutes: number | null;
+      delta_percent: number | null;
+      previous_games: number;
+    };
+    production: {
+      state: "review" | "role_related" | "no_multicategory_dip" | "insufficient_sample" | "no_baseline";
+      sample_games: number;
+      declines: Array<{ category: string; previous: number; current: number }>;
+    };
+  };
   category_strengths: string[];
   impact_rank: number | null;
   impact_score: number | null;

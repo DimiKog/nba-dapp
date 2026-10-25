@@ -524,6 +524,13 @@ function rosterPerformanceFixture(league, membership, incomplete) {
       latest_game: null,
       window_stats: { games: 0 },
       season_average: null,
+      roster_watch: index === 0 ? {
+        basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
+        season_games: 3, latest_game_date: "2026-10-24",
+        role: { state: "watch", sample_games: 3, minutes: 15, previous_minutes: 28,
+          delta_minutes: -13, delta_percent: -46.4, previous_games: 70 },
+        production: { state: "insufficient_sample", sample_games: 3, declines: [] },
+      } : undefined,
       category_strengths: [],
       impact_rank: null,
       impact_score: null,
