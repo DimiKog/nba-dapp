@@ -21,7 +21,7 @@ function roleDescription(player: FantasyPlayerPerformance): string {
   if (role.state === "limited_observed") {
     return `${role.minutes?.toFixed(1)} MIN in ${role.sample_games} games · no reliable ${player.roster_watch!.previous_season} baseline`;
   }
-  return `${role.minutes?.toFixed(1)} MIN in ${role.sample_games} games · ${role.previous_minutes?.toFixed(1)} MIN last season`;
+  return `${role.minutes?.toFixed(1)} MIN / ${role.sample_games} GP · ${role.previous_minutes?.toFixed(1)} MIN / ${role.previous_games} GP in ${player.roster_watch!.previous_season}`;
 }
 
 export default function RosterWatchPanel({
@@ -85,7 +85,7 @@ export default function RosterWatchPanel({
         <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">No sustained role or multi-category production signal yet. The early-season sample may still be too small.</p>
       )}
       <p className="mt-4 text-[11px] text-slate-500 dark:text-slate-400">
-        Minutes: 3+ recorded games for a watch signal; 2 games are preliminary. Production: 5 games and declines in at least two league categories. Injuries are separate evidence; no automatic replacement decision.
+        Minutes: latest five recorded games; 3+ for a watch signal, 2 are preliminary. Production: 5 games and declines in at least two league categories. Injuries are separate evidence; no automatic replacement decision.
       </p>
     </section>
   );
