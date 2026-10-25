@@ -53,6 +53,10 @@ const sessions = {
       membership("bdb", "bdb-franchise-b", "xrtc", "bdb-team-b", false),
     ],
   },
+  "gnfc-manager-subject": {
+    user: { id: 3, email: "gnfc-manager@example.test", display_name: "GNFC Manager" },
+    memberships: [membership("gnfc", "gnfc-athens-bricklayers", "Athens BrickLayers", "gnfc-athens", false)],
+  },
 };
 const privateTradeOutlooks = new Map();
 const reviewedInjuryReports = new Map();
@@ -129,6 +133,38 @@ const server = createServer((request, response) => {
       return;
     }
     return send(response, 200, session);
+  }
+  if (url.pathname === "/api/fantasy/leagues") {
+    return send(response, 200, [leagueFixture("ldl"), leagueFixture("bdb"), leagueFixture("gnfc")]);
+  }
+  if (url.pathname === "/api/fantasy/gnfc/standings") {
+    return send(response, 200, []);
+  }
+  if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens") {
+    const member = sessions["gnfc-manager-subject"].memberships[0];
+    return send(response, 200, {
+      team_id: member.fantrax_team_id, team_name: member.franchise_name,
+      logo: null, owner: "GNFC Manager", players: rosterPerformanceFixture("gnfc", member, false).players,
+    });
+  }
+  if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/performance") {
+    return send(response, 200, rosterPerformanceFixture("gnfc", sessions["gnfc-manager-subject"].memberships[0], false));
+  }
+  if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/targets") {
+    const member = sessionFor(request)?.memberships.find((item) => item.league_slug === "gnfc");
+    if (!member) return send(response, 403, { error: "GNFC membership required" });
+    const fixture = targetsFixture("gnfc", member, 3, url.searchParams.get("action_scope"));
+    const candidate = fixture.candidates[0];
+    candidate.season_average = { games: 2, minutes: 25, points: 17 };
+    candidate.fit_explanation.sample_games = 2;
+    candidate.fit_explanation.sample_weight = 0.4;
+    candidate.fit_explanation.full_weight_games = 5;
+    candidate.fit_explanation.sample_adjustment = "current_season_only";
+    candidate.actionability = { status: "requires_move", reasons: ["roster_drop_required", "current_role_unverified"], role_signal: "insufficient_current_sample", cap_result: "not_applicable", roster_result: "drop_required" };
+    candidate.minutes_trend = { basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26", state: "early_increase", sample_games: 2, minutes: 25, previous_minutes: 17, delta_minutes: 8, delta_percent: 47, previous_games: 60, latest_game_date: "2026-10-24" };
+    fixture.needs = [{ key: "points", label: "PTS", of: 12, team_rank: 8, team_z: -0.2, weight: 1 }];
+    fixture.category_recommendations = [{ key: "points", label: "PTS", free_agent_market: "limited", message: "Early current-season help", strong_free_agents: [], best_available: [candidate], trade_targets: [], last_resort: [] }];
+    return send(response, 200, fixture);
   }
   const outlookMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/my-trade-outlook$/);
   if (outlookMatch) {
@@ -385,11 +421,13 @@ const server = createServer((request, response) => {
 function leagueFixture(slug) {
   return {
     slug,
-    name: slug === "ldl" ? "LDL" : "BδB",
+    name: slug === "ldl" ? "LDL" : slug === "gnfc" ? "GNFC Γ5" : "BδB",
     league_id: `${slug}-league`,
     personal_team_id: "global-config-must-not-be-used",
     personal_team_name: "Global config must not be used",
     enabled: true,
+    availability_ready: slug === "gnfc",
+    categories: slug === "gnfc" ? ["points", "rebounds", "assists"] : undefined,
     season_phase: "off_season",
     roster_rules: { minimum_players: 13, standard_maximum: 14 },
   };
@@ -563,7 +601,7 @@ function categoryProfileFixture(league, membership) {
 }
 
 function targetsFixture(league, membership, managerId, actionScope) {
-  const name = managerId === 1
+  const name = league === "gnfc" ? "GNFC Current Form Target" : managerId === 1
     ? `${league.toUpperCase()} Manager A Target`
     : `${league.toUpperCase()} xrtc Target`;
   return {

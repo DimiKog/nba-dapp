@@ -1237,7 +1237,11 @@ export interface FantasyTargetCandidate {
     market_rank_separate_from_score: boolean;
     salary_and_tokens_in_score: false;
     future_role_and_injury_risk_in_score: false;
+    sample_weight?: number;
+    full_weight_games?: number;
+    sample_adjustment?: "current_season_only";
   };
+  minutes_trend?: FantasyRadarPlayer["minutes_trend"];
   recommendation_reason_codes?: string[];
   confidence: "high" | "medium" | "low";
   availability_rank?: number;

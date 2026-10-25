@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
 import { roleEvidenceSummary } from "@/lib/faActionability";
+import MinutesTrendEvidence from "@/components/MinutesTrendEvidence";
 import { candidateListCopy, PLAYER_POSITION_OPTIONS } from "@/lib/categoryTargetDiscovery";
 
 type LeagueSlug = "ldl" | "bdb" | "gnfc";
@@ -110,6 +111,7 @@ export default function CategoryNeedsFinder({
     && position === ""
     && actionScope === "all"
     && capScope === "all";
+  const gnfcCurrentForm = league === "gnfc" && targets.window.season === "2026-27";
 
   async function applyFilters(next: {
     basis?: Basis;
@@ -252,6 +254,16 @@ export default function CategoryNeedsFinder({
           </div>
         </div>
 
+        {gnfcCurrentForm && (
+          <section aria-label="2026–27 free-agent form" className="border-b border-blue-200 bg-blue-50 px-5 py-4 dark:border-blue-900 dark:bg-blue-950/30">
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">GNFC Γ5 · 2026–27 free-agent form</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">This season&apos;s games drive the FA ranking.</p>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+              One to four recorded games have proportionally reduced statistical weight; full weight begins at five games. These are provisional category signals, not guaranteed pickups. Last season is shown only for minutes comparison, never to raise a player&apos;s current fit score.
+            </p>
+          </section>
+        )}
+
         <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-950/40 lg:flex-row lg:items-center">
           <div className="flex flex-wrap gap-1.5">
             {(["all", "free_agent", "rostered"] as const).map((value) => (
@@ -312,7 +324,7 @@ export default function CategoryNeedsFinder({
               How are recommendations scored?
             </summary>
             <div className="mt-3 grid gap-3 text-xs leading-relaxed text-slate-600 dark:text-slate-300 sm:grid-cols-2 lg:grid-cols-3">
-              <p><strong className="text-slate-900 dark:text-white">Category impact:</strong> 0 z is average among eligible players. Positive values are better and negative values are worse.</p>
+              <p><strong className="text-slate-900 dark:text-white">Category impact:</strong> 0 z is average among eligible players. Positive values are better and negative values are worse.{gnfcCurrentForm ? " GNFC fit scores temper samples below five games." : ""}</p>
               <p><strong className="text-slate-900 dark:text-white">Strong help:</strong> +0.50 z or higher is treated as a meaningful category improvement.</p>
               <p><strong className="text-slate-900 dark:text-white">Market rank:</strong> free agents and rostered trade targets are ranked separately from their absolute z-score.</p>
               <p><strong className="text-slate-900 dark:text-white">FG% and FT%:</strong> shooting impact accounts for attempt volume, not percentage alone.</p>
@@ -413,10 +425,11 @@ function RecommendationLane({
   onWatch: (player: FantasyTargetCandidate, recommendation: string) => Promise<void>;
 }) {
   const market = MARKET_PRESENTATION[lane.free_agent_market];
+  const provisional = league === "gnfc" && statsSeason === "2026-27";
   return (
     <div>
       <div className={`rounded-xl border p-4 ${market.className}`}>
-        <p className="text-xs font-black uppercase tracking-[0.14em]">{lane.label} market verdict</p>
+        <p className="text-xs font-black uppercase tracking-[0.14em]">{provisional ? "Provisional · " : ""}{lane.label} market verdict</p>
         <h3 className="mt-1 text-lg font-black">{market.label}</h3>
         <p className="mt-1 text-sm opacity-90">{lane.message ?? market.description}</p>
       </div>
@@ -508,6 +521,7 @@ function CandidateCard({
   const sampleGames = fit?.sample_games ?? scoringSample?.games ?? 0;
   const sampleMinutes = fit?.basis_used === "window" ? null : scoringSample?.minutes;
   const historical = statsSeason !== "2026-27";
+  const provisionalCurrentForm = league === "gnfc" && !historical && sampleGames < (fit?.full_weight_games ?? 5);
   const rankedContributions = [...(player.need_contributions ?? [])]
     .sort((a, b) => Math.abs(b.weighted_contribution) - Math.abs(a.weighted_contribution));
   return (
@@ -526,8 +540,14 @@ function CandidateCard({
       <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-slate-700 dark:border-violet-900 dark:bg-violet-950/20 dark:text-slate-200">
         <p className="font-black text-violet-800 dark:text-violet-300">Evidence first · {statsSeason} regular season{historical ? " · historical" : ""}{fit?.basis_used === "window" ? " · recent sample" : ""}</p>
         <p className="mt-1 tabular-nums">{sampleGames} games recorded{typeof sampleMinutes === "number" ? ` · ${sampleMinutes.toFixed(1)} min/game` : " · minutes unavailable"}</p>
+        {provisionalCurrentForm && (
+          <p className="mt-1 font-bold text-amber-700 dark:text-amber-300">
+            Provisional sample · {Math.round((fit?.sample_weight ?? sampleGames / 5) * 100)}% statistical weight; full weight at {fit?.full_weight_games ?? 5} games.
+          </p>
+        )}
         {player.availability === "free_agent" && <p className="mt-1 font-semibold">{historical ? "2026–27 role and expected minutes not verified." : "Observed minutes are not a projection of future role."} Preseason is context, not part of this score.</p>}
       </div>
+      {league === "gnfc" && player.availability === "free_agent" && <MinutesTrendEvidence trend={player.minutes_trend} />}
       {actionability && (
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">

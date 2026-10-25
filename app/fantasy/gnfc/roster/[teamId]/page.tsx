@@ -98,7 +98,7 @@ export default async function GnfcRosterPage({
         hasPayroll={false}
         hasAnalysis={Boolean(seasonProfile)}
         hasTargets={showTargets}
-        targetsLabel="Free-agent targets"
+        targetsLabel="2026–27 free agents"
       />
 
       {isPersonalTeam && performance && (
