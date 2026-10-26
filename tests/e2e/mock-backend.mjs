@@ -150,6 +150,9 @@ const server = createServer((request, response) => {
   if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/performance") {
     return send(response, 200, rosterPerformanceFixture("gnfc", sessions["gnfc-manager-subject"].memberships[0], false));
   }
+  if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/category-profile") {
+    return send(response, 200, categoryProfileFixture("gnfc", sessions["gnfc-manager-subject"].memberships[0]));
+  }
   if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/targets") {
     const member = sessionFor(request)?.memberships.find((item) => item.league_slug === "gnfc");
     if (!member) return send(response, 403, { error: "GNFC membership required" });
@@ -365,7 +368,28 @@ const server = createServer((request, response) => {
     const [, league, teamId] = profileMatch;
     const membership = membershipByTeam(league, teamId);
     if (!membership) return send(response, 403, { error: "Not your team" });
-    return send(response, 200, categoryProfileFixture(league, membership));
+    const profile = categoryProfileFixture(league, membership);
+    if (url.searchParams.get("basis") === "window") {
+      profile.basis_requested = "window";
+      profile.basis_used = "window";
+      profile.categories[0] = { ...profile.categories[0], value: 12, league_rank: 5 };
+    }
+    return send(response, 200, profile);
+  }
+  const seasonActualsMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb|gnfc)\/roster\/([^/]+)\/season-category-actuals$/);
+  if (seasonActualsMatch) {
+    const [, league, teamId] = seasonActualsMatch;
+    if (teamId === "ldl-team-b") return send(response, 503, { error: "Fantrax unavailable" });
+    const membership = league === "gnfc"
+      ? sessions["gnfc-manager-subject"].memberships[0]
+      : membershipByTeam(league, teamId);
+    if (!membership) return send(response, 404, { error: "Team not found" });
+    return send(response, 200, {
+      source: "fantrax", view: "SEASON_STATS", timeframe: "YEAR_TO_DATE",
+      fetched_at: "2026-10-26T09:00:00Z", stale: false,
+      league_teams: league === "gnfc" ? 12 : 20,
+      team: { id: teamId, name: membership.franchise_name, categories: { blocks: { rank: 4, value: 22 } } },
+    });
   }
   const targetsMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/targets$/);
   if (targetsMatch) {
@@ -591,8 +615,8 @@ function categoryProfileFixture(league, membership) {
     scope: "roster_rate",
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
     snapshot: { captured_at: "2026-09-10T08:00:00Z", generated_at: "2026-09-10T08:01:00Z", source: "database_cache" },
-    sample: { league_teams: 14, players_included: 14, players_missing_stats: 0, league_players_included: { minimum: 13, maximum: 14, average: 14 } },
-    categories: [],
+    sample: { league_teams: league === "gnfc" ? 12 : 20, players_included: 14, players_missing_stats: 0, league_players_included: { minimum: 13, maximum: 14, average: 14 } },
+    categories: [{ key: "blocks", label: "BLK", value: 8.5, league_rank: 6, eligible_teams: league === "gnfc" ? 12 : 20, percentile: 0.25, league_mean: 6.9, z: 0.65, verdict: "strength", sample: null }],
     weaknesses: ["FT%", "TO"],
     strengths: ["3PTM", "AST"],
     severe_weaknesses: [],

@@ -6,6 +6,7 @@ import {
   fetchFantasyRosterPerformance,
   fetchFantasyCategoryTargets,
   fetchFantasyTeamCategoryProfile,
+  fetchFantasySeasonCategoryActuals,
   photoUrl,
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
@@ -31,21 +32,24 @@ export default async function FantasyRosterPage({
   let performance = null;
   let seasonProfile = null;
   let windowProfile = null;
+  let seasonActuals = null;
   let initialTargets = null;
   let isPersonalTeam = false;
   const access = await loadCurrentFantasyAccess();
   const membership = membershipFor(access?.session ?? null, league);
   try {
-    const [rosterResult, performanceResult, seasonResult, windowResult] = await Promise.all([
+    const [rosterResult, performanceResult, seasonResult, windowResult, actualsResult] = await Promise.all([
       fetchFantasyRoster(league, teamId),
       fetchFantasyRosterPerformance(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId).catch(() => null),
       fetchFantasyTeamCategoryProfile(league, teamId, "window", 14).catch(() => null),
+      fetchFantasySeasonCategoryActuals(league, teamId).catch(() => null),
     ]);
     roster = rosterResult;
     performance = performanceResult;
     seasonProfile = seasonResult;
     windowProfile = windowResult;
+    seasonActuals = actualsResult;
     isPersonalTeam = membership?.fantrax_team_id === teamId;
     if (isPersonalTeam) {
       initialTargets = await fetchFantasyCategoryTargets(
@@ -183,6 +187,7 @@ export default async function FantasyRosterPage({
         <TeamCategoryProfilePanel
           seasonProfile={seasonProfile}
           windowProfile={windowProfile}
+          seasonActuals={seasonActuals}
         />
       )}
 
