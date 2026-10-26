@@ -7,6 +7,7 @@ import InjuryFlag from "@/components/InjuryFlag";
 import PreseasonAveragesPanel from "@/components/PreseasonAveragesPanel";
 import RosterWatchBadges from "@/components/RosterWatchBadges";
 import { leaguePresentation, type LeagueSlug } from "@/lib/leagues";
+import { rosterPerGameStats } from "@/lib/rosterPerGameStats";
 import {
   FantasyPlayerPerformance,
   FantasyPlayerStats,
@@ -52,7 +53,7 @@ function latestStats(player: FantasyPlayerPerformance): FantasyPlayerStats | nul
 }
 
 function statsFor(player: FantasyPlayerPerformance, view: View) {
-  if (view === "window") return player.window_stats;
+  if (view === "window") return rosterPerGameStats(player.window_stats);
   if (view === "season") return player.season_average;
   return latestStats(player);
 }
@@ -60,7 +61,7 @@ function statsFor(player: FantasyPlayerPerformance, view: View) {
 function formatStat(key: string, value: number | null | undefined, view: View) {
   if (value == null) return "—";
   if (key === "fg_pct" || key === "ft_pct") return `${value.toFixed(1)}%`;
-  if (view === "season") return value.toFixed(value >= 10 ? 1 : 2);
+  if (view === "season" || view === "window") return value.toFixed(value >= 10 ? 1 : 2);
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
@@ -69,7 +70,7 @@ function summary(player: FantasyPlayerPerformance, view: View) {
   if (!stats) return "No data";
   if (view === "window" && stats.games === 0) return "No games in this window";
   const rebounds = stats.oreb + stats.dreb;
-  return `${formatStat("points", stats.points, view)} PTS · ${formatStat("dreb", rebounds, view)} REB · ${formatStat("assists", stats.assists, view)} AST`;
+  return `${formatStat("points", stats.points, view)} PTS · ${formatStat("dreb", rebounds, view)} REB · ${formatStat("assists", stats.assists, view)} AST${view === "latest" ? "" : " · per game"}`;
 }
 
 function freshnessLabel(value: string | null) {
@@ -330,7 +331,7 @@ export default function RosterPerformanceTable({
 
             <div className="min-w-0 p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Player production</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-700 dark:text-blue-300">Player production{view === "latest" ? " · single game" : " · per game"}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">{selectedStats?.games ?? 0} games</p>
               </div>
               <div className="grid grid-cols-3 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
