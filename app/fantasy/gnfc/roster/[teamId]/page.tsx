@@ -16,6 +16,7 @@ import {
   fetchFantasyRosterPerformance,
   fetchFantasyStandings,
   fetchFantasyTeamCategoryProfile,
+  fetchFantasySeasonCategoryActuals,
   fetchFantasyTeamPowerOutlook,
   photoUrl,
   type FantasyPlayer,
@@ -34,13 +35,14 @@ export default async function GnfcRosterPage({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  const [roster, teams, leagues, performance, seasonProfile, windowProfile, outlook] = await Promise.all([
+  const [roster, teams, leagues, performance, seasonProfile, windowProfile, seasonActuals, outlook] = await Promise.all([
     fetchFantasyRoster("gnfc", teamId).catch(() => null),
     fetchFantasyStandings("gnfc").catch(() => []),
     fetchFantasyLeagues().catch(() => []),
     fetchFantasyRosterPerformance("gnfc", teamId).catch(() => null),
     fetchFantasyTeamCategoryProfile("gnfc", teamId).catch(() => null),
     fetchFantasyTeamCategoryProfile("gnfc", teamId, "window", 14).catch(() => null),
+    fetchFantasySeasonCategoryActuals("gnfc", teamId).catch(() => null),
     fetchFantasyTeamPowerOutlook("gnfc").catch(() => null),
   ]);
 
@@ -129,9 +131,9 @@ export default async function GnfcRosterPage({
         <div className="mt-8 space-y-4">
           <GnfcPowerSummary outlook={outlook} teamId={teamId} />
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Category comparison uses the current Fantrax roster and 2025–26 historical NBA production. It does not predict final standings or next-season roles.
+            Roster potential uses the current Fantrax roster and {seasonProfile?.window.season ?? "current-season"} NBA production. It is not the official Fantrax Season Stats ranking or a final-standings forecast.
           </p>
-          {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} />}
+          {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} seasonActuals={seasonActuals} />}
         </div>
       )}
       {showTargets && (

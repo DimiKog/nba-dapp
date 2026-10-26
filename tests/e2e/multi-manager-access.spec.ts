@@ -72,6 +72,42 @@ test("personal roster shows evidence-only watch and FA navigation", async ({ pag
   await expect(watch.getByRole("link", { name: "Player details" })).toHaveAttribute("href", "/players/20000?league=ldl&from=roster");
 });
 
+test("category profile keeps Fantrax actuals distinct from current-roster potential", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+
+  const panel = page.locator("#team-analysis");
+  await expect(panel.getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
+  const blocks = panel.getByRole("article").filter({ hasText: "BLK" });
+  await expect(blocks.getByText("22", { exact: true })).toBeVisible();
+  await expect(blocks.getByText("#4 of 20")).toBeVisible();
+  await expect(blocks.getByText("8.5", { exact: true })).toBeVisible();
+  await expect(blocks.getByText("#6 of 20")).toBeVisible();
+
+  await panel.getByRole("button", { name: "Potential · recent 14d" }).click();
+  await expect(blocks.getByText("12.0", { exact: true })).toBeVisible();
+  await expect(blocks.getByText("#5 of 20")).toBeVisible();
+  await expect(blocks.getByText("#4 of 20")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(blocks.getByText("#4 of 20")).toBeVisible();
+  await expect(blocks.getByText("#5 of 20")).toBeVisible();
+  expect(await panel.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(
+    await panel.evaluate((element) => element.clientWidth + 1),
+  );
+});
+
+test("Fantrax outage does not hide roster potential or invent actual rank", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-b-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-b`);
+  const panel = page.locator("#team-analysis");
+  await expect(panel.getByText(/Temporarily unavailable.*no actual rank is inferred/)).toBeVisible();
+  const blocks = panel.getByRole("article").filter({ hasText: "BLK" });
+  await expect(blocks.getByText("Unavailable")).toBeVisible();
+  await expect(blocks.getByText("#6 of 20")).toBeVisible();
+});
+
 test("trade analyzer clears loading when a pending request is invalidated", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
@@ -394,6 +430,7 @@ test("GNFC roster shows current-season FA form and provisional minutes evidence"
   await page.goto(`${app}/fantasy/gnfc/roster/gnfc-athens`);
 
   await expect(page.getByRole("heading", { name: "Athens BrickLayers" })).toBeVisible();
+  await expect(page.locator("#team-analysis").getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
   await expect(page.getByRole("link", { name: "2026–27 free agents" })).toBeVisible();
   const form = page.getByRole("region", { name: "2026–27 free-agent form" });
   await expect(form.getByText("This season's games drive the FA ranking.")).toBeVisible();

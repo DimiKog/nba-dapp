@@ -1171,6 +1171,20 @@ export interface FantasyTeamCategoryProfile {
   };
 }
 
+export interface FantasySeasonCategoryActuals {
+  source: "fantrax";
+  view: "SEASON_STATS";
+  timeframe: "YEAR_TO_DATE";
+  fetched_at: string;
+  stale: boolean;
+  league_teams: number;
+  team: {
+    id: string;
+    name: string;
+    categories: Record<string, { rank: number; value: number }>;
+  };
+}
+
 export interface FantasyTeamPowerRow {
   team: { id: string; name: string; logo: string | null; owner: string | null };
   rank: number | null;
@@ -1573,6 +1587,18 @@ export async function fetchFantasyTeamCategoryProfile(
     { next: { revalidate: 300 } },
   );
   if (!res.ok) throw new Error("Failed to fetch team category profile");
+  return res.json();
+}
+
+export async function fetchFantasySeasonCategoryActuals(
+  league: "ldl" | "bdb" | "gnfc",
+  teamId: string,
+): Promise<FantasySeasonCategoryActuals> {
+  const res = await fetch(
+    `${BASE}/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/season-category-actuals`,
+    { cache: "no-store", signal: AbortSignal.timeout(5000) },
+  );
+  if (!res.ok) throw new Error("Fantrax Season Stats unavailable");
   return res.json();
 }
 
