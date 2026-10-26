@@ -5,7 +5,7 @@ const accessHeader = "cf-access-jwt-assertion";
 
 async function tokenFor(
   request: APIRequestContext,
-  subject: "manager-a-subject" | "manager-b-subject",
+  subject: "manager-a-subject" | "manager-b-subject" | "gnfc-manager-subject",
 ) {
   const response = await request.get(
     `http://127.0.0.1:3101/test/access-token?subject=${subject}`,
@@ -386,6 +386,21 @@ test("free-agent fit explains the weighted score without treating salary or risk
   await expect(candidate.getByText("Acquisition checks passed", { exact: true })).toBeVisible();
   await page.getByText("How is this scored?").click();
   await expect(page.getByText(/Salary, tokens, future role and injury risk do not change the category-fit score/)).toBeVisible();
+});
+
+test("GNFC roster shows current-season FA form and provisional minutes evidence", async ({ page, request }) => {
+  const token = await tokenFor(request, "gnfc-manager-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/gnfc/roster/gnfc-athens`);
+
+  await expect(page.getByRole("heading", { name: "Athens BrickLayers" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "2026–27 free agents" })).toBeVisible();
+  const form = page.getByRole("region", { name: "2026–27 free-agent form" });
+  await expect(form.getByText("This season's games drive the FA ranking.")).toBeVisible();
+  const candidate = page.locator("article").filter({ has: page.getByRole("heading", { name: "GNFC Current Form Target" }) });
+  await expect(candidate.getByText("2 games recorded")).toBeVisible();
+  await expect(candidate.getByText(/Provisional sample · 40% statistical weight/)).toBeVisible();
+  await expect(candidate.getByLabel("Early Minutes ↑, show minutes evidence")).toBeVisible();
 });
 
 test("conditional FA candidates remain collapsed until the manager explores them", async ({ page, request }) => {
