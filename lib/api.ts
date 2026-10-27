@@ -1185,6 +1185,27 @@ export interface FantasySeasonCategoryActuals {
   };
 }
 
+export interface FantasyPeriodCategoryBaseline {
+  source: "fantrax_historical_lineups_and_nba_boxscores";
+  league: "ldl" | "bdb" | "gnfc";
+  team_id: string;
+  scoring_period: number;
+  period_start: string;
+  period_end: string;
+  season: string;
+  previous_season: string;
+  actual_player_games: number;
+  covered_player_games: number;
+  missing_baseline_players: number;
+  categories: Record<string, {
+    actual: number | null;
+    baseline: number | null;
+    favorable_delta: number | null;
+  }>;
+  comparison_scope: string;
+  weight_rule: string;
+}
+
 export interface FantasyTeamPowerRow {
   team: { id: string; name: string; logo: string | null; owner: string | null };
   rank: number | null;
@@ -1600,6 +1621,19 @@ export async function fetchFantasySeasonCategoryActuals(
   );
   if (!res.ok) throw new Error("Fantrax Season Stats unavailable");
   return res.json();
+}
+
+export async function fetchFantasyPeriodCategoryBaseline(
+  league: "ldl" | "bdb" | "gnfc",
+  teamId: string,
+): Promise<FantasyPeriodCategoryBaseline | null> {
+  const res = await fetch(
+    `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/period-category-baseline`,
+    { cache: "no-store", signal: AbortSignal.timeout(18000) },
+  );
+  if (!res.ok) throw new Error("Completed-period baseline unavailable");
+  const result = await res.json();
+  return result.status === "awaiting_completed_period" ? null : result;
 }
 
 export async function fetchFantasyTeamPowerOutlook(

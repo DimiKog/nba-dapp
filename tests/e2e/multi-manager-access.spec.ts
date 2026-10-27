@@ -78,6 +78,9 @@ test("category profile keeps Fantrax actuals distinct from current-roster potent
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
   const panel = page.locator("#team-analysis");
+  await expect(panel.getByText("Actual vs pre-period baseline")).toBeVisible();
+  await expect(panel.getByText("Baseline coverage 31/31 games")).toBeVisible();
+  await expect(panel.getByText("0.71", { exact: true })).toBeVisible();
   await expect(panel.getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
   const blocks = panel.getByRole("article").filter({ hasText: "BLK" });
   await expect(blocks.getByText("22", { exact: true })).toBeVisible();
@@ -102,6 +105,7 @@ test("Fantrax outage does not hide roster potential or invent actual rank", asyn
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-b`);
   const panel = page.locator("#team-analysis");
+  await expect(panel.getByText(/comparison is temporarily unavailable/i)).toBeVisible();
   await expect(panel.getByText(/Temporarily unavailable.*no actual rank is inferred/)).toBeVisible();
   const blocks = panel.getByRole("article").filter({ hasText: "BLK" });
   await expect(blocks.getByText("Unavailable")).toBeVisible();
