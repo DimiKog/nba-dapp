@@ -133,7 +133,7 @@ export default async function GnfcRosterPage({
           <p className="text-xs text-slate-500 dark:text-slate-400">
             Roster potential uses the current Fantrax roster and {seasonProfile?.window.season ?? "current-season"} NBA production. It is not the official Fantrax Season Stats ranking or a final-standings forecast.
           </p>
-          {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} seasonActuals={seasonActuals} />}
+          {seasonProfile && <TeamCategoryProfilePanel seasonProfile={seasonProfile} windowProfile={windowProfile} seasonActuals={seasonActuals} league="gnfc" teamId={teamId} />}
         </div>
       )}
       {showTargets && (

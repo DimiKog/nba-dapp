@@ -188,6 +188,8 @@ export default async function FantasyRosterPage({
           seasonProfile={seasonProfile}
           windowProfile={windowProfile}
           seasonActuals={seasonActuals}
+          league={league}
+          teamId={teamId}
         />
       )}
 

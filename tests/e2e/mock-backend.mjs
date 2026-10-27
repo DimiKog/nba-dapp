@@ -391,6 +391,23 @@ const server = createServer((request, response) => {
       team: { id: teamId, name: membership.franchise_name, categories: { blocks: { rank: 4, value: 22 } } },
     });
   }
+  const periodBaselineMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb|gnfc)\/roster\/([^/]+)\/period-category-baseline$/);
+  if (periodBaselineMatch) {
+    response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3102");
+    const [, league, teamId] = periodBaselineMatch;
+    if (teamId === "ldl-team-b") return send(response, 503, { error: "Unverified comparison" });
+    return send(response, 200, {
+      source: "fantrax_historical_lineups_and_nba_boxscores",
+      league, team_id: teamId, scoring_period: 1,
+      period_start: "2026-10-20T15:00:00-04:00",
+      period_end: "2026-10-26T18:59:59-04:00",
+      season: "2026-27", previous_season: "2025-26",
+      actual_player_games: 31, covered_player_games: 31, missing_baseline_players: 0,
+      categories: { blocks: { actual: 0.71, baseline: 0.64, favorable_delta: 0.07 } },
+      comparison_scope: "same active player-games; counting stats per active player-game",
+      weight_rule: "current pre-period NBA games / (current pre-period NBA games + 10)",
+    });
+  }
   const targetsMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/targets$/);
   if (targetsMatch) {
     const [, league, teamId] = targetsMatch;

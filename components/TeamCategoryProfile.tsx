@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { fetchFantasyPeriodCategoryBaseline } from "@/lib/api";
 import type {
   FantasyTeamCategory,
   FantasyTeamCategoryProfile,
   FantasySeasonCategoryActuals,
+  FantasyPeriodCategoryBaseline,
 } from "@/lib/api";
 
 type ProfileView = "season" | "window";
@@ -32,12 +34,32 @@ export default function TeamCategoryProfilePanel({
   seasonProfile,
   windowProfile,
   seasonActuals,
+  league,
+  teamId,
 }: {
   seasonProfile: FantasyTeamCategoryProfile;
   windowProfile: FantasyTeamCategoryProfile | null;
   seasonActuals: FantasySeasonCategoryActuals | null;
+  league: "ldl" | "bdb" | "gnfc";
+  teamId: string;
 }) {
   const [view, setView] = useState<ProfileView>("season");
+  const [periodBaseline, setPeriodBaseline] = useState<FantasyPeriodCategoryBaseline | null>(null);
+  const [baselineStatus, setBaselineStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+  useEffect(() => {
+    let current = true;
+    fetchFantasyPeriodCategoryBaseline(league, teamId)
+      .then((result) => {
+        if (current) {
+          setPeriodBaseline(result);
+          setBaselineStatus("ready");
+        }
+      })
+      .catch(() => {
+        if (current) setBaselineStatus("unavailable");
+      });
+    return () => { current = false; };
+  }, [league, teamId]);
   const selected = view === "window" && windowProfile ? windowProfile : seasonProfile;
   const windowFallback =
     view === "window" &&
@@ -56,7 +78,7 @@ export default function TeamCategoryProfilePanel({
               Category profile
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Fantrax shows what has counted this season. Roster potential compares the players currently owned by all {selected.sample.league_teams} {selected.league.name} teams, including Reserve and Injured Reserve.
+              The completed-period comparison measures the same active player-games. Fantrax YTD rank and current-roster potential remain separate views.
             </p>
           </div>
           <div className="inline-flex w-fit rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
@@ -78,6 +100,8 @@ export default function TeamCategoryProfilePanel({
             No qualifying games were found in the last 14 days. Season production is shown instead.
           </div>
         )}
+
+        <PeriodBaselinePanel baseline={periodBaseline} status={baselineStatus} categories={selected.categories} />
 
         <div role="status" className={`border-b px-5 py-4 text-sm ${seasonActuals?.stale ? "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200"}`}>
           <p className="font-bold">Actual season results · Fantrax Season Stats</p>
@@ -131,6 +155,81 @@ export default function TeamCategoryProfilePanel({
       </div>
     </section>
   );
+}
+
+function PeriodBaselinePanel({
+  baseline,
+  status,
+  categories,
+}: {
+  baseline: FantasyPeriodCategoryBaseline | null;
+  status: "loading" | "ready" | "unavailable";
+  categories: FantasyTeamCategory[];
+}) {
+  if (!baseline) {
+    return (
+      <div className="border-b border-slate-200 px-5 py-4 text-xs text-slate-500 dark:border-slate-700">
+        {status === "loading" ? "Loading completed-period comparison…" : status === "unavailable" ? "Completed-period comparison is temporarily unavailable; no performance gap is inferred." : "Same-opportunity comparison awaits a verified completed scoring period."}
+      </div>
+    );
+  }
+  const complete = baseline.covered_player_games === baseline.actual_player_games;
+  return (
+    <div className="border-b border-slate-200 bg-violet-50/50 px-5 py-5 dark:border-slate-700 dark:bg-violet-950/10">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">Actual vs pre-period baseline</p>
+          <h3 className="mt-1 text-base font-black text-slate-950 dark:text-white">Scoring period {baseline.scoring_period} · {formatShortDate(baseline.period_start)}–{formatShortDate(baseline.period_end)}</h3>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+            The actual and baseline use the same active player-games. Counting stats are shown per player-game; shooting percentages use total makes and attempts. Positive difference means better than baseline, including fewer turnovers.
+          </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${complete ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200" : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"}`}>
+          Baseline coverage {baseline.covered_player_games}/{baseline.actual_player_games} games
+        </span>
+      </div>
+      {!complete && (
+        <p className="mt-3 text-xs font-semibold text-amber-800 dark:text-amber-300">
+          Partial comparison: {baseline.missing_baseline_players} player{baseline.missing_baseline_players === 1 ? "" : "s"} lack a reliable pre-period baseline. Their games are excluded from both sides below.
+        </p>
+      )}
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {categories.map((category) => {
+          const comparison = baseline.categories[category.key];
+          const difference = comparison?.favorable_delta;
+          return (
+            <div key={category.key} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+              <p className="text-[11px] font-black uppercase text-slate-500">{category.label}</p>
+              {comparison?.actual == null || comparison.baseline == null ? (
+                <p className="mt-1 text-xs text-slate-500">Insufficient baseline</p>
+              ) : (
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+                  <span className="font-black tabular-nums text-slate-950 dark:text-white">{formatPeriodValue(comparison.actual, category.key)}</span>
+                  <span className="text-slate-400">vs</span>
+                  <span className="tabular-nums text-slate-600 dark:text-slate-300">{formatPeriodValue(comparison.baseline, category.key)}</span>
+                  <span className={`ml-auto font-black tabular-nums ${difference != null && difference > 0 ? "text-emerald-700 dark:text-emerald-300" : difference != null && difference < 0 ? "text-rose-700 dark:text-rose-300" : "text-slate-500"}`}>
+                    {difference == null ? "—" : `${difference > 0 ? "+" : ""}${formatPeriodValue(difference, category.key)}`}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400">
+        Baseline starts with {baseline.previous_season} NBA per-game stats. Pre-period games from {baseline.season} gradually take more weight (50% after 10 games; 75% after 30). This measures past performance against a reference, not future role or final standing.
+      </p>
+    </div>
+  );
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "America/New_York" }).format(new Date(value));
+}
+
+function formatPeriodValue(value: number, key: string) {
+  if (key === "fg_pct" || key === "ft_pct") return `${value.toFixed(1)}%`;
+  return value.toFixed(2);
 }
 
 function ViewButton({
