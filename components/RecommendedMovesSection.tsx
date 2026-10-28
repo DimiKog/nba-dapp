@@ -12,36 +12,51 @@ import RecommendedMoveCard from "@/components/RecommendedMoveCard";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
 
+export type SharedDiscoveryState = {
+  status: LoadState;
+  discovery: RosterMoveDiscovery | null;
+  error: string | null;
+};
+
 export default function RecommendedMovesSection({
   league,
   teamId,
   embedded = false,
+  sharedDiscovery,
 }: {
   league: "ldl" | "bdb";
   teamId: string;
   /** When true, omit the outer Team Intelligence chrome (parent area owns it). */
   embedded?: boolean;
+  /**
+   * When provided, consume the parent Team Intelligence discovery result
+   * instead of fetching independently.
+   */
+  sharedDiscovery?: SharedDiscoveryState;
 }) {
-  const [state, setState] = useState<LoadState>("loading");
-  const [error, setError] = useState<string | null>(null);
-  const [moves, setMoves] = useState<RosterMoveRecommendation[]>([]);
+  const [localState, setLocalState] = useState<LoadState>("loading");
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [localMoves, setLocalMoves] = useState<RosterMoveRecommendation[]>([]);
   const [expanded, setExpanded] = useState(false);
 
+  const controlled = sharedDiscovery !== undefined;
+
   useEffect(() => {
+    if (controlled) return;
     let active = true;
     fetchRosterMoveDiscovery(league, teamId, { basis: "season" })
       .then((discovery: RosterMoveDiscovery) => {
         if (!active) return;
         const flattened = flattenDiscoveryRecommendations(discovery);
-        setMoves(flattened);
+        setLocalMoves(flattened);
         setExpanded(false);
-        setError(null);
-        setState(flattened.length ? "ready" : "empty");
+        setLocalError(null);
+        setLocalState(flattened.length ? "ready" : "empty");
       })
       .catch((err: unknown) => {
         if (!active) return;
-        setState("error");
-        setError(
+        setLocalState("error");
+        setLocalError(
           err instanceof ApiResponseError
             ? err.message
             : "Could not load recommended moves",
@@ -50,13 +65,19 @@ export default function RecommendedMovesSection({
     return () => {
       active = false;
     };
-  }, [league, teamId]);
+  }, [league, teamId, controlled]);
+
+  const state = controlled ? sharedDiscovery.status : localState;
+  const error = controlled ? sharedDiscovery.error : localError;
+  const moves = controlled
+    ? flattenDiscoveryRecommendations(sharedDiscovery.discovery)
+    : localMoves;
 
   const visible = visibleRecommendations(moves, expanded);
   const hiddenCount = Math.max(0, moves.length - INITIAL_RECOMMENDATION_COUNT);
 
   const heading = (
-      <div className={embedded ? "mb-4 mt-3" : "mb-4"}>
+      <div className={embedded ? "mb-4 mt-4" : "mb-4"}>
         {!embedded && (
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
             Team intelligence

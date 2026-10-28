@@ -115,8 +115,19 @@ test("personal roster recommended moves show top three and on-demand analysis", 
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  const section = page.locator("#intelligence #recommended-moves");
-  await expect(page.locator("#intelligence").getByText("Team intelligence").first()).toBeVisible();
+  const intelligence = page.locator("#intelligence");
+  await expect(intelligence.getByText("Team intelligence").first()).toBeVisible();
+  await expect(intelligence.getByRole("heading", { name: "How your team looks" })).toBeVisible();
+  await expect(intelligence.getByText("AST #1 · STL #1 · 3PTM #2")).toBeVisible();
+  await expect(intelligence.getByText("OREB · A/TO · TO")).toBeVisible();
+  await expect(intelligence.getByRole("heading", { name: "Recommended strategy" })).toBeVisible();
+  await expect(intelligence.getByText("Based on your current category profile")).toBeVisible();
+  await expect(intelligence.getByText("PROTECT", { exact: true })).toBeVisible();
+  await expect(intelligence.getByText("TARGET", { exact: true })).toBeVisible();
+  await expect(intelligence.getByText("PUNT CANDIDATE", { exact: true })).toBeVisible();
+  await expect(intelligence.getByText("View full category analysis")).toBeVisible();
+
+  const section = intelligence.locator("#recommended-moves");
   await expect(section.getByRole("heading", { name: "Recommended moves" })).toBeVisible();
   await expect(section.getByRole("link", { name: "Recommended moves" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Intelligence" })).toBeVisible();
@@ -154,7 +165,7 @@ test("category profile keeps Fantrax actuals distinct from current-roster potent
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  await page.locator("#intelligence").getByText("Full category analysis").click();
+  await page.locator("#intelligence").getByText("View full category analysis").click();
   const panel = page.locator("#intelligence #team-analysis");
   await expect(panel.getByRole("button", { name: "Performance" })).toHaveAttribute("aria-pressed", "true");
   await expect(panel.getByText("Actual vs pre-period baseline")).toBeVisible();
@@ -188,7 +199,7 @@ test("Fantrax outage does not hide roster potential or invent actual rank", asyn
   const token = await tokenFor(request, "manager-b-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-b`);
-  await page.locator("#intelligence").getByText("Full category analysis").click();
+  await page.locator("#intelligence").getByText("View full category analysis").click();
   const panel = page.locator("#intelligence #team-analysis");
   await expect(panel.getByText(/comparison is temporarily unavailable/i)).toBeVisible();
   await panel.getByRole("button", { name: "Fantrax rank" }).click();

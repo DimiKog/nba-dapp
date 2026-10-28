@@ -126,6 +126,38 @@ export interface RosterMoveDiscoveryTierPayload {
   returned?: RosterMoveRecommendation[];
 }
 
+/** System-recommended strategy classifications from discovery (not manager-declared). */
+export type RosterMoveStrategyClassification =
+  | "PROTECT"
+  | "TARGET"
+  | "FLEX"
+  | "PUNT_CANDIDATE"
+  | string;
+
+export interface RosterMoveStrategyCategory {
+  key: string;
+  label?: string | null;
+  classification: RosterMoveStrategyClassification;
+  in_core?: boolean;
+  repairability?: number | null;
+  league_rank?: number | null;
+  eligible_teams?: number | null;
+  percentile?: number | null;
+  z?: number | null;
+  verdict?: string | null;
+  reason_codes?: string[];
+}
+
+/** Backend `recommend_category_strategy` payload on discovery/analysis. */
+export interface RosterMoveRecommendedStrategy {
+  minimum_winning_core?: number;
+  recommended_core_size?: number;
+  core_category_keys?: string[];
+  categories?: RosterMoveStrategyCategory[];
+  method?: Record<string, unknown>;
+  reason_codes?: string[];
+}
+
 export interface RosterMoveDiscovery {
   league?: { slug?: string | null; season_phase?: string | null };
   team_id?: string;
@@ -134,7 +166,7 @@ export interface RosterMoveDiscovery {
   window?: Record<string, unknown>;
   snapshot?: Record<string, unknown>;
   before_profile?: Record<string, unknown> | null;
-  recommended_strategy?: Record<string, unknown> | null;
+  recommended_strategy?: RosterMoveRecommendedStrategy | null;
   protect_categories?: string[];
   fa_shortlist?: RosterMovePlayerRef[];
   discovery_heuristics?: Record<string, unknown>;
@@ -183,7 +215,7 @@ export interface RosterMoveAnalysis {
     invented_drop?: boolean;
   };
   before_profile?: Record<string, unknown> | null;
-  recommended_strategy?: Record<string, unknown> | null;
+  recommended_strategy?: RosterMoveRecommendedStrategy | null;
   category_impact?: RosterMoveAnalysisCategoryImpact[];
   strategic_impact?: {
     target?: { improved?: string[]; declined?: string[]; unchanged?: string[] };
