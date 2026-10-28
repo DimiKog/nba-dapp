@@ -1,5 +1,6 @@
 import type {
   RosterMoveDiscovery,
+  RosterMoveMeaningfulTransition,
   RosterMoveRecommendation,
   RosterMovePairFeasibilityStatus,
 } from "./rosterMoveTypes";
@@ -174,9 +175,47 @@ export function categoryShortLabel(key: string): string {
   return CATEGORY_SHORT_LABELS[key] ?? key.toUpperCase();
 }
 
-export function targetImprovementLines(
+export type TargetImpactDisplay = {
+  key: string;
+  label: string;
+  /** True when league position improved (numerically lower rank). */
+  improved: boolean;
+  beforeRank: number | null;
+  afterRank: number | null;
+  /** Absolute place change when known from rank_delta or before/after. */
+  places: number | null;
+  /** Compact single-line fallback when ranks are incomplete. */
+  fallbackLine: string;
+};
+
+function transitionRanks(transition: RosterMoveMeaningfulTransition): {
+  beforeRank: number | null;
+  afterRank: number | null;
+} {
+  const before =
+    transition.before_league_rank
+    ?? transition.before?.league_rank
+    ?? null;
+  const after =
+    transition.after_league_rank
+    ?? transition.after?.league_rank
+    ?? null;
+  return {
+    beforeRank: typeof before === "number" ? before : null,
+    afterRank: typeof after === "number" ? after : null,
+  };
+}
+
+/**
+ * Format TARGET impacts for recommendation cards.
+ *
+ * rank_delta semantics (backend): before_rank - after_rank.
+ * Positive delta => gained places; negative => lost places.
+ * Before/after ranks are shown only when both are present factually.
+ */
+export function targetImpactDisplays(
   move: RosterMoveRecommendation,
-): string[] {
+): TargetImpactDisplay[] {
   const improved = new Set(move.target?.improved ?? []);
   if (!improved.size) return [];
   const byKey = new Map(
@@ -187,14 +226,48 @@ export function targetImprovementLines(
   return [...improved].map((key) => {
     const transition = byKey.get(key);
     const label = categoryShortLabel(key);
+    const { beforeRank, afterRank } = transition
+      ? transitionRanks(transition)
+      : { beforeRank: null, afterRank: null };
     const rankDelta = transition?.rank_delta;
-    if (typeof rankDelta === "number" && rankDelta !== 0) {
-      // Negative rank_delta means better (lower) rank.
-      const ranks = Math.abs(rankDelta);
-      const arrow = rankDelta < 0 ? "↑" : "↓";
-      return `${label} ${arrow} ${ranks} ${ranks === 1 ? "rank" : "ranks"}`;
+    let places: number | null = null;
+    if (beforeRank != null && afterRank != null) {
+      places = beforeRank - afterRank;
+    } else if (typeof rankDelta === "number" && rankDelta !== 0) {
+      places = rankDelta;
     }
-    return `${label} improved`;
+    const didImprove = places != null ? places > 0 : true;
+    const absPlaces = places != null ? Math.abs(places) : null;
+    let fallbackLine = `${label} improved`;
+    if (absPlaces != null && absPlaces > 0) {
+      fallbackLine = didImprove
+        ? `${label} · +${absPlaces} ${absPlaces === 1 ? "place" : "places"}`
+        : `${label} · −${absPlaces} ${absPlaces === 1 ? "place" : "places"}`;
+    }
+    return {
+      key,
+      label,
+      improved: didImprove,
+      beforeRank,
+      afterRank,
+      places: absPlaces,
+      fallbackLine,
+    };
+  });
+}
+
+/** @deprecated Prefer targetImpactDisplays for structured UI. */
+export function targetImprovementLines(
+  move: RosterMoveRecommendation,
+): string[] {
+  return targetImpactDisplays(move).map((row) => {
+    if (row.beforeRank != null && row.afterRank != null && row.places != null) {
+      const placeBit = row.improved
+        ? `+${row.places} ${row.places === 1 ? "place" : "places"}`
+        : `−${row.places} ${row.places === 1 ? "place" : "places"}`;
+      return `${row.label} #${row.beforeRank} → #${row.afterRank} · ${placeBit}`;
+    }
+    return row.fallbackLine;
   });
 }
 

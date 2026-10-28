@@ -532,7 +532,8 @@ function rosterMoveDiscoveryFixture(league, teamId) {
         key: "oreb",
         classification: "TARGET",
         transition: "improved",
-        rank_delta: -5,
+        // before_rank - after_rank; positive = places gained
+        rank_delta: 5,
         z_delta: 0.35,
       },
     ],

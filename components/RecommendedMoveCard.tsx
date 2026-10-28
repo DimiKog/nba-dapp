@@ -1,7 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
-import { ApiResponseError, fetchRosterMoveAnalysis } from "@/lib/api";
+import { ApiResponseError, fetchRosterMoveAnalysis, photoUrl } from "@/lib/api";
 import type { RosterMoveAnalysis, RosterMoveRecommendation } from "@/lib/rosterMoveTypes";
 import {
   acquisitionReasonLabel,
@@ -12,7 +13,7 @@ import {
   headlineStatus,
   protectDamageLabel,
   salaryDeltaLabel,
-  targetImprovementLines,
+  targetImpactDisplays,
 } from "@/lib/rosterMovePresentation";
 
 export default function RecommendedMoveCard({
@@ -31,7 +32,11 @@ export default function RecommendedMoveCard({
 
   const addName = move.add_player?.name ?? "Free agent";
   const dropName = move.remove_player?.name ?? "Roster player";
-  const targets = targetImprovementLines(move);
+  const addPhoto = photoUrl(
+    typeof move.add_player?.photo === "string" ? move.add_player.photo : null,
+    move.add_player?.nba_id,
+  );
+  const targets = targetImpactDisplays(move);
   const protectLine = protectDamageLabel(move);
   const protectDamaged = hasProtectDamage(move);
   const gamesCue = compactObservedGames(move);
@@ -66,9 +71,9 @@ export default function RecommendedMoveCard({
   }
 
   return (
-    <article className="flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+    <article className="flex h-full min-w-0 flex-col rounded-xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-950/80">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
           {statusLine}
         </span>
         {gamesCue && (
@@ -78,22 +83,32 @@ export default function RecommendedMoveCard({
         )}
       </div>
 
-      <div className="mt-3 min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
-          Add
-        </p>
-        <h3 className="mt-0.5 truncate text-lg font-black leading-tight text-slate-950 dark:text-white">
-          {addName}
-        </h3>
-      </div>
-
-      <div className="mt-2 min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-          Drop
-        </p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-slate-600 dark:text-slate-300">
-          {dropName}
-        </p>
+      <div className="mt-3 flex min-w-0 items-start gap-3">
+        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+          {addPhoto ? (
+            <Image src={addPhoto} alt={addName} fill className="object-cover" unoptimized />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm font-bold text-slate-400">
+              {addName[0]}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
+            Add
+          </p>
+          <h3 className="mt-0.5 truncate text-lg font-black leading-tight text-slate-950 dark:text-white">
+            {addName}
+          </h3>
+          <div className="mt-2 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              Drop
+            </p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-slate-600 dark:text-slate-300">
+              {dropName}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="mt-3 min-w-0 flex-1">
@@ -101,16 +116,39 @@ export default function RecommendedMoveCard({
           Helps your targets
         </p>
         {targets.length > 0 ? (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {targets.map((line) => (
-              <span
-                key={line}
-                className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold tabular-nums text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+          <ul className="mt-1.5 space-y-1.5">
+            {targets.map((row) => (
+              <li
+                key={row.key}
+                className={`rounded-md px-2 py-1.5 ${
+                  row.improved
+                    ? "bg-emerald-50 dark:bg-emerald-950/40"
+                    : "bg-rose-50 dark:bg-rose-950/30"
+                }`}
               >
-                {line}
-              </span>
+                {row.beforeRank != null && row.afterRank != null ? (
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                    <span className={`text-[11px] font-black ${row.improved ? "text-emerald-800 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"}`}>
+                      {row.label}
+                    </span>
+                    <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-200">
+                      #{row.beforeRank} → #{row.afterRank}
+                    </span>
+                    {row.places != null && row.places > 0 && (
+                      <span className={`w-full text-[10px] font-semibold ${row.improved ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400"}`}>
+                        {row.improved ? "+" : "−"}
+                        {row.places} {row.places === 1 ? "place" : "places"}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <span className={`text-[11px] font-bold ${row.improved ? "text-emerald-800 dark:text-emerald-300" : "text-rose-800 dark:text-rose-300"}`}>
+                    {row.fallbackLine}
+                  </span>
+                )}
+              </li>
             ))}
-          </div>
+          </ul>
         ) : (
           <p className="mt-1.5 text-xs text-slate-400">No TARGET gains listed</p>
         )}
@@ -123,7 +161,7 @@ export default function RecommendedMoveCard({
             : "text-slate-500 dark:text-slate-400"
         }`}
       >
-        {protectLine}
+        {protectDamaged ? protectLine : `✓ ${protectLine}`}
       </p>
 
       {salaryLine && (
@@ -138,11 +176,11 @@ export default function RecommendedMoveCard({
         className="mt-3 self-start text-sm font-bold text-blue-700 hover:underline dark:text-blue-300"
         aria-expanded={open}
       >
-        {open ? "Hide analysis" : "View analysis"}
+        {open ? "Hide analysis" : "View analysis →"}
       </button>
 
       {open && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/60">
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/80">
           {status === "loading" && (
             <p className="text-sm text-slate-500">Loading analysis…</p>
           )}
@@ -225,8 +263,9 @@ function MoveAnalysisDetail({ analysis }: { analysis: RosterMoveAnalysis }) {
               </span>
               <span className="tabular-nums text-slate-500">
                 #{row.before?.league_rank ?? "—"} → #{row.after?.league_rank ?? "—"}
-                {typeof row.rank_delta === "number" ? ` (${row.rank_delta > 0 ? "+" : ""}${row.rank_delta})` : ""}
-                {typeof row.z_delta === "number" ? ` · ${row.z_delta > 0 ? "+" : ""}${row.z_delta.toFixed(2)}z` : ""}
+                {typeof row.rank_delta === "number" && row.rank_delta !== 0
+                  ? ` · ${row.rank_delta > 0 ? "+" : "−"}${Math.abs(row.rank_delta)} ${Math.abs(row.rank_delta) === 1 ? "place" : "places"}`
+                  : ""}
               </span>
             </li>
           ))}

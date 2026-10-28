@@ -59,19 +59,15 @@ test("trade analyzer tabs preserve their inputs and URL modes", async ({ page, r
   await expect(page).toHaveURL(/mode=suggestions/);
 });
 
-test("personal roster shows evidence-only watch and FA navigation", async ({ page, request }) => {
+test("personal roster keeps roster-watch cues in the roster table without a standalone panel", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  const watch = page.getByRole("heading", { name: "Players to review" }).locator("xpath=ancestor::section[1]");
-  await expect(watch).toBeVisible();
-  await expect(watch.getByText("Lower minutes")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Players to review" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Roster watch" })).toHaveCount(0);
   await expect(page.locator("#roster").getByText("Lower minutes").first()).toBeVisible();
-  await expect(watch.getByText("15.0 MIN / 3 GP · 28.0 MIN / 70 GP in 2025-26")).toBeVisible();
-  await expect(watch.getByText(/not drop recommendations/i)).toBeVisible();
-  await expect(watch.getByRole("link", { name: "Explore free agents" })).toHaveAttribute("href", "#player-targets");
-  await expect(watch.getByRole("link", { name: "Player details" })).toHaveAttribute("href", "/players/20000?league=ldl&from=roster");
+  await expect(page.locator("#recommended-moves").getByRole("heading", { name: "Recommended moves" })).toBeVisible();
 });
 
 test("roster-move discovery and analysis stay personal-team only", async ({ request }) => {
@@ -127,8 +123,8 @@ test("personal roster recommended moves show top three and on-demand analysis", 
   await expect(section.getByText("Roster Player 1").first()).toBeVisible();
   await expect(section.getByText("Jordan Goodwin")).toBeVisible();
   await expect(section.getByText("Free Agent 4")).toHaveCount(0);
-  await expect(section.getByText("OREB ↑ 5 ranks").first()).toBeVisible();
-  await expect(section.getByText("No PROTECT categories damaged").first()).toBeVisible();
+  await expect(section.getByText("OREB · +5 places").first()).toBeVisible();
+  await expect(section.getByText(/No PROTECT categories damaged/).first()).toBeVisible();
   await expect(section.getByText("Promising · Verify role").first()).toBeVisible();
   await expect(section.getByText("current_role_unverified")).toHaveCount(0);
   await expect(section.getByText("needs_review")).toHaveCount(0);
@@ -143,7 +139,7 @@ test("personal roster recommended moves show top three and on-demand analysis", 
       analysisRequests.push(req.url());
     }
   });
-  await section.getByRole("button", { name: "View analysis" }).first().click();
+  await section.getByRole("button", { name: /View analysis/ }).first().click();
   await expect(section.getByText(/#11 → #6/)).toBeVisible();
   expect(analysisRequests.length).toBe(1);
 });

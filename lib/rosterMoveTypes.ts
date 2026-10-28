@@ -39,6 +39,7 @@ export interface RosterMoveActionability {
 export interface RosterMovePlayerRef {
   nba_id: number;
   name?: string | null;
+  photo?: string | null;
   salary?: string | number | null;
   discovery_lanes?: string[];
   contribution_basis?: RosterMoveContributionBasis | null;
@@ -65,8 +66,18 @@ export interface RosterMoveMeaningfulTransition {
   key: string;
   classification?: string | null;
   transition?: string | null;
+  /**
+   * Backend contract (trade_analyzer / evaluator):
+   * rank_delta = before_league_rank - after_league_rank.
+   * Positive => improved places; negative => worsened places.
+   */
   rank_delta?: number | null;
   z_delta?: number | null;
+  /** Optional; discovery summaries currently omit these. */
+  before_league_rank?: number | null;
+  after_league_rank?: number | null;
+  before?: { league_rank?: number | null } | null;
+  after?: { league_rank?: number | null } | null;
 }
 
 export interface RosterMoveSalaryCapSummary {
