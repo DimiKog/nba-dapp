@@ -99,7 +99,7 @@ test("empty discovery flattens to empty list", () => {
 
 test("TARGET improvements render with rank deltas", () => {
   const lines = targetImprovementLines(move());
-  assert.deepEqual(lines, ["OREB ↑5 ranks", "A/TO ↑2 ranks"]);
+  assert.deepEqual(lines, ["OREB ↑ 5 ranks", "A/TO ↑ 2 ranks"]);
 });
 
 test("no PROTECT damage is communicated clearly", () => {

@@ -6,10 +6,10 @@ import type { RosterMoveAnalysis, RosterMoveRecommendation } from "@/lib/rosterM
 import {
   acquisitionReasonLabel,
   categoryShortLabel,
+  compactObservedGames,
   formatMoneyDelta,
   hasProtectDamage,
   headlineStatus,
-  observedGamesLabel,
   protectDamageLabel,
   salaryDeltaLabel,
   targetImprovementLines,
@@ -34,7 +34,7 @@ export default function RecommendedMoveCard({
   const targets = targetImprovementLines(move);
   const protectLine = protectDamageLabel(move);
   const protectDamaged = hasProtectDamage(move);
-  const gamesLine = observedGamesLabel(move);
+  const gamesCue = compactObservedGames(move);
   const salaryLine = salaryDeltaLabel(move);
   const statusLine = headlineStatus(move);
 
@@ -66,45 +66,76 @@ export default function RecommendedMoveCard({
   }
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <h3 className="text-base font-black text-slate-950 dark:text-white">
-        Add {addName}
-        <span className="mx-1.5 font-bold text-slate-400">→</span>
-        Drop {dropName}
-      </h3>
-
-      {targets.length > 0 ? (
-        <p className="mt-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
-          {targets.join(" · ")}
-        </p>
-      ) : (
-        <p className="mt-2 text-sm text-slate-500">No TARGET category rank gains listed</p>
-      )}
-
-      <p className={`mt-1 text-sm font-semibold ${protectDamaged ? "text-rose-700 dark:text-rose-300" : "text-slate-600 dark:text-slate-300"}`}>
-        {protectLine}
-      </p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+    <article className="flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
           {statusLine}
         </span>
-        {gamesLine && (
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {gamesLine}
-          </span>
-        )}
-        {salaryLine && (
-          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-            {salaryLine}
+        {gamesCue && (
+          <span className="text-[11px] font-semibold tabular-nums text-slate-400 dark:text-slate-500">
+            {gamesCue}
           </span>
         )}
       </div>
 
+      <div className="mt-3 min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">
+          Add
+        </p>
+        <h3 className="mt-0.5 truncate text-lg font-black leading-tight text-slate-950 dark:text-white">
+          {addName}
+        </h3>
+      </div>
+
+      <div className="mt-2 min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+          Drop
+        </p>
+        <p className="mt-0.5 truncate text-sm font-semibold text-slate-600 dark:text-slate-300">
+          {dropName}
+        </p>
+      </div>
+
+      <div className="mt-3 min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+          Helps your targets
+        </p>
+        {targets.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {targets.map((line) => (
+              <span
+                key={line}
+                className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold tabular-nums text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+              >
+                {line}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1.5 text-xs text-slate-400">No TARGET gains listed</p>
+        )}
+      </div>
+
+      <p
+        className={`mt-3 text-xs font-semibold ${
+          protectDamaged
+            ? "text-rose-700 dark:text-rose-300"
+            : "text-slate-500 dark:text-slate-400"
+        }`}
+      >
+        {protectLine}
+      </p>
+
+      {salaryLine && (
+        <p className="mt-1 text-[11px] font-medium text-slate-400 dark:text-slate-500">
+          {salaryLine}
+        </p>
+      )}
+
       <button
         type="button"
         onClick={() => void toggleAnalysis()}
-        className="mt-3 text-sm font-bold text-blue-700 hover:underline dark:text-blue-300"
+        className="mt-3 self-start text-sm font-bold text-blue-700 hover:underline dark:text-blue-300"
         aria-expanded={open}
       >
         {open ? "Hide analysis" : "View analysis"}

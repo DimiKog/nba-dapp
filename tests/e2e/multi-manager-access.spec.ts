@@ -123,16 +123,17 @@ test("personal roster recommended moves show top three and on-demand analysis", 
   await expect(section.getByRole("link", { name: "Recommended moves" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Recommended moves" })).toBeVisible();
 
-  await expect(section.getByRole("heading", { name: /Add Free Agent 1.*Drop Roster Player 1/ })).toBeVisible();
+  await expect(section.getByRole("heading", { name: "Free Agent 1" })).toBeVisible();
+  await expect(section.getByText("Roster Player 1").first()).toBeVisible();
   await expect(section.getByText("Jordan Goodwin")).toBeVisible();
   await expect(section.getByText("Free Agent 4")).toHaveCount(0);
-  await expect(section.getByText("OREB ↑5 ranks").first()).toBeVisible();
+  await expect(section.getByText("OREB ↑ 5 ranks").first()).toBeVisible();
   await expect(section.getByText("No PROTECT categories damaged").first()).toBeVisible();
   await expect(section.getByText("Promising · Verify role").first()).toBeVisible();
   await expect(section.getByText("current_role_unverified")).toHaveCount(0);
   await expect(section.getByText("needs_review")).toHaveCount(0);
 
-  await section.getByRole("button", { name: /View all recommendations/ }).click();
+  await section.getByRole("button", { name: "Explore more moves" }).click();
   await expect(section.getByText("Free Agent 4")).toBeVisible();
   await expect(section.getByText("PROTECT damaged: ST")).toBeVisible();
 
