@@ -53,15 +53,18 @@ export default function RecommendedMovesSection({
   const hiddenCount = Math.max(0, moves.length - INITIAL_RECOMMENDATION_COUNT);
 
   return (
-    <section id="recommended-moves" className="mt-10 scroll-mt-32">
+    <section
+      id="recommended-moves"
+      className="mt-10 scroll-mt-32 rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/20 sm:p-5"
+    >
       <div className="mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
           Team intelligence
         </p>
         <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">
           Recommended moves
         </h2>
-        <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
           Moves that strengthen your recommended category plan.
         </p>
       </div>
@@ -75,7 +78,7 @@ export default function RecommendedMovesSection({
       )}
 
       {state === "empty" && (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white/80 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-400">
           No recommended roster moves right now. Check back after the next roster
           or stats refresh.
         </div>
@@ -97,7 +100,7 @@ export default function RecommendedMovesSection({
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800 sm:w-auto"
+              className="w-full rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-950 dark:text-blue-300 dark:hover:bg-slate-900 sm:w-auto"
             >
               Explore more moves
             </button>
@@ -127,16 +130,17 @@ function RecommendedMovesSkeleton() {
       {[0, 1, 2].map((index) => (
         <div
           key={index}
-          className="animate-pulse rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
+          className="animate-pulse rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950/80"
         >
           <div className="h-4 w-28 rounded-full bg-slate-200 dark:bg-slate-700" />
-          <div className="mt-4 h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
-          <div className="mt-2 h-6 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
-          <div className="mt-3 h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
-          <div className="mt-2 h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
-          <div className="mt-4 flex gap-2">
-            <div className="h-6 w-20 rounded-md bg-emerald-50 dark:bg-emerald-950/40" />
-            <div className="h-6 w-20 rounded-md bg-emerald-50 dark:bg-emerald-950/40" />
+          <div className="mt-4 flex gap-3">
+            <div className="h-12 w-12 rounded-full bg-slate-200 dark:bg-slate-700" />
+            <div className="flex-1">
+              <div className="h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
+              <div className="mt-2 h-5 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+              <div className="mt-3 h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
+              <div className="mt-1 h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
+            </div>
           </div>
         </div>
       ))}

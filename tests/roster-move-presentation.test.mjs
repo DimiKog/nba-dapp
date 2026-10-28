@@ -9,6 +9,7 @@ import {
   isRawEngineCode,
   pairFeasibilityLabel,
   protectDamageLabel,
+  targetImpactDisplays,
   targetImprovementLines,
   visibleRecommendations,
 } from "../lib/rosterMovePresentation.ts";
@@ -32,14 +33,15 @@ function move(overrides = {}) {
         key: "oreb",
         classification: "TARGET",
         transition: "improved",
-        rank_delta: -5,
+        // backend: before_rank - after_rank; positive = places gained
+        rank_delta: 5,
         z_delta: 0.4,
       },
       {
         key: "assist_turnover",
         classification: "TARGET",
         transition: "improved",
-        rank_delta: -2,
+        rank_delta: 2,
         z_delta: 0.2,
       },
     ],
@@ -97,9 +99,79 @@ test("empty discovery flattens to empty list", () => {
   assert.deepEqual(flattenDiscoveryRecommendations(null), []);
 });
 
-test("TARGET improvements render with rank deltas", () => {
-  const lines = targetImprovementLines(move());
-  assert.deepEqual(lines, ["OREB ↑ 5 ranks", "A/TO ↑ 2 ranks"]);
+test("TARGET improvements use places from positive rank_delta without inventing ranks", () => {
+  const rows = targetImpactDisplays(move());
+  assert.equal(rows[0].label, "OREB");
+  assert.equal(rows[0].improved, true);
+  assert.equal(rows[0].beforeRank, null);
+  assert.equal(rows[0].afterRank, null);
+  assert.equal(rows[0].places, 5);
+  assert.equal(rows[0].fallbackLine, "OREB · +5 places");
+  assert.deepEqual(targetImprovementLines(move()), [
+    "OREB · +5 places",
+    "A/TO · +2 places",
+  ]);
+});
+
+test("TARGET impact shows explicit before → after ranks when both are present", () => {
+  const rows = targetImpactDisplays(move({
+    meaningful_transitions: [{
+      key: "oreb",
+      classification: "TARGET",
+      transition: "improved",
+      rank_delta: 5,
+      before_league_rank: 11,
+      after_league_rank: 6,
+    }],
+    target: { improved: ["oreb"], declined: [] },
+  }));
+  assert.equal(rows[0].beforeRank, 11);
+  assert.equal(rows[0].afterRank, 6);
+  assert.equal(rows[0].places, 5);
+  assert.equal(rows[0].improved, true);
+  assert.equal(
+    targetImprovementLines(move({
+      meaningful_transitions: [{
+        key: "oreb",
+        classification: "TARGET",
+        transition: "improved",
+        rank_delta: 5,
+        before_league_rank: 11,
+        after_league_rank: 6,
+      }],
+      target: { improved: ["oreb"], declined: [] },
+    }))[0],
+    "OREB #11 → #6 · +5 places",
+  );
+});
+
+test("TARGET worsening uses negative places language without inventing ranks", () => {
+  const rows = targetImpactDisplays(move({
+    target: { improved: ["oreb"], declined: [] },
+    meaningful_transitions: [{
+      key: "oreb",
+      classification: "TARGET",
+      transition: "declined",
+      rank_delta: -3,
+    }],
+  }));
+  assert.equal(rows[0].improved, false);
+  assert.equal(rows[0].fallbackLine, "OREB · −3 places");
+});
+
+test("TARGET falls back honestly when rank data is missing", () => {
+  const rows = targetImpactDisplays(move({
+    meaningful_transitions: [{
+      key: "oreb",
+      classification: "TARGET",
+      transition: "improved",
+    }],
+    target: { improved: ["oreb"], declined: [] },
+  }));
+  assert.equal(rows[0].fallbackLine, "OREB improved");
+  assert.equal(rows[0].beforeRank, null);
+  assert.equal(rows[0].afterRank, null);
+  assert.equal(rows[0].places, null);
 });
 
 test("no PROTECT damage is communicated clearly", () => {
