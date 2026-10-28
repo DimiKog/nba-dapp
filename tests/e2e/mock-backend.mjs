@@ -372,7 +372,14 @@ const server = createServer((request, response) => {
     if (url.searchParams.get("basis") === "window") {
       profile.basis_requested = "window";
       profile.basis_used = "window";
-      profile.categories[0] = { ...profile.categories[0], value: 12, league_rank: 5 };
+      const blocksIndex = profile.categories.findIndex((row) => row.key === "blocks");
+      if (blocksIndex >= 0) {
+        profile.categories[blocksIndex] = {
+          ...profile.categories[blocksIndex],
+          value: 12,
+          league_rank: 5,
+        };
+      }
     }
     return send(response, 200, profile);
   }
@@ -552,6 +559,26 @@ function rosterMoveDiscoveryFixture(league, teamId) {
     team_id: teamId,
     basis_requested: "season",
     basis_used: "season",
+    recommended_strategy: {
+      minimum_winning_core: 6,
+      recommended_core_size: 8,
+      core_category_keys: ["assists", "steals", "three_pm", "ft_pct", "points", "dreb", "blocks", "oreb"],
+      categories: [
+        { key: "assists", label: "AST", classification: "PROTECT" },
+        { key: "steals", label: "STL", classification: "PROTECT" },
+        { key: "three_pm", label: "3PTM", classification: "PROTECT" },
+        { key: "ft_pct", label: "FT%", classification: "PROTECT" },
+        { key: "points", label: "PTS", classification: "PROTECT" },
+        { key: "dreb", label: "DREB", classification: "PROTECT" },
+        { key: "blocks", label: "BLK", classification: "PROTECT" },
+        { key: "oreb", label: "OREB", classification: "TARGET" },
+        { key: "assist_turnover", label: "A/TO", classification: "TARGET" },
+        { key: "fg_pct", label: "FG%", classification: "FLEX" },
+        { key: "turnovers", label: "TO", classification: "PUNT_CANDIDATE" },
+      ],
+      method: { repairability: "profile_z_v1" },
+      reason_codes: [],
+    },
     tiers: {
       tier_1_target_ready: { count_evaluated: 1, returned: [moves[0]] },
       tier_2_target_needs_review: {
@@ -769,6 +796,7 @@ function rosterPerformanceFixture(league, membership, incomplete) {
 }
 
 function categoryProfileFixture(league, membership) {
+  const teams = league === "gnfc" ? 12 : 20;
   return {
     league: leagueFixture(league),
     team: { id: membership.fantrax_team_id, name: membership.franchise_name, logo: null, owner: null },
@@ -777,10 +805,19 @@ function categoryProfileFixture(league, membership) {
     scope: "roster_rate",
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
     snapshot: { captured_at: "2026-09-10T08:00:00Z", generated_at: "2026-09-10T08:01:00Z", source: "database_cache" },
-    sample: { league_teams: league === "gnfc" ? 12 : 20, players_included: 14, players_missing_stats: 0, league_players_included: { minimum: 13, maximum: 14, average: 14 } },
-    categories: [{ key: "blocks", label: "BLK", value: 8.5, league_rank: 6, eligible_teams: league === "gnfc" ? 12 : 20, percentile: 0.25, league_mean: 6.9, z: 0.65, verdict: "strength", sample: null }],
-    weaknesses: ["FT%", "TO"],
-    strengths: ["3PTM", "AST"],
+    sample: { league_teams: teams, players_included: 14, players_missing_stats: 0, league_players_included: { minimum: 13, maximum: 14, average: 14 } },
+    categories: [
+      { key: "assists", label: "AST", value: 28.1, league_rank: 1, eligible_teams: teams, percentile: 0.0, league_mean: 22.0, z: 1.4, verdict: "strength", sample: null },
+      { key: "steals", label: "STL", value: 9.2, league_rank: 1, eligible_teams: teams, percentile: 0.0, league_mean: 7.0, z: 1.2, verdict: "strength", sample: null },
+      { key: "three_pm", label: "3PTM", value: 14.5, league_rank: 2, eligible_teams: teams, percentile: 0.05, league_mean: 11.0, z: 1.0, verdict: "strength", sample: null },
+      { key: "blocks", label: "BLK", value: 8.5, league_rank: 6, eligible_teams: teams, percentile: 0.25, league_mean: 6.9, z: 0.65, verdict: "strength", sample: null },
+      { key: "fg_pct", label: "FG%", value: 0.47, league_rank: 10, eligible_teams: teams, percentile: 0.5, league_mean: 0.47, z: 0.0, verdict: "neutral", sample: null },
+      { key: "oreb", label: "OREB", value: 9.1, league_rank: 16, eligible_teams: teams, percentile: 0.8, league_mean: 11.0, z: -0.8, verdict: "weakness", sample: null },
+      { key: "assist_turnover", label: "A/TO", value: 1.6, league_rank: 17, eligible_teams: teams, percentile: 0.85, league_mean: 2.0, z: -0.9, verdict: "weakness", sample: null },
+      { key: "turnovers", label: "TO", value: 16.2, league_rank: 18, eligible_teams: teams, percentile: 0.9, league_mean: 13.0, z: -1.4, verdict: "weakness", sample: null },
+    ],
+    weaknesses: ["OREB", "A/TO", "TO"],
+    strengths: ["AST", "STL", "3PTM", "BLK"],
     severe_weaknesses: [],
     method: { ranking: "fixture", ratios: "fixture", turnovers: "fixture", window_scope: "fixture" },
   };
