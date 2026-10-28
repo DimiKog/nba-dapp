@@ -66,8 +66,9 @@ test("personal roster keeps roster-watch cues in the roster table without a stan
 
   await expect(page.getByRole("heading", { name: "Players to review" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Roster watch" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Intelligence" })).toBeVisible();
   await expect(page.locator("#roster").getByText("Lower minutes").first()).toBeVisible();
-  await expect(page.locator("#recommended-moves").getByRole("heading", { name: "Recommended moves" })).toBeVisible();
+  await expect(page.locator("#intelligence #recommended-moves").getByRole("heading", { name: "Recommended moves" })).toBeVisible();
 });
 
 test("roster-move discovery and analysis stay personal-team only", async ({ request }) => {
@@ -114,10 +115,14 @@ test("personal roster recommended moves show top three and on-demand analysis", 
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  const section = page.locator("#recommended-moves");
+  const section = page.locator("#intelligence #recommended-moves");
+  await expect(page.locator("#intelligence").getByText("Team intelligence").first()).toBeVisible();
   await expect(section.getByRole("heading", { name: "Recommended moves" })).toBeVisible();
   await expect(section.getByRole("link", { name: "Recommended moves" })).toHaveCount(0);
-  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Recommended moves" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Intelligence" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Recommended moves" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Category analysis" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Player targets" })).toHaveCount(0);
 
   await expect(section.getByRole("heading", { name: "Free Agent 1" })).toBeVisible();
   await expect(section.getByText("Roster Player 1").first()).toBeVisible();
@@ -149,7 +154,8 @@ test("category profile keeps Fantrax actuals distinct from current-roster potent
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
 
-  const panel = page.locator("#team-analysis");
+  await page.locator("#intelligence").getByText("Full category analysis").click();
+  const panel = page.locator("#intelligence #team-analysis");
   await expect(panel.getByRole("button", { name: "Performance" })).toHaveAttribute("aria-pressed", "true");
   await expect(panel.getByText("Actual vs pre-period baseline")).toBeVisible();
   await expect(panel.getByText("Baseline coverage 31/31 games")).toBeVisible();
@@ -182,7 +188,8 @@ test("Fantrax outage does not hide roster potential or invent actual rank", asyn
   const token = await tokenFor(request, "manager-b-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-b`);
-  const panel = page.locator("#team-analysis");
+  await page.locator("#intelligence").getByText("Full category analysis").click();
+  const panel = page.locator("#intelligence #team-analysis");
   await expect(panel.getByText(/comparison is temporarily unavailable/i)).toBeVisible();
   await panel.getByRole("button", { name: "Fantrax rank" }).click();
   await expect(panel.getByText(/Temporarily unavailable.*no actual rank is inferred/)).toBeVisible();
@@ -491,21 +498,18 @@ test("scoreboard shows no personal highlights or toggle to visitors without a me
   await expect(page.getByRole("button", { name: /Mine only/ })).toHaveCount(0);
 });
 
-test("free-agent fit explains the weighted score without treating salary or risk as scored", async ({ page, request }) => {
+test("LDL team page omits Category Needs from the main flow", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
-  await page.getByText("Explore all 2 matching candidates").click();
-  const candidate = page.locator("article").filter({ has: page.getByRole("heading", { name: "LDL Manager A Target" }) });
-  await expect(candidate.getByText("+1.25", { exact: true })).toBeVisible();
-  await expect(candidate.getByText("Model: statistical help for a selected need; future role and minutes unassessed")).toBeVisible();
-  await expect(candidate.getByText(/Evidence first/)).toBeVisible();
-  await expect(candidate.getByText("12 games recorded")).toBeVisible();
-  await expect(candidate.getByText("Market #1 of 80", { exact: true })).toHaveCount(1);
-  await expect(candidate.getByText(/Weighted fit/)).toHaveCount(0);
-  await expect(candidate.getByText("Acquisition checks passed", { exact: true })).toBeVisible();
-  await page.getByText("How is this scored?").click();
-  await expect(page.getByText(/Salary, tokens, future role and injury risk do not change the category-fit score/)).toBeVisible();
+
+  await expect(page.locator("#player-targets")).toHaveCount(0);
+  await expect(page.getByText("Players who address your needs")).toHaveCount(0);
+  await expect(page.getByText("Explore all 2 matching candidates")).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Player targets" })).toHaveCount(0);
+  await expect(page.locator("#intelligence")).toBeVisible();
+  await expect(page.locator("#roster")).toBeVisible();
+  await expect(page.locator("#payroll")).toBeVisible();
 });
 
 test("GNFC roster shows current-season FA form and provisional minutes evidence", async ({ page, request }) => {
@@ -525,28 +529,20 @@ test("GNFC roster shows current-season FA form and provisional minutes evidence"
   await expect(candidate.getByLabel("Early Minutes ↑, show minutes evidence")).toBeVisible();
 });
 
-test("conditional FA candidates remain collapsed until the manager explores them", async ({ page, request }) => {
+test("LDL team page keeps Overview → Intelligence → Data section order", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
-  await expect(page.getByText("Conditional FA", { exact: true })).toBeHidden();
-  await page.getByText("Explore all 2 matching candidates").click();
-  await expect(page.getByText("Conditional FA", { exact: true })).toBeVisible();
-  await expect(page.getByText("Roster spot or drop needed")).toBeVisible();
-});
 
-test("candidate list loads the next page and keeps the selected position", async ({ page, request }) => {
-  const token = await tokenFor(request, "manager-a-subject");
-  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
-  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
-  await page.locator("#player-targets select").nth(1).selectOption("PG");
-  await page.getByText("Explore 24 of 25 matching candidates").click();
-  await expect(page.getByText("Paged candidate 1", { exact: true })).toBeVisible();
-  await expect(page.getByText("Paged candidate 25", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Load more (24 of 25 shown)" }).click();
-  await expect(page.getByText("Paged candidate 25", { exact: true })).toBeVisible();
-  await expect(page.getByText("Explore all 25 matching candidates")).toBeVisible();
-  await expect(page.locator("#player-targets select").nth(1)).toHaveValue("PG");
+  const order = await page.evaluate(() => {
+    const ids = ["overview", "intelligence", "roster", "payroll"];
+    return ids
+      .map((id) => document.getElementById(id))
+      .filter(Boolean)
+      .sort((a, b) => (a!.compareDocumentPosition(b!) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      .map((el) => el!.id);
+  });
+  expect(order).toEqual(["overview", "intelligence", "roster", "payroll"]);
 });
 
 test("free-agent radar distinguishes recent trend from team fit", async ({ page, request }) => {

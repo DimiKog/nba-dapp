@@ -4,9 +4,14 @@ import { leaguePresentation } from "@/lib/leagues";
 export default function TeamPageOverview({
   performance,
   showCap = true,
+  insightsHref = "#team-analysis",
+  insightsLabel = "Category analysis",
 }: {
   performance: FantasyRosterPerformance;
   showCap?: boolean;
+  /** Deep link for the overview insights sentence (LDL/BDB → #intelligence). */
+  insightsHref?: string;
+  insightsLabel?: string;
 }) {
   const injured = performance.players.filter((player) => player.injury);
   const current = performance.payroll?.seasons[0] ?? null;
@@ -89,8 +94,8 @@ export default function TeamPageOverview({
       </div>
       <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
         Category strengths and gaps are in{" "}
-        <a href="#team-analysis" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
-          Category analysis
+        <a href={insightsHref} className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          {insightsLabel}
         </a>
         .
       </p>
