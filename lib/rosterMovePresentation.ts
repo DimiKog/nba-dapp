@@ -192,10 +192,17 @@ export function targetImprovementLines(
       // Negative rank_delta means better (lower) rank.
       const ranks = Math.abs(rankDelta);
       const arrow = rankDelta < 0 ? "↑" : "↓";
-      return `${label} ${arrow}${ranks} ${ranks === 1 ? "rank" : "ranks"}`;
+      return `${label} ${arrow} ${ranks} ${ranks === 1 ? "rank" : "ranks"}`;
     }
     return `${label} improved`;
   });
+}
+
+/** Compact games cue for card status rows (e.g. "3 GP"). */
+export function compactObservedGames(move: RosterMoveRecommendation): string | null {
+  const games = move.add_player?.observed?.games;
+  if (typeof games !== "number") return null;
+  return `${games} GP`;
 }
 
 export function protectDamageLabel(move: RosterMoveRecommendation): string {

@@ -62,8 +62,7 @@ export default function RecommendedMovesSection({
           Recommended moves
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-          Unilateral free-agent add / roster drop ideas for your team. Not trade
-          suggestions, matchup projections, or guaranteed wins.
+          Moves that strengthen your recommended category plan.
         </p>
       </div>
 
@@ -83,22 +82,24 @@ export default function RecommendedMovesSection({
       )}
 
       {state === "ready" && (
-        <div className="space-y-3">
-          {visible.map((move) => (
-            <RecommendedMoveCard
-              key={`${move.remove_player?.nba_id}-${move.add_player?.nba_id}-${move.tier}`}
-              league={league}
-              teamId={teamId}
-              move={move}
-            />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 xl:items-stretch">
+            {visible.map((move) => (
+              <RecommendedMoveCard
+                key={`${move.remove_player?.nba_id}-${move.add_player?.nba_id}-${move.tier}`}
+                league={league}
+                teamId={teamId}
+                move={move}
+              />
+            ))}
+          </div>
           {!expanded && hiddenCount > 0 && (
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800"
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800 sm:w-auto"
             >
-              View all recommendations ({moves.length})
+              Explore more moves
             </button>
           )}
           {expanded && moves.length > INITIAL_RECOMMENDATION_COUNT && (
@@ -107,7 +108,7 @@ export default function RecommendedMovesSection({
               onClick={() => setExpanded(false)}
               className="text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
             >
-              Show top {INITIAL_RECOMMENDATION_COUNT}
+              Show fewer moves
             </button>
           )}
         </div>
@@ -118,16 +119,25 @@ export default function RecommendedMovesSection({
 
 function RecommendedMovesSkeleton() {
   return (
-    <div className="space-y-3" aria-busy="true" aria-label="Loading recommended moves">
+    <div
+      className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      aria-busy="true"
+      aria-label="Loading recommended moves"
+    >
       {[0, 1, 2].map((index) => (
         <div
           key={index}
           className="animate-pulse rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
         >
-          <div className="h-5 w-2/3 rounded bg-slate-200 dark:bg-slate-700" />
-          <div className="mt-3 h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
-          <div className="mt-2 h-4 w-2/5 rounded bg-slate-100 dark:bg-slate-800" />
-          <div className="mt-4 h-6 w-40 rounded-full bg-slate-100 dark:bg-slate-800" />
+          <div className="h-4 w-28 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <div className="mt-4 h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
+          <div className="mt-2 h-6 w-3/4 rounded bg-slate-200 dark:bg-slate-700" />
+          <div className="mt-3 h-3 w-10 rounded bg-slate-100 dark:bg-slate-800" />
+          <div className="mt-2 h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
+          <div className="mt-4 flex gap-2">
+            <div className="h-6 w-20 rounded-md bg-emerald-50 dark:bg-emerald-950/40" />
+            <div className="h-6 w-20 rounded-md bg-emerald-50 dark:bg-emerald-950/40" />
+          </div>
         </div>
       ))}
     </div>
