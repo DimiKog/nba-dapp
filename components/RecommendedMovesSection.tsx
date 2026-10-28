@@ -15,9 +15,12 @@ type LoadState = "loading" | "ready" | "empty" | "error";
 export default function RecommendedMovesSection({
   league,
   teamId,
+  embedded = false,
 }: {
   league: "ldl" | "bdb";
   teamId: string;
+  /** When true, omit the outer Team Intelligence chrome (parent area owns it). */
+  embedded?: boolean;
 }) {
   const [state, setState] = useState<LoadState>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -52,22 +55,25 @@ export default function RecommendedMovesSection({
   const visible = visibleRecommendations(moves, expanded);
   const hiddenCount = Math.max(0, moves.length - INITIAL_RECOMMENDATION_COUNT);
 
-  return (
-    <section
-      id="recommended-moves"
-      className="mt-10 scroll-mt-32 rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/20 sm:p-5"
-    >
-      <div className="mb-4">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
-          Team intelligence
-        </p>
-        <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">
+  const heading = (
+      <div className={embedded ? "mb-4 mt-3" : "mb-4"}>
+        {!embedded && (
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-700 dark:text-blue-300">
+            Team intelligence
+          </p>
+        )}
+        <h2 className={`${embedded ? "" : "mt-1 "}text-xl font-black text-slate-950 dark:text-white`}>
           Recommended moves
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
           Moves that strengthen your recommended category plan.
         </p>
       </div>
+  );
+
+  const body = (
+    <>
+      {heading}
 
       {state === "loading" && <RecommendedMovesSkeleton />}
 
@@ -116,6 +122,23 @@ export default function RecommendedMovesSection({
           )}
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div id="recommended-moves" className="scroll-mt-32">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <section
+      id="recommended-moves"
+      className="mt-10 scroll-mt-32 rounded-2xl border border-blue-200/80 bg-blue-50/50 p-4 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/20 sm:p-5"
+    >
+      {body}
     </section>
   );
 }

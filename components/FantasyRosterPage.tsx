@@ -4,18 +4,16 @@ import {
   ApiResponseError,
   fetchFantasyRoster,
   fetchFantasyRosterPerformance,
-  fetchFantasyCategoryTargets,
   fetchFantasyTeamCategoryProfile,
   fetchFantasySeasonCategoryActuals,
   photoUrl,
 } from "@/lib/api";
 import RosterPerformanceTable from "@/components/RosterPerformanceTable";
-import TeamCategoryProfilePanel from "@/components/TeamCategoryProfile";
-import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamPayrollPanel from "@/components/TeamPayrollPanel";
 import TeamSectionNav from "@/components/TeamSectionNav";
-import RecommendedMovesSection from "@/components/RecommendedMovesSection";
+import TeamIntelligenceArea from "@/components/TeamIntelligenceArea";
+import TeamDataArea from "@/components/TeamDataArea";
 import RefreshDataButton from "@/components/RefreshDataButton";
 import { notFound } from "next/navigation";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
@@ -33,7 +31,6 @@ export default async function FantasyRosterPage({
   let seasonProfile = null;
   let windowProfile = null;
   let seasonActuals = null;
-  let initialTargets = null;
   let isPersonalTeam = false;
   const access = await loadCurrentFantasyAccess();
   const membership = membershipFor(access?.session ?? null, league);
@@ -51,14 +48,6 @@ export default async function FantasyRosterPage({
     windowProfile = windowResult;
     seasonActuals = actualsResult;
     isPersonalTeam = membership?.fantrax_team_id === teamId;
-    if (isPersonalTeam) {
-      initialTargets = await fetchFantasyCategoryTargets(
-        league,
-        teamId,
-        { actionScope: "all" },
-        access?.identityHeaders,
-      ).catch(() => null);
-    }
   } catch (error) {
     if (error instanceof ApiResponseError && error.status === 404) notFound();
     throw error;
@@ -67,6 +56,7 @@ export default async function FantasyRosterPage({
   const active  = roster.players.filter((p) => p.status === "Active");
   const reserve = roster.players.filter((p) => p.status === "Reserve");
   const ir      = roster.players.filter((p) => p.status === "IR");
+  const showIntelligence = isPersonalTeam || Boolean(seasonProfile);
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-10">
@@ -101,108 +91,107 @@ export default async function FantasyRosterPage({
         </div>
       </div>
 
-      {performance && <TeamPageOverview performance={performance} />}
+      {/* A. OVERVIEW */}
+      {performance && (
+        <TeamPageOverview
+          performance={performance}
+          insightsHref="#intelligence"
+          insightsLabel="Team intelligence"
+        />
+      )}
       <TeamSectionNav
         hasOverview={Boolean(performance)}
-        hasRecommendedMoves={isPersonalTeam}
+        hasIntelligence={showIntelligence}
+        hasRecommendedMoves={false}
         hasWatch={false}
         hasPayroll={Boolean(performance?.payroll)}
-        hasAnalysis={Boolean(seasonProfile)}
-        hasTargets={isPersonalTeam}
+        hasAnalysis={false}
+        hasTargets={false}
       />
 
-      {isPersonalTeam && (
-        <RecommendedMovesSection league={league} teamId={teamId} />
-      )}
+      {/*
+        B. TEAM INTELLIGENCE  →  C. TEAM DATA
+        Reverse later by swapping these two composition units only.
+      */}
+      <TeamIntelligenceArea
+        league={league}
+        teamId={teamId}
+        showRecommendedMoves={isPersonalTeam}
+        seasonProfile={seasonProfile}
+        windowProfile={windowProfile}
+        seasonActuals={seasonActuals}
+      />
 
-      <section id="roster" className="scroll-mt-32">
-        {performance ? (
-          <RosterPerformanceTable performance={performance} league={league} showWatch={isPersonalTeam} />
-      ) : (
-      <div className="mt-8 space-y-6">
-        {[
-          { label: "Active", players: active },
-          { label: "Reserve", players: reserve },
-          { label: "Injured Reserve", players: ir },
-        ].map(({ label, players }) =>
-          players.length === 0 ? null : (
-            <div key={label}>
-              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</h2>
-              <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-100 dark:bg-slate-800 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Player</th>
-                      <th className="px-4 py-2 text-left hidden sm:table-cell">NBA Team</th>
-                      <th className="px-4 py-2 text-left">Pos</th>
-                      <th className="px-4 py-2 text-right">2026-27 Salary</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {players.map((p) => {
-                      const photo = photoUrl(p.photo, p.nba_id);
-                      return (
-                        <tr key={p.name} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-3">
-                              <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-                                {photo ? (
-                                  <Image src={photo} alt={p.name} fill className="object-cover" unoptimized />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
-                                    {p.name[0]}
-                                  </div>
-                                )}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</p>
-                                {p.injury && (
-                                  <p className="text-xs text-red-500 truncate max-w-[180px]">{p.injury}</p>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 hidden sm:table-cell">
-                            {p.nba_team_short || p.nba_team || "—"}
-                          </td>
-                          <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{p.position}</td>
-                          <td className="px-4 py-2.5 text-right font-semibold text-blue-700 dark:text-blue-400 tabular-nums">
-                            {p.salary_2026_27 ?? <span className="text-slate-400">—</span>}
-                          </td>
+      <TeamDataArea>
+        <section id="roster" className="scroll-mt-32">
+          {performance ? (
+            <RosterPerformanceTable performance={performance} league={league} showWatch={isPersonalTeam} />
+          ) : (
+          <div className="mt-8 space-y-6">
+            {[
+              { label: "Active", players: active },
+              { label: "Reserve", players: reserve },
+              { label: "Injured Reserve", players: ir },
+            ].map(({ label, players }) =>
+              players.length === 0 ? null : (
+                <div key={label}>
+                  <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</h2>
+                  <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-100 dark:bg-slate-800 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                        <tr>
+                          <th className="px-4 py-2 text-left">Player</th>
+                          <th className="px-4 py-2 text-left hidden sm:table-cell">NBA Team</th>
+                          <th className="px-4 py-2 text-left">Pos</th>
+                          <th className="px-4 py-2 text-right">2026-27 Salary</th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )
-        )}
-      </div>
-      )}
-      </section>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {players.map((p) => {
+                          const photo = photoUrl(p.photo, p.nba_id);
+                          return (
+                            <tr key={p.name} className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                              <td className="px-4 py-2.5">
+                                <div className="flex items-center gap-3">
+                                  <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                                    {photo ? (
+                                      <Image src={photo} alt={p.name} fill className="object-cover" unoptimized />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center text-sm text-slate-400">
+                                        {p.name[0]}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-slate-900 dark:text-slate-100">{p.name}</p>
+                                    {p.injury && (
+                                      <p className="text-xs text-red-500 truncate max-w-[180px]">{p.injury}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400 hidden sm:table-cell">
+                                {p.nba_team_short || p.nba_team || "—"}
+                              </td>
+                              <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{p.position}</td>
+                              <td className="px-4 py-2.5 text-right font-semibold text-blue-700 dark:text-blue-400 tabular-nums">
+                                {p.salary_2026_27 ?? <span className="text-slate-400">—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+          )}
+        </section>
 
-      {performance?.payroll && <TeamPayrollPanel payroll={performance.payroll} />}
-
-      {seasonProfile && (
-        <TeamCategoryProfilePanel
-          seasonProfile={seasonProfile}
-          windowProfile={windowProfile}
-          seasonActuals={seasonActuals}
-          league={league}
-          teamId={teamId}
-        />
-      )}
-
-      {isPersonalTeam && (
-        <CategoryNeedsSection
-          league={league}
-          teamId={teamId}
-          teamName={roster.team_name}
-          initialTargets={initialTargets}
-          isPersonalTeam
-        />
-      )}
+        {performance?.payroll && <TeamPayrollPanel payroll={performance.payroll} />}
+      </TeamDataArea>
     </main>
   );
 }

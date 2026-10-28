@@ -37,12 +37,15 @@ export default function TeamCategoryProfilePanel({
   seasonActuals,
   league,
   teamId,
+  presentation = "primary",
 }: {
   seasonProfile: FantasyTeamCategoryProfile;
   windowProfile: FantasyTeamCategoryProfile | null;
   seasonActuals: FantasySeasonCategoryActuals | null;
   league: "ldl" | "bdb" | "gnfc";
   teamId: string;
+  /** Secondary: demoted under Team Intelligence (no competing eyebrow). */
+  presentation?: "primary" | "secondary";
 }) {
   const [activeTab, setActiveTab] = useState<CategoryTab>("performance");
   const [view, setView] = useState<ProfileView>("season");
@@ -68,15 +71,22 @@ export default function TeamCategoryProfilePanel({
     selected.basis_requested === "window" &&
     selected.basis_used === "season";
 
+  const secondary = presentation === "secondary";
+
   return (
-    <section id="team-analysis" className="mt-10 scroll-mt-32">
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-5 dark:border-slate-700 sm:flex-row sm:items-start sm:justify-between">
+    <section
+      id="team-analysis"
+      className={secondary ? "scroll-mt-32" : "mt-10 scroll-mt-32"}
+    >
+      <div className={`overflow-hidden bg-white dark:bg-slate-900 ${secondary ? "" : "rounded-2xl border border-slate-200 shadow-sm dark:border-slate-700"}`}>
+        <div className={`flex flex-col gap-4 border-b border-slate-200 dark:border-slate-700 sm:flex-row sm:items-start sm:justify-between ${secondary ? "px-4 py-4" : "px-5 py-5"}`}>
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
-              Team intelligence
-            </p>
-            <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">
+            {!secondary && (
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
+                Team intelligence
+              </p>
+            )}
+            <h2 className={`${secondary ? "text-lg" : "mt-1 text-xl"} font-black text-slate-950 dark:text-white`}>
               Category profile
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
