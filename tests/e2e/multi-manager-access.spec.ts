@@ -32,6 +32,8 @@ test("unconfigured league stays closed across shared fantasy routes", async ({ r
     "/api/fantasy/third/trade-suggestions",
     "/api/fantasy/third/trade-package-suggestions",
     "/api/fantasy/third/trade-package-analysis",
+    "/api/fantasy/third/roster/team-a/roster-move-discovery",
+    "/api/fantasy/third/roster/team-a/roster-move-analysis",
   ];
   for (const path of postRoutes) {
     expect((await request.post(`${app}${path}`, { data: {} })).status()).toBe(404);
@@ -70,6 +72,79 @@ test("personal roster shows evidence-only watch and FA navigation", async ({ pag
   await expect(watch.getByText(/not drop recommendations/i)).toBeVisible();
   await expect(watch.getByRole("link", { name: "Explore free agents" })).toHaveAttribute("href", "#player-targets");
   await expect(watch.getByRole("link", { name: "Player details" })).toHaveAttribute("href", "/players/20000?league=ldl&from=roster");
+});
+
+test("roster-move discovery and analysis stay personal-team only", async ({ request }) => {
+  const [tokenA, tokenB] = await Promise.all([
+    tokenFor(request, "manager-a-subject"),
+    tokenFor(request, "manager-b-subject"),
+  ]);
+  const ownDiscovery = `${app}/api/fantasy/ldl/roster/ldl-team-a/roster-move-discovery`;
+  const ownAnalysis = `${app}/api/fantasy/ldl/roster/ldl-team-a/roster-move-analysis`;
+  const otherDiscovery = `${app}/api/fantasy/ldl/roster/ldl-team-b/roster-move-discovery`;
+
+  expect((await request.post(ownDiscovery, { data: { basis: "season" } })).status()).toBe(401);
+  expect((await request.post(ownAnalysis, {
+    data: { remove_nba_id: 1, add_nba_id: 2 },
+  })).status()).toBe(401);
+
+  const cross = await request.post(otherDiscovery, {
+    headers: { [accessHeader]: tokenA },
+    data: { basis: "season" },
+  });
+  expect(cross.status()).toBe(403);
+  expect(await cross.json()).toEqual({
+    error: "Trade analysis is restricted to your own team",
+  });
+
+  expect((await request.post(ownDiscovery, {
+    headers: { [accessHeader]: tokenB },
+    data: { basis: "season" },
+  })).status()).toBe(403);
+
+  const proxied = await request.post(ownDiscovery, {
+    headers: { [accessHeader]: tokenA },
+    data: { basis: "season" },
+  });
+  expect(proxied.ok()).toBeTruthy();
+  const payload = await proxied.json();
+  expect(payload.team_id).toBe("ldl-team-a");
+  expect(JSON.stringify(payload).toLowerCase()).not.toContain("x-fantasy-identity-key");
+  expect(JSON.stringify(payload).toLowerCase()).not.toContain("e2e-identity-key");
+});
+
+test("personal roster recommended moves show top three and on-demand analysis", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+  await page.goto(`${app}/fantasy/ldl/roster/ldl-team-a`);
+
+  const section = page.locator("#recommended-moves");
+  await expect(section.getByRole("heading", { name: "Recommended moves" })).toBeVisible();
+  await expect(section.getByRole("link", { name: "Recommended moves" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Recommended moves" })).toBeVisible();
+
+  await expect(section.getByRole("heading", { name: /Add Free Agent 1.*Drop Roster Player 1/ })).toBeVisible();
+  await expect(section.getByText("Jordan Goodwin")).toBeVisible();
+  await expect(section.getByText("Free Agent 4")).toHaveCount(0);
+  await expect(section.getByText("OREB ↑5 ranks").first()).toBeVisible();
+  await expect(section.getByText("No PROTECT categories damaged").first()).toBeVisible();
+  await expect(section.getByText("Promising · Verify role").first()).toBeVisible();
+  await expect(section.getByText("current_role_unverified")).toHaveCount(0);
+  await expect(section.getByText("needs_review")).toHaveCount(0);
+
+  await section.getByRole("button", { name: /View all recommendations/ }).click();
+  await expect(section.getByText("Free Agent 4")).toBeVisible();
+  await expect(section.getByText("PROTECT damaged: ST")).toBeVisible();
+
+  const analysisRequests: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("roster-move-analysis") && req.method() === "POST") {
+      analysisRequests.push(req.url());
+    }
+  });
+  await section.getByRole("button", { name: "View analysis" }).first().click();
+  await expect(section.getByText(/#11 → #6/)).toBeVisible();
+  expect(analysisRequests.length).toBe(1);
 });
 
 test("category profile keeps Fantrax actuals distinct from current-roster potential", async ({ page, request }) => {

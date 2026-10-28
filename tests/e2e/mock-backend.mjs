@@ -455,9 +455,153 @@ const server = createServer((request, response) => {
     }));
     return;
   }
+  const discoveryMatch = url.pathname.match(
+    /^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/roster-move-discovery$/,
+  );
+  if (discoveryMatch && request.method === "POST") {
+    const [, league, teamId] = discoveryMatch;
+    const session = sessionFor(request);
+    if (!session) return send(response, 401, { error: "Unknown test identity" });
+    const membership = session.memberships.find((item) => (
+      item.league_slug === league && item.fantrax_team_id === teamId
+    ));
+    if (!membership) return send(response, 403, { error: "Not your team" });
+    let rawBody = "";
+    request.on("data", (chunk) => { rawBody += chunk; });
+    request.on("end", () => {
+      send(response, 200, rosterMoveDiscoveryFixture(league, teamId));
+    });
+    return;
+  }
+  const analysisMatch = url.pathname.match(
+    /^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/roster-move-analysis$/,
+  );
+  if (analysisMatch && request.method === "POST") {
+    const [, league, teamId] = analysisMatch;
+    const session = sessionFor(request);
+    if (!session) return send(response, 401, { error: "Unknown test identity" });
+    const membership = session.memberships.find((item) => (
+      item.league_slug === league && item.fantrax_team_id === teamId
+    ));
+    if (!membership) return send(response, 403, { error: "Not your team" });
+    let rawBody = "";
+    request.on("data", (chunk) => { rawBody += chunk; });
+    request.on("end", () => {
+      const body = JSON.parse(rawBody || "{}");
+      send(response, 200, rosterMoveAnalysisFixture(body));
+    });
+    return;
+  }
 
   send(response, 404, { error: `No E2E fixture for ${url.pathname}` });
 });
+
+function rosterMoveDiscoveryFixture(league, teamId) {
+  const moves = [1, 2, 3, 4].map((index) => ({
+    tier: index === 1 ? "tier_1_target_ready" : "tier_2_target_needs_review",
+    pair_feasibility: {
+      status: index === 1 ? "feasible" : "needs_review",
+      reasons: index === 1 ? [] : ["current_role_unverified"],
+      salary_verified: true,
+      cap_result: "compliant",
+    },
+    remove_player: {
+      nba_id: 3000 + index,
+      name: `Roster Player ${index}`,
+      observed: { games: 10 },
+    },
+    add_player: {
+      nba_id: 4000 + index,
+      name: index === 2 ? "Jordan Goodwin" : `Free Agent ${index}`,
+      observed: { games: index === 2 ? 3 : 12 },
+      contribution_basis: { resolution: index === 2 ? "blended" : "current_only" },
+      actionability: {
+        status: index === 1 ? "ready" : "needs_review",
+        reasons: index === 1 ? [] : ["current_role_unverified"],
+      },
+      injury: null,
+    },
+    target: { improved: ["oreb"], declined: [] },
+    protect: {
+      improved: [],
+      preserved: ["points"],
+      damaged: index === 4 ? ["steals"] : [],
+    },
+    meaningful_transitions: [
+      {
+        key: "oreb",
+        classification: "TARGET",
+        transition: "improved",
+        rank_delta: -5,
+        z_delta: 0.35,
+      },
+    ],
+    salary_cap: {
+      applies: true,
+      status: "applicable",
+      verified: true,
+      delta: -200_000,
+      cap_result: "compliant",
+    },
+    invented_drop: false,
+    reason_codes: [],
+  }));
+  return {
+    league: { slug: league, season_phase: "in_season" },
+    team_id: teamId,
+    basis_requested: "season",
+    basis_used: "season",
+    tiers: {
+      tier_1_target_ready: { count_evaluated: 1, returned: [moves[0]] },
+      tier_2_target_needs_review: {
+        count_evaluated: 3,
+        returned: [moves[1], moves[2], moves[3]],
+      },
+      tier_3_target_protect_tradeoff: { count_evaluated: 0, returned: [] },
+      tier_economically_unverified: { count_evaluated: 0, returned: [] },
+      tier_blocked: { count_evaluated: 0, returned: [] },
+      tier_other: { count_evaluated: 0, returned: [] },
+    },
+    method: { overall_score: null },
+  };
+}
+
+function rosterMoveAnalysisFixture(body) {
+  return {
+    team_id: "ldl-team-a",
+    basis_used: "season",
+    move: {
+      removed: [{ nba_id: body.remove_nba_id, name: "Drop Candidate", observed: { games: 10 } }],
+      added: [{
+        nba_id: body.add_nba_id,
+        name: "Add Candidate",
+        observed: { games: 3 },
+        contribution_basis: { resolution: "blended" },
+      }],
+      invented_drop: false,
+    },
+    category_impact: [
+      {
+        key: "oreb",
+        label: "OREB",
+        classification: "TARGET",
+        before: { league_rank: 11, z: 0.01 },
+        after: { league_rank: 6, z: 0.4 },
+        rank_delta: -5,
+        z_delta: 0.39,
+        transition: "improved",
+      },
+    ],
+    strategic_impact: {
+      target: { improved: ["oreb"], declined: [], unchanged: [] },
+      protect: { improved: [], preserved: ["points"], damaged: [] },
+    },
+    salary_cap: { applies: true, delta: -200_000 },
+    actionability: {
+      added: { status: "needs_review", reasons: ["current_role_unverified"] },
+    },
+  };
+}
 
 function leagueFixture(slug) {
   return {
