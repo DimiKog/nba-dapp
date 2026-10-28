@@ -1,3 +1,10 @@
+import type {
+  RosterMoveAnalysis,
+  RosterMoveAnalysisRequest,
+  RosterMoveDiscovery,
+  RosterMoveDiscoveryRequest,
+} from "@/lib/rosterMoveTypes";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://mybackend.dimikog.org";
 
 export class ApiResponseError extends Error {
@@ -1904,6 +1911,64 @@ export async function fetchPersonalFantasyPerformance(
   const league = leagues.find((item) => item.slug === leagueSlug && item.enabled);
   if (!league?.personal_team_id) return null;
   return fetchFantasyRosterPerformance(leagueSlug, league.personal_team_id);
+}
+
+// ── Team Intelligence roster moves ───────────────────────────────────────────
+
+export type {
+  RosterMoveAnalysis,
+  RosterMoveAnalysisRequest,
+  RosterMoveDiscovery,
+  RosterMoveDiscoveryRequest,
+  RosterMoveRecommendation,
+} from "@/lib/rosterMoveTypes";
+
+export async function fetchRosterMoveDiscovery(
+  league: "ldl" | "bdb",
+  teamId: string,
+  body: RosterMoveDiscoveryRequest = { basis: "season" },
+): Promise<RosterMoveDiscovery> {
+  const res = await fetch(
+    `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/roster-move-discovery`,
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(
+      payload?.error ?? "Roster move discovery failed",
+      res.status,
+    );
+  }
+  return res.json();
+}
+
+export async function fetchRosterMoveAnalysis(
+  league: "ldl" | "bdb",
+  teamId: string,
+  body: RosterMoveAnalysisRequest,
+): Promise<RosterMoveAnalysis> {
+  const res = await fetch(
+    `/api/fantasy/${league}/roster/${encodeURIComponent(teamId)}/roster-move-analysis`,
+    {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiResponseError(
+      payload?.error ?? "Roster move analysis failed",
+      res.status,
+    );
+  }
+  return res.json();
 }
 
 // ── Scoreboard & News ────────────────────────────────────────────────────────

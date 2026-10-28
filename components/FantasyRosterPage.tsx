@@ -16,6 +16,7 @@ import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import TeamPageOverview from "@/components/TeamPageOverview";
 import TeamPayrollPanel from "@/components/TeamPayrollPanel";
 import TeamSectionNav from "@/components/TeamSectionNav";
+import RecommendedMovesSection from "@/components/RecommendedMovesSection";
 import RefreshDataButton from "@/components/RefreshDataButton";
 import { notFound } from "next/navigation";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
@@ -104,11 +105,16 @@ export default async function FantasyRosterPage({
       {performance && <TeamPageOverview performance={performance} />}
       <TeamSectionNav
         hasOverview={Boolean(performance)}
+        hasRecommendedMoves={isPersonalTeam}
         hasWatch={isPersonalTeam && Boolean(performance?.players.some((player) => player.roster_watch))}
         hasPayroll={Boolean(performance?.payroll)}
         hasAnalysis={Boolean(seasonProfile)}
         hasTargets={isPersonalTeam}
       />
+
+      {isPersonalTeam && (
+        <RecommendedMovesSection league={league} teamId={teamId} />
+      )}
 
       {isPersonalTeam && performance && (
         <RosterWatchPanel league={league} players={performance.players} hasTargets />
