@@ -10,8 +10,9 @@ import {
 type DiscoveryStatus = "idle" | "loading" | "ready" | "empty" | "error";
 
 /**
- * Compact "How your team looks" strip from the SSR category profile.
- * Punt candidates populate only after system recommended_strategy loads.
+ * Compact "How your team looks" strip.
+ * Strongest is profile-derived; Needs attention / Punt candidate wait on
+ * system recommended_strategy (TARGET / PUNT_CANDIDATE).
  */
 export default function TeamIntelligenceSummary({
   profile,
@@ -23,9 +24,9 @@ export default function TeamIntelligenceSummary({
   discoveryStatus?: DiscoveryStatus;
 }) {
   const strongest = selectStrongestCategories(profile);
-  const needsAttention = selectNeedsAttentionCategories(profile);
+  const needsAttention = selectNeedsAttentionCategories(strategy);
   const puntCandidates = selectPuntCandidateCategories(strategy);
-  const showPuntRow = discoveryStatus !== "idle";
+  const strategyDependent = discoveryStatus !== "idle";
 
   return (
     <div className="rounded-xl border border-slate-200/90 bg-white/90 p-3 dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
@@ -38,27 +39,53 @@ export default function TeamIntelligenceSummary({
           value={strongest.length ? formatLookItems(strongest) : "No clear strengths yet"}
           tone={strongest.length ? "strength" : "muted"}
         />
-        <LookRow
-          label="Needs attention"
-          value={needsAttention.length ? formatLookItems(needsAttention) : "No clear weaknesses yet"}
-          tone={needsAttention.length ? "weakness" : "muted"}
-        />
-        {showPuntRow && (
-          discoveryStatus === "loading" ? (
-            <LookRow label="Punt candidate" value="Loading…" tone="muted" />
-          ) : discoveryStatus === "error" ? (
-            <LookRow label="Punt candidate" value="Unavailable" tone="muted" />
-          ) : puntCandidates.length > 0 ? (
-            <LookRow
-              label="Punt candidate"
-              value={formatLookItems(puntCandidates)}
-              tone="punt"
-            />
-          ) : null
+        {strategyDependent && (
+          <StrategyDependentRow
+            label="Needs attention"
+            status={discoveryStatus}
+            items={needsAttention}
+            tone="weakness"
+          />
+        )}
+        {strategyDependent && (
+          <StrategyDependentRow
+            label="Punt candidate"
+            status={discoveryStatus}
+            items={puntCandidates}
+            tone="punt"
+            omitWhenEmpty
+          />
         )}
       </dl>
     </div>
   );
+}
+
+function StrategyDependentRow({
+  label,
+  status,
+  items,
+  tone,
+  omitWhenEmpty = false,
+}: {
+  label: string;
+  status: Exclude<DiscoveryStatus, "idle">;
+  items: ReturnType<typeof selectNeedsAttentionCategories>;
+  tone: "weakness" | "punt";
+  omitWhenEmpty?: boolean;
+}) {
+  if (status === "loading") {
+    return <LookRow label={label} value="Loading…" tone="muted" />;
+  }
+  if (status === "error") {
+    return <LookRow label={label} value="Unavailable" tone="muted" />;
+  }
+  if (!items.length) {
+    return omitWhenEmpty ? null : (
+      <LookRow label={label} value="None right now" tone="muted" />
+    );
+  }
+  return <LookRow label={label} value={formatLookItems(items)} tone={tone} />;
 }
 
 function LookRow({

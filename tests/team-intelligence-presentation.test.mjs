@@ -44,22 +44,29 @@ test("strongest prefers strength verdicts ordered by league rank", () => {
   assert.deepEqual(formatLookItems(items), "AST #1 · STL #1 · 3PTM #2");
 });
 
-test("needs attention uses weakness verdicts only and prefers higher z", () => {
-  const items = selectNeedsAttentionCategories(profile([
-    category({ key: "oreb", label: "OREB", league_rank: 16, z: -0.8, verdict: "weakness" }),
-    category({ key: "assist_turnover", label: "A/TO", league_rank: 17, z: -0.9, verdict: "weakness" }),
-    category({ key: "turnovers", label: "TO", league_rank: 18, z: -1.4, verdict: "weakness" }),
-    category({ key: "fg_pct", label: "FG%", league_rank: 10, z: 0, verdict: "neutral" }),
-  ]));
-  assert.deepEqual(formatLookItems(items), "OREB · A/TO · TO");
+test("needs attention uses backend TARGET rows in backend order", () => {
+  assert.deepEqual(selectNeedsAttentionCategories(null), []);
+  const items = selectNeedsAttentionCategories({
+    categories: [
+      { key: "assists", label: "AST", classification: "PROTECT" },
+      { key: "oreb", label: "OREB", classification: "TARGET" },
+      { key: "assist_turnover", label: "A/TO", classification: "TARGET" },
+      { key: "turnovers", label: "TO", classification: "PUNT_CANDIDATE" },
+      { key: "fg_pct", label: "FG%", classification: "FLEX" },
+    ],
+  });
+  assert.deepEqual(formatLookItems(items), "OREB · A/TO");
 });
 
-test("needs attention does not invent TARGET or PUNT classifications", () => {
-  const items = selectNeedsAttentionCategories(profile([
-    category({ key: "oreb", label: "OREB", league_rank: 16, z: -0.8, verdict: "weakness" }),
-  ]));
-  assert.equal(items[0].display, "OREB");
-  assert.equal(items[0].display.includes("TARGET"), false);
+test("needs attention does not use profile weaknesses or invent classifications", () => {
+  const items = selectNeedsAttentionCategories({
+    categories: [
+      { key: "turnovers", label: "TO", classification: "PUNT_CANDIDATE" },
+      { key: "oreb", label: "OREB", classification: "TARGET" },
+    ],
+  });
+  assert.deepEqual(items.map((item) => item.display), ["OREB"]);
+  assert.equal(items.some((item) => item.key === "turnovers"), false);
 });
 
 test("punt candidates come only from recommended_strategy PUNT_CANDIDATE rows", () => {

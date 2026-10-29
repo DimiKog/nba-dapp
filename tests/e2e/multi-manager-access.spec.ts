@@ -117,9 +117,11 @@ test("personal roster recommended moves show top three and on-demand analysis", 
 
   const intelligence = page.locator("#intelligence");
   await expect(intelligence.getByText("Team intelligence").first()).toBeVisible();
+  const teamLook = intelligence.locator("div").filter({ has: intelligence.getByRole("heading", { name: "How your team looks" }) }).first();
   await expect(intelligence.getByRole("heading", { name: "How your team looks" })).toBeVisible();
-  await expect(intelligence.getByText("AST #1 · STL #1 · 3PTM #2")).toBeVisible();
-  await expect(intelligence.getByText("OREB · A/TO · TO")).toBeVisible();
+  await expect(teamLook.getByText("AST #1 · STL #1 · 3PTM #2")).toBeVisible();
+  await expect(teamLook.getByText("OREB · A/TO", { exact: true })).toBeVisible();
+  await expect(teamLook.getByText("TO", { exact: true })).toBeVisible();
   await expect(intelligence.getByRole("heading", { name: "Recommended strategy" })).toBeVisible();
   await expect(intelligence.getByText("Based on your current category profile")).toBeVisible();
   await expect(intelligence.getByText("PROTECT", { exact: true })).toBeVisible();
