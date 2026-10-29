@@ -48,7 +48,6 @@ export type StrategyGroup = {
 };
 
 const STRONGEST_LIMIT = 3;
-const NEEDS_ATTENTION_LIMIT = 3;
 
 function displayLabel(category: { key: string; label?: string | null }): string {
   const label = category.label?.trim();
@@ -76,20 +75,14 @@ export function selectStrongestCategories(
 }
 
 /**
- * Profile-based repair opportunities.
- * Uses verdict === weakness only — does not invent TARGET/FLEX/PUNT from strategy.
- * Prefers more repairable weaknesses (higher z) so the row tends to align with
- * categories the system later classifies as TARGET, without waiting on discovery.
+ * Needs attention = backend TARGET categories from recommended_strategy.
+ * Preserves backend order. Does not recompute TARGET or use profile weaknesses.
  */
 export function selectNeedsAttentionCategories(
-  profile: FantasyTeamCategoryProfile | null | undefined,
-  limit = NEEDS_ATTENTION_LIMIT,
+  strategy: RosterMoveRecommendedStrategy | null | undefined,
 ): TeamLookItem[] {
-  if (!profile?.categories?.length) return [];
-  return [...profile.categories]
-    .filter((row) => row.verdict === "weakness")
-    .sort(compareMoreRepairableWeaknessFirst)
-    .slice(0, limit)
+  return (strategy?.categories ?? [])
+    .filter((row) => row.classification === "TARGET" && row.key)
     .map((row) => ({
       key: row.key,
       display: displayLabel(row),
@@ -156,16 +149,4 @@ function compareStrongerFirst(a: FantasyTeamCategory, b: FantasyTeamCategory): n
   const bRank = b.league_rank ?? Number.POSITIVE_INFINITY;
   if (aRank !== bRank) return aRank - bRank;
   return (b.z ?? Number.NEGATIVE_INFINITY) - (a.z ?? Number.NEGATIVE_INFINITY);
-}
-
-function compareMoreRepairableWeaknessFirst(
-  a: FantasyTeamCategory,
-  b: FantasyTeamCategory,
-): number {
-  const aZ = a.z ?? Number.NEGATIVE_INFINITY;
-  const bZ = b.z ?? Number.NEGATIVE_INFINITY;
-  if (aZ !== bZ) return bZ - aZ;
-  const aRank = a.league_rank ?? Number.POSITIVE_INFINITY;
-  const bRank = b.league_rank ?? Number.POSITIVE_INFINITY;
-  return aRank - bRank;
 }
