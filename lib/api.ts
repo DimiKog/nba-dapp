@@ -1362,7 +1362,10 @@ export interface FantasyCategoryTargets {
     to: string;
     season: string;
   };
-  need_source: "profile_weaknesses" | "relative_lowest" | "user_selected_category";
+  need_source:
+    | "system_recommended_strategy"
+    | "system_recommended_strategy_no_targets"
+    | "user_selected_category";
   needs: FantasyCategoryNeed[];
   sample: {
     candidate_universe: number;

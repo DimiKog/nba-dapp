@@ -834,7 +834,7 @@ function targetsFixture(league, membership, managerId, actionScope) {
     basis_used: "season",
     fallback_reason: null,
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
-    need_source: "profile_weaknesses",
+    need_source: "system_recommended_strategy",
     needs: [],
     sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: actionScope === "all" ? 2 : 1, returned: actionScope === "all" ? 2 : 1 },
     filters: { availability: "free_agent", position: null, limit: 12 },
