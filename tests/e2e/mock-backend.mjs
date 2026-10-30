@@ -813,20 +813,26 @@ function leaguePlayerExplorerFixture(league) {
     ["Dallas Mavericks", "DAL"],
   ];
 
+  // Rostered identity must remain the shared pre-Discovery explorer contract used by
+  // Trade Analyzer and other consumers of GET /api/fantasy/{league}/players:
+  //   name = "{franchise} Player {n}", nba_id = 10000+n (team A) / 11000+n (team B),
+  //   Player 1 position = "G" so option labels match /^xrtc Player 1 G/.
+  // Browse still gets rich stats/FA rows below; only the identity contract is restored.
   const rostered = members.flatMap((member, teamIndex) => (
     Array.from({ length: 6 }, (_, index) => {
       const rank = teamIndex * 6 + index + 1;
       const [nbaTeam, nbaShort] = nbaTeams[(teamIndex + index) % nbaTeams.length];
       const points = 22 - index * 1.4 - teamIndex;
+      const playerNumber = index + 1;
       return {
-        nba_id: 21_000 + teamIndex * 100 + index,
-        player_id: 31_000 + teamIndex * 100 + index,
-        name: `${member.franchise_name.split(" ")[0]} ${positions[index % positions.length]} ${index + 1}`,
-        short_name: `${member.franchise_name.split(" ")[0]} ${index + 1}`,
+        nba_id: 10_000 + teamIndex * 1_000 + index,
+        player_id: 20_000 + teamIndex * 1_000 + index,
+        name: `${member.franchise_name} Player ${playerNumber}`,
+        short_name: `${member.franchise_name} Player ${playerNumber}`,
         status: index === 5 ? "Reserve" : "Active",
-        nba_team: nbaTeam,
-        nba_team_short: nbaShort,
-        position: positions[index % positions.length],
+        nba_team: index === 0 ? "Test Team" : nbaTeam,
+        nba_team_short: index === 0 ? "TST" : nbaShort,
+        position: index === 0 ? "G" : positions[index % positions.length],
         photo: null,
         availability: "rostered",
         fantasy_team: {

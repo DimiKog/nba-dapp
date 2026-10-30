@@ -107,7 +107,8 @@ test.describe("Discovery Slice 3 — Fit to my plan", () => {
 
     await page.getByRole("tab", { name: "Fit to my plan" }).click();
     await expect(page.getByTestId("discovery-fit")).toBeVisible();
-    expect(targetHits.some((url) => url.includes("/targets"))).toBeTruthy();
+    // discovery-fit mounts during session resolve; wait for the targets fetch itself.
+    await expect.poll(() => targetHits.some((url) => url.includes("/targets"))).toBe(true);
   });
 
   test("LDL Fit keeps cap scope control", async ({ page, request }) => {
