@@ -39,8 +39,8 @@ test.describe("Discovery Slice 0 visual review", () => {
 
     await page.goto(`${app}/players?league=ldl&view=fit`);
     await expect(page.getByRole("tab", { name: "Fit to my plan" })).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByText("Fit to my plan is being consolidated")).toBeVisible();
-    await expect(page.getByLabel("Strategy context")).toBeVisible();
+    await expect(page.getByTestId("discovery-fit")).toBeVisible();
+    await expect(page.getByText("Fit to my plan is being consolidated")).toHaveCount(0);
     await page.screenshot({
       path: path.join(outDir, "02-fit-desktop.png"),
       fullPage: true,

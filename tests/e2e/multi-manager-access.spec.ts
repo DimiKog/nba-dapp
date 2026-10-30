@@ -590,7 +590,10 @@ test("Player Discovery defaults to Browse and keeps GNFC distinct", async ({ pag
   await expect(page).toHaveURL(/league=gnfc/);
   await expect(page).not.toHaveURL(/league=ldl/);
   await expect(page.getByRole("tab", { name: "Fit to my plan" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Fit to my plan is being consolidated")).toBeVisible();
+  await expect(page.getByTestId("discovery-fit")).toBeVisible();
+  // manager-a has no GNFC membership — intentional no-team state, not an LDL remap.
+  await expect(page.getByTestId("fit-no-team")).toBeVisible();
+  await expect(page.getByText("Fit to my plan is being consolidated")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "GNFC", pressed: true })).toBeVisible();
 });
 

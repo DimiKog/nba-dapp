@@ -15,6 +15,10 @@ async function tokenFor(
 }
 
 test.describe("Discovery Slice 2 — Watched + FA Trends", () => {
+  test.beforeEach(async ({ request }) => {
+    await request.post("http://127.0.0.1:3101/test/reset-state");
+  });
+
   test("Watched mounts real watchlist entries with priority order and notes", async ({ page, request }) => {
     const token = await tokenFor(request, "manager-a-subject");
     await page.context().setExtraHTTPHeaders({ [accessHeader]: token });

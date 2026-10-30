@@ -1345,6 +1345,24 @@ export interface FantasyCategoryRecommendation {
   last_resort: FantasyTargetCandidate[];
 }
 
+export interface FantasyStrategySummaryCategory {
+  key: string;
+  label: string;
+  classification: "TARGET" | "PROTECT" | "FLEX" | "PUNT_CANDIDATE";
+  league_rank?: number | null;
+  percentile?: number | null;
+  z?: number | null;
+  verdict?: FantasyCategoryVerdict | null;
+  in_core?: boolean | null;
+}
+
+export interface FantasyStrategySummary {
+  source: "system_recommended_strategy";
+  minimum_winning_core?: number | null;
+  recommended_core_size?: number | null;
+  categories: FantasyStrategySummaryCategory[];
+}
+
 export interface FantasyCategoryTargets {
   league: FantasyLeague & { categories?: string[] };
   team: {
@@ -1367,6 +1385,8 @@ export interface FantasyCategoryTargets {
     | "system_recommended_strategy_no_targets"
     | "user_selected_category";
   needs: FantasyCategoryNeed[];
+  /** Additive live System Recommended Strategy context for Fit UI. */
+  strategy_summary?: FantasyStrategySummary;
   sample: {
     candidate_universe: number;
     eligible_candidates: number;

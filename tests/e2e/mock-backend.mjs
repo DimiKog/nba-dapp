@@ -112,6 +112,14 @@ const server = createServer((request, response) => {
   if (url.pathname === "/cdn-cgi/access/certs") {
     return send(response, 200, { keys: [publicJwk] });
   }
+  if (url.pathname === "/test/reset-state" && request.method === "POST") {
+    watchlistStore.clear();
+    privateTradeOutlooks.clear();
+    reviewedInjuryReports.clear();
+    performanceDelays.clear();
+    sessionDelays.clear();
+    return send(response, 200, { ok: true });
+  }
   if (url.pathname === "/test/access-token") {
     const subject = url.searchParams.get("subject");
     const session = subject ? sessions[subject] : null;
@@ -171,7 +179,13 @@ const server = createServer((request, response) => {
   if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/targets") {
     const member = sessionFor(request)?.memberships.find((item) => item.league_slug === "gnfc");
     if (!member) return send(response, 403, { error: "GNFC membership required" });
-    const fixture = targetsFixture("gnfc", member, 3, url.searchParams.get("action_scope"));
+    const fixture = targetsFixture(
+      "gnfc",
+      member,
+      3,
+      url.searchParams.get("action_scope"),
+      url.searchParams.get("category"),
+    );
     const candidate = fixture.candidates[0];
     candidate.season_average = { games: 2, minutes: 25, points: 17 };
     candidate.fit_explanation.sample_games = 2;
@@ -180,9 +194,7 @@ const server = createServer((request, response) => {
     candidate.fit_explanation.sample_adjustment = "current_season_only";
     candidate.actionability = { status: "requires_move", reasons: ["roster_drop_required", "current_role_unverified"], role_signal: "insufficient_current_sample", cap_result: "not_applicable", roster_result: "drop_required" };
     candidate.minutes_trend = { basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26", state: "early_increase", sample_games: 2, minutes: 25, previous_minutes: 17, delta_minutes: 8, delta_percent: 47, previous_games: 60, latest_game_date: "2026-10-24" };
-    fixture.needs = [{ key: "points", label: "PTS", of: 12, team_rank: 8, team_z: -0.2, weight: 1 }];
-    fixture.category_recommendations = [{ key: "points", label: "PTS", free_agent_market: "limited", message: "Early current-season help", strong_free_agents: [], best_available: [candidate], trade_targets: [], last_resort: [] }];
-    return send(response, 200, fixture);
+    return send(response, 200, applyTargetsPagination(fixture, url.searchParams));
   }
   const outlookMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/my-trade-outlook$/);
   if (outlookMatch) {
@@ -480,24 +492,14 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    const fixture = targetsFixture(league, membership, session.user.id, url.searchParams.get("action_scope"));
-    if (url.searchParams.get("position") === "PG") {
-      const first = fixture.candidates[0];
-      const all = Array.from({ length: 25 }, (_, index) => ({
-        ...first,
-        nba_id: first.nba_id + 1001 + index,
-        player_id: first.player_id + 1001 + index,
-        name: `Paged candidate ${index + 1}`,
-        short_name: `Paged candidate ${index + 1}`,
-        position: "PG",
-      }));
-      const offset = Number(url.searchParams.get("offset") || 0);
-      fixture.candidates = all.slice(offset, offset + 24);
-      fixture.sample.filtered_candidates = all.length;
-      fixture.sample.returned = fixture.candidates.length;
-      fixture.filters.offset = offset;
-    }
-    return send(response, 200, fixture);
+    const fixture = targetsFixture(
+      league,
+      membership,
+      session.user.id,
+      url.searchParams.get("action_scope"),
+      url.searchParams.get("category"),
+    );
+    return send(response, 200, applyTargetsPagination(fixture, url.searchParams));
   }
   if (/^\/api\/fantasy\/(ldl|bdb)\/trade-suggestions$/.test(url.pathname)) {
     let rawBody = "";
@@ -1069,75 +1071,235 @@ function categoryProfileFixture(league, membership) {
   };
 }
 
-function targetsFixture(league, membership, managerId, actionScope) {
+function strategySummaryFixture(league) {
+  if (league === "gnfc") {
+    return {
+      source: "system_recommended_strategy",
+      minimum_winning_core: 2,
+      recommended_core_size: 2,
+      categories: [
+        { key: "points", label: "PTS", classification: "TARGET", league_rank: 8, percentile: 0.35, z: -0.4, verdict: "weakness", in_core: true },
+        { key: "rebounds", label: "REB", classification: "PROTECT", league_rank: 3, percentile: 0.8, z: 0.9, verdict: "strength", in_core: true },
+        { key: "assists", label: "AST", classification: "FLEX", league_rank: 7, percentile: 0.45, z: -0.1, verdict: "neutral", in_core: false },
+      ],
+    };
+  }
+  return {
+    source: "system_recommended_strategy",
+    minimum_winning_core: 6,
+    recommended_core_size: 7,
+    categories: [
+      { key: "fg_pct", label: "FG%", classification: "TARGET", league_rank: 15, percentile: 0.25, z: -0.8, verdict: "weakness", in_core: true },
+      { key: "ft_pct", label: "FT%", classification: "TARGET", league_rank: 14, percentile: 0.3, z: -0.7, verdict: "weakness", in_core: true },
+      { key: "dreb", label: "DREB", classification: "TARGET", league_rank: 13, percentile: 0.35, z: -0.55, verdict: "weakness", in_core: true },
+      { key: "three_pm", label: "3PTM", classification: "PROTECT", league_rank: 4, percentile: 0.8, z: 0.85, verdict: "strength", in_core: true },
+      { key: "points", label: "PTS", classification: "PROTECT", league_rank: 5, percentile: 0.75, z: 0.7, verdict: "strength", in_core: true },
+      { key: "assists", label: "AST", classification: "PROTECT", league_rank: 3, percentile: 0.85, z: 1.0, verdict: "strength", in_core: true },
+      { key: "steals", label: "STL", classification: "PROTECT", league_rank: 6, percentile: 0.7, z: 0.55, verdict: "strength", in_core: true },
+      { key: "blocks", label: "BLK", classification: "PROTECT", league_rank: 7, percentile: 0.65, z: 0.4, verdict: "strength", in_core: true },
+      { key: "oreb", label: "OREB", classification: "FLEX", league_rank: 11, percentile: 0.45, z: -0.05, verdict: "neutral", in_core: false },
+      { key: "assist_turnover", label: "A/TO", classification: "FLEX", league_rank: 10, percentile: 0.5, z: 0.0, verdict: "neutral", in_core: false },
+      { key: "turnovers", label: "TO", classification: "PUNT_CANDIDATE", league_rank: 18, percentile: 0.1, z: -1.4, verdict: "weakness", in_core: false },
+    ],
+  };
+}
+
+function applyTargetsPagination(fixture, searchParams) {
+  const limit = Math.min(Math.max(Number(searchParams.get("limit") || 24), 1), 100);
+  const offset = Math.min(Math.max(Number(searchParams.get("offset") || 0), 0), 10000);
+  let candidates = fixture.candidates;
+  if (searchParams.get("position") === "PG") {
+    const first = candidates[0];
+    candidates = Array.from({ length: 25 }, (_, index) => ({
+      ...first,
+      nba_id: first.nba_id + 1001 + index,
+      player_id: first.player_id + 1001 + index,
+      name: `Paged candidate ${index + 1}`,
+      short_name: `Paged candidate ${index + 1}`,
+      position: "PG",
+      // Preserve GNFC minutes evidence on every page for Fit pagination tests.
+      minutes_trend: first.minutes_trend,
+      season_average: first.season_average,
+      actionability: first.actionability,
+      fit_explanation: first.fit_explanation,
+    }));
+  }
+  const filtered = candidates.length;
+  fixture.candidates = candidates.slice(offset, offset + limit);
+  fixture.sample.filtered_candidates = filtered;
+  fixture.sample.returned = fixture.candidates.length;
+  fixture.filters = {
+    ...fixture.filters,
+    position: searchParams.get("position") || null,
+    limit,
+    offset,
+  };
+  return fixture;
+}
+
+function targetsFixture(league, membership, managerId, actionScope, selectedCategory = null) {
   const name = league === "gnfc" ? "GNFC Current Form Target" : managerId === 1
     ? `${league.toUpperCase()} Manager A Target`
     : `${league.toUpperCase()} xrtc Target`;
+  const strategy_summary = strategySummaryFixture(league);
+  const categories = strategy_summary.categories.map((row) => row.key);
+  const automaticNeeds = strategy_summary.categories
+    .filter((row) => row.classification === "TARGET")
+    .map((row) => ({
+      key: row.key,
+      label: row.label,
+      of: league === "gnfc" ? 12 : 20,
+      team_rank: row.league_rank,
+      team_z: row.z,
+      weight: 2,
+    }));
+  const explicit = typeof selectedCategory === "string" && selectedCategory.length > 0
+    ? strategy_summary.categories.find((row) => row.key === selectedCategory)
+    : null;
+  const need_source = explicit
+    ? "user_selected_category"
+    : automaticNeeds.length
+      ? "system_recommended_strategy"
+      : "system_recommended_strategy_no_targets";
+  const needs = explicit
+    ? [{
+      key: explicit.key,
+      label: explicit.label,
+      of: league === "gnfc" ? 12 : 20,
+      team_rank: explicit.league_rank,
+      team_z: explicit.z,
+      weight: 2,
+    }]
+    : automaticNeeds;
+  const helpLabel = needs[0]?.label ?? "PTS";
+  const helpKey = needs[0]?.key ?? "points";
+  const readyCandidate = {
+    player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
+    nba_id: managerId * 1_000 + (league === "ldl" ? 1 : 2),
+    name,
+    short_name: name,
+    nba_team: "ORL",
+    nba_team_short: "ORL",
+    position: "G",
+    photo: null,
+    availability: "free_agent",
+    fantasy_team: null,
+    fit_rank: 1,
+    fit_score: managerId === 1 ? 1.25 : 0.85,
+    availability_rank: 1,
+    availability_of: 80,
+    fit_explanation: {
+      schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
+      sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,
+      contributions_field: "need_contributions", market_rank_separate_from_score: true,
+      salary_and_tokens_in_score: false, future_role_and_injury_risk_in_score: false,
+    },
+    recommendation_reason_codes: ["absolute_category_helper", "controlled_tradeoffs"],
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
+    confidence: "high",
+    recommendation_tier: "strong",
+    actionability: {
+      status: "ready",
+      reasons: [],
+      role_signal: "observed_current_minutes",
+      cap_result: league === "gnfc" ? "not_applicable" : "within_known_caps",
+      roster_result: "open_slot",
+    },
+    recommendation_labels: ["fixture"],
+    helps: [helpLabel, "AST"],
+    hurts_needs: [],
+    tradeoffs: ["TO"],
+    salary_2026_27: league === "gnfc" ? null : "$2,400,000",
+    injury: null,
+  };
+  const reviewCandidate = {
+    player_id: 9000 + managerId,
+    nba_id: 9000 + managerId,
+    name: "Conditional FA",
+    short_name: "Conditional FA",
+    nba_team: "DET",
+    nba_team_short: "DET",
+    position: "F",
+    photo: null,
+    availability: "free_agent",
+    fantasy_team: null,
+    fit_rank: 2,
+    fit_score: 0.7,
+    confidence: "medium",
+    recommendation_tier: "best_available",
+    actionability: {
+      status: "needs_review",
+      reasons: ["limited_current_minutes"],
+      role_signal: "historical_only",
+      cap_result: league === "gnfc" ? "not_applicable" : "within_known_caps",
+      roster_result: "open_slot",
+    },
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 0.6, weight: 2, weighted_contribution: 1.2, verdict: "helps" }],
+    helps: [helpLabel],
+    hurts_needs: [],
+    tradeoffs: ["AST"],
+    salary_2026_27: league === "gnfc" ? null : "$1,000,000",
+    injury: null,
+  };
+  const tradeTarget = {
+    player_id: 9100 + managerId,
+    nba_id: 9100 + managerId,
+    name: "Rostered Trade Target",
+    short_name: "Trade Target",
+    nba_team: "BOS",
+    nba_team_short: "BOS",
+    position: "C",
+    photo: null,
+    availability: "rostered",
+    fantasy_team: { id: `${league}-team-b`, name: "Rival Franchise", logo: null },
+    fit_rank: 3,
+    fit_score: 0.95,
+    confidence: "medium",
+    recommendation_tier: "strong",
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 0.9, weight: 2, weighted_contribution: 1.8, verdict: "helps" }],
+    helps: [helpLabel, "DREB"],
+    hurts_needs: [],
+    tradeoffs: ["TO"],
+    salary_2026_27: league === "gnfc" ? null : "$8,500,000",
+    injury: null,
+  };
+  const candidates = actionScope === "ready"
+    ? [readyCandidate]
+    : [readyCandidate, reviewCandidate, tradeTarget];
   return {
-    league: leagueFixture(league),
+    league: { ...leagueFixture(league), categories },
     team: { id: membership.fantrax_team_id, name: membership.franchise_name, logo: null, owner: null },
     basis_requested: "season",
     basis_used: "season",
     fallback_reason: null,
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
-    need_source: "system_recommended_strategy",
-    needs: [],
-    sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: actionScope === "all" ? 2 : 1, returned: actionScope === "all" ? 2 : 1 },
-    filters: { availability: "free_agent", position: null, limit: 12 },
-    candidates: [{
-      player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
-      nba_id: managerId * 1_000 + (league === "ldl" ? 1 : 2),
-      name,
-      short_name: name,
-      nba_team: "Test Team",
-      nba_team_short: "TST",
-      position: "G",
-      photo: null,
-      availability: "free_agent",
-      fantasy_team: null,
-      fit_rank: 1,
-      fit_score: managerId === 1 ? 1.25 : 0.85,
-      availability_rank: 1,
-      availability_of: 80,
-      fit_explanation: {
-        schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
-        sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,
-        contributions_field: "need_contributions", market_rank_separate_from_score: true,
-        salary_and_tokens_in_score: false, future_role_and_injury_risk_in_score: false,
-      },
-      recommendation_reason_codes: ["absolute_category_helper", "controlled_tradeoffs"],
-      need_contributions: [{ key: "ft_pct", label: "FT%", player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
-      confidence: "high",
-      recommendation_tier: "strong",
-      actionability: { status: "ready", reasons: [], role_signal: "observed_current_minutes", cap_result: "within_known_caps", roster_result: "open_slot" },
-      recommendation_labels: ["fixture"],
-      helps: ["FT%", "AST"],
-      hurts_needs: [],
-      tradeoffs: ["TO"],
-      salary_2026_27: null,
-      injury: null,
-    }, ...(actionScope === "all" ? [{
-      player_id: 9000 + managerId,
-      nba_id: 9000 + managerId,
-      name: "Conditional FA",
-      short_name: "Conditional FA",
-      nba_team: "Test Team",
-      nba_team_short: "TST",
-      position: "F",
-      photo: null,
-      availability: "free_agent",
-      fantasy_team: null,
-      fit_rank: 2,
-      fit_score: 0.7,
-      confidence: "medium",
-      recommendation_tier: "strong",
-      actionability: { status: "requires_move", reasons: ["roster_drop_required"], role_signal: "historical_only", cap_result: "within_known_caps", roster_result: "drop_required" },
-      helps: ["FG%"],
-      hurts_needs: [],
-      tradeoffs: [],
-      salary_2026_27: "$1,000,000",
-      injury: null,
-    }] : [])],
+    need_source,
+    needs,
+    strategy_summary,
+    sample: {
+      candidate_universe: 100,
+      eligible_candidates: 80,
+      filtered_candidates: candidates.length,
+      returned: candidates.length,
+    },
+    filters: { availability: league === "gnfc" ? "free_agent" : "all", position: null, limit: 24, offset: 0 },
+    acquisition_context: {
+      roster_count: 13,
+      roster_limit: 14,
+      cap_applies: league !== "gnfc",
+      cap_season: league === "gnfc" ? null : "2026-27",
+    },
+    candidates,
+    category_recommendations: needs.map((need) => ({
+      key: need.key,
+      label: need.label,
+      free_agent_market: "limited",
+      message: "Fixture lane",
+      strong_free_agents: [readyCandidate],
+      best_available: [reviewCandidate],
+      trade_targets: [tradeTarget],
+      last_resort: [],
+    })),
   };
 }
 
