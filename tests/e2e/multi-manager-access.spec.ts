@@ -250,7 +250,8 @@ test("home league panels keep LDL and BδB order and league-specific links", asy
   await expect(standings.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/fantasy/bdb");
 
   const radar = page.getByRole("heading", { name: "Free-agent trends" }).locator("xpath=ancestor::section[1]");
-  await expect(radar.getByRole("heading", { name: "Test league radar" })).toHaveCount(2);
+  await expect(radar.getByRole("heading", { name: "LDL radar" })).toBeVisible();
+  await expect(radar.getByRole("heading", { name: "BδB radar" })).toBeVisible();
   await expect(radar.getByRole("link", { name: /Radar Test Player/ }).first()).toHaveAttribute(
     "href", "/players/21001?league=ldl&from=home",
   );
@@ -568,7 +569,8 @@ test("watchlist redirects into Player Discovery Watched", async ({ page, request
   await expect(page).toHaveURL(/league=ldl/);
   await expect(page.getByRole("heading", { name: "Players" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Watched" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Watched is being consolidated")).toBeVisible();
+  await expect(page.getByTestId("discovery-watched")).toBeVisible();
+  await expect(page.getByText("Watched is being consolidated")).toHaveCount(0);
 });
 
 test("Player Discovery defaults to Browse and keeps GNFC distinct", async ({ page, request }) => {

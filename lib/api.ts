@@ -1852,7 +1852,7 @@ export async function fetchLeaguePlayerExplorer(
 }
 
 export async function fetchFreeAgentRadar(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   window = 7,
   minimumGames = 2,
   fresh = false,
@@ -1866,7 +1866,7 @@ export async function fetchFreeAgentRadar(
 }
 
 export async function fetchFantasyWatchlist(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   window = 7,
 ): Promise<FantasyWatchlist> {
   const res = await fetch(

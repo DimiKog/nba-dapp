@@ -28,6 +28,8 @@ import {
   formatBrowseCacheHint,
   formatBrowseMetadata,
 } from "@/lib/browsePresentation";
+import { upsertWatchlistEntry } from "@/lib/watchlistClient";
+
 import {
   fantasyStatValue,
   formatFantasyStat,
@@ -263,14 +265,10 @@ export default function LeaguePlayerExplorer({
     setWatchPending(player.nba_id);
     setWatchError(null);
     try {
-      const response = await fetch(`/api/watchlist/${league}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nba_player_id: player.nba_id,
-          notes: "",
-          priority: 2,
-        }),
+      const response = await upsertWatchlistEntry(league, {
+        nbaPlayerId: player.nba_id,
+        notes: "",
+        priority: 2,
       });
       if (!response.ok) throw new Error();
       setWatchedIds((current) => new Set(current).add(player.nba_id!));
