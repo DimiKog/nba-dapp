@@ -48,7 +48,7 @@ export function buildHomeAttentionItems(teams: HomeAttentionTeam[]): HomeAttenti
         league: team.league,
         title: `${team.teamName} roster is incomplete`,
         detail: `${team.rosterCount} of at least ${team.rosterMinimum} players. Recommendations remain provisional.`,
-        href: `/watchlist?league=${team.league}`,
+        href: `/players?view=fit&league=${team.league}&team=${encodeURIComponent(team.teamId)}`,
         tone: "critical",
       });
     }
