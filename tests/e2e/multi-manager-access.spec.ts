@@ -250,6 +250,10 @@ test("home league panels keep LDL and BδB order and league-specific links", asy
   await expect(standings.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/fantasy/bdb");
 
   const radar = page.getByRole("heading", { name: "Free-agent trends" }).locator("xpath=ancestor::section[1]");
+  await expect(radar.getByRole("link", { name: "Open FA trends →" })).toHaveAttribute(
+    "href",
+    "/players?view=fa-trends",
+  );
   await expect(radar.getByRole("heading", { name: "LDL radar" })).toBeVisible();
   await expect(radar.getByRole("heading", { name: "BδB radar" })).toBeVisible();
   await expect(radar.getByRole("link", { name: /Radar Test Player/ }).first()).toHaveAttribute(
@@ -268,7 +272,10 @@ test("home shows independent panels while a personal roster is slow", async ({ p
 
   await page.goto(app, { waitUntil: "commit" });
   await expect(page.getByLabel("Your teams loading")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open radar & watchlist →" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open FA trends →" })).toHaveAttribute(
+    "href",
+    "/players?view=fa-trends",
+  );
   const scoreboard = page.getByRole("heading", { name: "NBA Scoreboard" }).locator("xpath=ancestor::section[1]");
   await expect(scoreboard.getByText("NO", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Your teams loading")).toBeVisible();
@@ -293,7 +300,10 @@ test("mobile Home keeps team essentials and direct actions without long card sec
   );
   await expect(team.getByText(/Free-agent (move check|candidate to review)/)).toBeVisible();
   await expect(team.getByText("Current matchup is temporarily unavailable.")).toHaveCount(0);
-  await expect(team.getByRole("link", { name: "Free agents" })).toBeVisible();
+  await expect(team.getByRole("link", { name: "Free agents" })).toHaveAttribute(
+    "href",
+    "/players?view=fit&league=ldl&team=ldl-team-a",
+  );
 
   const matchups = page.getByRole("heading", { name: "Your matchups" }).locator("xpath=ancestor::section[1]");
   await expect(matchups.getByText("Current matchup is temporarily unavailable.").first()).toBeVisible();
@@ -310,7 +320,10 @@ test("home shows public panels while the private session is slow", async ({ page
   expect(delayed.ok()).toBeTruthy();
 
   await page.goto(app, { waitUntil: "commit" });
-  await expect(page.getByRole("link", { name: "Open radar & watchlist →" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open FA trends →" })).toHaveAttribute(
+    "href",
+    "/players?view=fa-trends",
+  );
   await expect(page.getByLabel("Your teams loading")).toBeVisible();
 
   await expect(page.getByRole("heading", { name: /Alice/ })).toBeVisible();
@@ -415,16 +428,24 @@ test("membership-aware navigation differs by manager role", async ({ page, reque
   ]);
   await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenA });
   await page.goto(app);
-  await expect(page.getByRole("link", { name: "My LDL" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "My BδB" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Commissioner" })).toBeVisible();
+  const navA = page.locator("header nav");
+  await expect(navA.getByRole("link", { name: "Players" })).toBeVisible();
+  await expect(navA.getByRole("link", { name: "Watchlist" })).toHaveCount(0);
+  await expect(navA.getByRole("link", { name: "Draft Assets" })).toHaveCount(0);
+  await expect(navA.getByRole("link", { name: "My LDL" })).toBeVisible();
+  await expect(navA.getByRole("link", { name: "My BδB" })).toBeVisible();
+  await expect(navA.getByRole("link", { name: "Commissioner" })).toBeVisible();
   await expect(page.getByText("Manager A LDL", { exact: true })).toBeVisible();
 
   await page.context().setExtraHTTPHeaders({ [accessHeader]: tokenB });
   await page.goto(app);
-  await expect(page.getByRole("link", { name: "My LDL" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "My BδB" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Commissioner" })).toHaveCount(0);
+  const navB = page.locator("header nav");
+  await expect(navB.getByRole("link", { name: "Players" })).toBeVisible();
+  await expect(navB.getByRole("link", { name: "Watchlist" })).toHaveCount(0);
+  await expect(navB.getByRole("link", { name: "Draft Assets" })).toHaveCount(0);
+  await expect(navB.getByRole("link", { name: "My LDL" })).toBeVisible();
+  await expect(navB.getByRole("link", { name: "My BδB" })).toBeVisible();
+  await expect(navB.getByRole("link", { name: "Commissioner" })).toHaveCount(0);
   await expect(page.getByText("xrtc", { exact: true }).first()).toBeVisible();
 });
 

@@ -43,6 +43,8 @@ test("shared Home alerts keep roster and cap checks ahead of injuries", () => {
   assert.deepEqual(items.map((item) => item.key), ["ldl-roster", "ldl-cap", "ldl-injuries"]);
   assert.deepEqual(items.map((item) => item.kind), ["roster", "cap", "injury"]);
   assert.match(items[1].title, /\$5\.7M over the cap/);
+  assert.equal(items[0].href, "/players?view=fit&league=ldl&team=team-2");
+  assert.equal(items[1].href, "/fantasy/ldl/roster/team-2");
 });
 
 test("injury detail keeps three names and appends a remainder count", () => {

@@ -499,8 +499,8 @@ function HomeRadarPanels({
           </h2>
           <p className="mt-1 text-sm text-slate-500">League-specific upward performance signals.</p>
         </div>
-        <Link href="/watchlist" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
-          Open radar & watchlist →
+        <Link href="/players?view=fa-trends" className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
+          Open FA trends →
         </Link>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -544,7 +544,7 @@ function HomeRadarCard({
             const src = photoUrl(player.photo, player.nba_id);
             const href = player.player_id
               ? `/players/${player.player_id}?league=${league}&from=home`
-              : `/watchlist?league=${league}`;
+              : `/players?view=fa-trends&league=${league}`;
             return (
               <Link
                 key={player.nba_id}
@@ -707,7 +707,14 @@ function GnfcHomeCard({
               ? gnfcFaMarketSummary(targets)
               : availabilityReady ? "Free-agent analysis is temporarily unavailable" : "Free-agent analysis is not active yet"}
           </p>
-          {availabilityReady && <Link href={`${rosterHref}#player-targets`} className="mt-2 inline-block font-bold text-blue-600 hover:underline dark:text-blue-400">Review FA analysis →</Link>}
+          {availabilityReady && teamId && (
+            <Link
+              href={`/players?view=fit&league=gnfc&team=${encodeURIComponent(teamId)}`}
+              className="mt-2 inline-block font-bold text-blue-600 hover:underline dark:text-blue-400"
+            >
+              Review FA analysis →
+            </Link>
+          )}
           <Link href="#your-matchups" className="mt-2 ml-3 inline-block font-bold text-slate-500 hover:underline dark:text-slate-400">Week matchup →</Link>
         </div>
       </div>
@@ -822,7 +829,7 @@ function PersonalTeamCard({ dashboard }: { dashboard: PersonalTeamDashboard }) {
 
       <div className="grid grid-cols-3 gap-2 border-t border-blue-100 bg-white/70 p-4 dark:border-blue-900/70 dark:bg-slate-950/20">
         <QuickAction href={rosterHref} label="Open team" />
-        <QuickAction href={`/watchlist?league=${league}`} label="Free agents" />
+        <QuickAction href={`/players?view=fit&league=${league}&team=${encodeURIComponent(teamId)}`} label="Free agents" />
         <QuickAction href={tradeHref} label="Trade" />
       </div>
     </article>

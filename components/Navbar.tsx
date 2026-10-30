@@ -59,10 +59,6 @@ export default function Navbar({
   const playersLeague = gnfcPage ? "gnfc" : league;
   const links: NavLink[] = [
     { href: `/players?league=${playersLeague}`, path: "/players", label: "Players" },
-    ...(!gnfcPage ? [
-      { href: `/watchlist?league=${league}`, path: "/watchlist", label: "Watchlist" },
-      { href: `/draft-assets?league=${league}`, path: "/draft-assets", label: "Draft Assets" },
-    ] : []),
     ...(!gnfcPage && membership?.commissioner
       ? [{ href: `/commissioner/trades?league=${league}`, path: "/commissioner/trades", label: "Commissioner" }]
       : []),

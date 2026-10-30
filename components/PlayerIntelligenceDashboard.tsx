@@ -156,5 +156,17 @@ function formatValue(category: PlayerIntelligenceCategory) { if (category.value 
 function injuryLabel(injury: NonNullable<PlayerIntelligence["player"]["injury"]>) { return [injury.body_part, injury.detail ?? injury.status.replaceAll("_", " ")].filter(Boolean).join(" · "); }
 function formatTimestamp(value: string | null) { if (!value) return "unavailable"; return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Athens" }).format(new Date(value)); }
 function contextHref(id: number, league: LeagueSlug | null, source: string | null) { const params = new URLSearchParams(); if (league) params.set("league", league); if (source) params.set("from", source); return `/players/${id}${params.size ? `?${params}` : ""}`; }
-function backHref(source: string | null, league: LeagueSlug | null) { if (source === "watchlist") return "/watchlist"; if ((source === "roster" || source === "recommendations") && league) return `/fantasy/${league}`; return "/players"; }
-function backLabel(source: string | null) { if (source === "watchlist") return "Watchlist"; if (source === "roster" || source === "recommendations") return "Fantasy league"; return "Player Explorer"; }
+function backHref(source: string | null, league: LeagueSlug | null) {
+  if (source === "watchlist") {
+    const params = new URLSearchParams({ view: "watched" });
+    if (league) params.set("league", league);
+    return `/players?${params}`;
+  }
+  if ((source === "roster" || source === "recommendations") && league) return `/fantasy/${league}`;
+  return "/players";
+}
+function backLabel(source: string | null) {
+  if (source === "watchlist") return "Watched";
+  if (source === "roster" || source === "recommendations") return "Fantasy league";
+  return "Players";
+}

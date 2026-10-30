@@ -54,8 +54,9 @@ export default function ManagerTodayRecommendation({
     };
   }, [league, teamId]);
 
-  const freeAgentsHref = `/watchlist?league=${league}`;
-  const conditionalHref = `/fantasy/${league}/roster/${encodeURIComponent(teamId)}#player-targets`;
+  const fitHref = `/players?view=fit&league=${league}&team=${encodeURIComponent(teamId)}`;
+  const freeAgentsHref = fitHref;
+  const conditionalHref = fitHref;
 
   if (state.status === "loading") {
     return (

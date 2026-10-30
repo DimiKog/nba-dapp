@@ -86,3 +86,29 @@ test("watchlist compatibility redirects preserve league including GNFC", () => {
   assert.equal(buildWatchlistRedirectHref(undefined), "/players?view=watched");
   assert.equal(buildWatchlistRedirectHref(""), "/players?view=watched");
 });
+
+test("Step 3C navbar drops Watchlist and Draft Assets while Players remains", async () => {
+  const { readFileSync } = await import("node:fs");
+  const navbar = readFileSync(new URL("../components/Navbar.tsx", import.meta.url), "utf8");
+  assert.match(navbar, /label: "Players"/);
+  assert.doesNotMatch(navbar, /label: "Watchlist"/);
+  assert.doesNotMatch(navbar, /label: "Draft Assets"/);
+  assert.match(navbar, /label: "Commissioner"/);
+  assert.doesNotMatch(navbar, /path: "\/watchlist"/);
+  assert.doesNotMatch(navbar, /path: "\/draft-assets"/);
+});
+
+test("Home Free-agent CTAs target Fit; radar CTAs target FA trends", async () => {
+  const { readFileSync } = await import("node:fs");
+  const home = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const managerToday = readFileSync(
+    new URL("../components/ManagerTodayRecommendation.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(home, /view=fit&league=\$\{league\}&team=/);
+  assert.match(home, /Open FA trends →/);
+  assert.match(home, /view=fa-trends/);
+  assert.doesNotMatch(home, /Open radar & watchlist/);
+  assert.doesNotMatch(managerToday, /#player-targets/);
+  assert.match(managerToday, /view=fit&league=\$\{league\}&team=/);
+});
