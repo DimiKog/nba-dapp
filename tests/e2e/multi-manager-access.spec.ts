@@ -250,7 +250,8 @@ test("home league panels keep LDL and BδB order and league-specific links", asy
   await expect(standings.getByRole("link", { name: "View all" })).toHaveAttribute("href", "/fantasy/bdb");
 
   const radar = page.getByRole("heading", { name: "Free-agent trends" }).locator("xpath=ancestor::section[1]");
-  await expect(radar.getByRole("heading", { name: "Test league radar" })).toHaveCount(2);
+  await expect(radar.getByRole("heading", { name: "LDL radar" })).toBeVisible();
+  await expect(radar.getByRole("heading", { name: "BδB radar" })).toBeVisible();
   await expect(radar.getByRole("link", { name: /Radar Test Player/ }).first()).toHaveAttribute(
     "href", "/players/21001?league=ldl&from=home",
   );
@@ -559,16 +560,41 @@ test("LDL team page keeps Overview → Intelligence → Data section order", asy
   expect(order).toEqual(["overview", "intelligence", "roster", "payroll"]);
 });
 
-test("free-agent radar distinguishes recent trend from team fit", async ({ page, request }) => {
+test("watchlist redirects into Player Discovery Watched", async ({ page, request }) => {
   const token = await tokenFor(request, "manager-a-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/watchlist?league=ldl`);
-  await expect(page.getByText("Recent trend +1.25 · 4 recent games")).toBeVisible();
-  await page.locator('summary[aria-label="Minutes ↑, show minutes evidence"]').click();
-  await expect(page.getByText(/24\.0 MIN in the latest 4 recorded games vs 16\.0 MIN across 65 games in 2025-26/)).toBeVisible();
-  await expect(page.getByText(/Not a team-fit or pickup recommendation/)).toBeVisible();
-  await page.getByText("Which categories drive the trend?").click();
-  await expect(page.getByText("PTS: 14.00 → 18.00")).toBeVisible();
+  await expect(page).toHaveURL(/\/players\?/);
+  await expect(page).toHaveURL(/view=watched/);
+  await expect(page).toHaveURL(/league=ldl/);
+  await expect(page.getByRole("heading", { name: "Players" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Watched" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("discovery-watched")).toBeVisible();
+  await expect(page.getByText("Watched is being consolidated")).toHaveCount(0);
+});
+
+test("Player Discovery defaults to Browse and keeps GNFC distinct", async ({ page, request }) => {
+  const token = await tokenFor(request, "manager-a-subject");
+  await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
+
+  await page.goto(`${app}/players?league=ldl`);
+  await expect(page.getByRole("heading", { name: "Players" })).toBeVisible();
+  await expect(page.getByText("Player Discovery")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Browse" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Fit to my plan" })).toHaveAttribute("aria-selected", "false");
+
+  await page.goto(`${app}/players?league=ldl&view=not-a-view`);
+  await expect(page.getByRole("tab", { name: "Browse" })).toHaveAttribute("aria-selected", "true");
+
+  await page.goto(`${app}/players?league=gnfc&view=fit`);
+  await expect(page).toHaveURL(/league=gnfc/);
+  await expect(page).not.toHaveURL(/league=ldl/);
+  await expect(page.getByRole("tab", { name: "Fit to my plan" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("discovery-fit")).toBeVisible();
+  // manager-a has no GNFC membership — intentional no-team state, not an LDL remap.
+  await expect(page.getByTestId("fit-no-team")).toBeVisible();
+  await expect(page.getByText("Fit to my plan is being consolidated")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "GNFC", pressed: true })).toBeVisible();
 });
 
 test("trade suggestions are restricted to the signed-in manager team", async ({ request }) => {

@@ -62,6 +62,9 @@ const privateTradeOutlooks = new Map();
 const reviewedInjuryReports = new Map();
 const performanceDelays = new Map();
 const sessionDelays = new Map();
+/** In-memory watchlists keyed by `${subject}:${league}`. */
+const watchlistStore = new Map();
+
 
 function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   return {
@@ -76,10 +79,17 @@ function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   };
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "http://127.0.0.1:3102",
+  "Access-Control-Allow-Headers": "cf-access-jwt-assertion, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+};
+
 function send(response, status, payload) {
   response.writeHead(status, {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
+    ...corsHeaders,
   });
   response.end(JSON.stringify(payload));
 }
@@ -91,11 +101,24 @@ function sessionFor(request) {
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? "/", "http://127.0.0.1:3101");
 
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, corsHeaders);
+    return response.end();
+  }
+
   if (url.pathname === "/api/health") {
     return send(response, 200, { status: "ok" });
   }
   if (url.pathname === "/cdn-cgi/access/certs") {
     return send(response, 200, { keys: [publicJwk] });
+  }
+  if (url.pathname === "/test/reset-state" && request.method === "POST") {
+    watchlistStore.clear();
+    privateTradeOutlooks.clear();
+    reviewedInjuryReports.clear();
+    performanceDelays.clear();
+    sessionDelays.clear();
+    return send(response, 200, { ok: true });
   }
   if (url.pathname === "/test/access-token") {
     const subject = url.searchParams.get("subject");
@@ -156,7 +179,13 @@ const server = createServer((request, response) => {
   if (url.pathname === "/api/fantasy/gnfc/roster/gnfc-athens/targets") {
     const member = sessionFor(request)?.memberships.find((item) => item.league_slug === "gnfc");
     if (!member) return send(response, 403, { error: "GNFC membership required" });
-    const fixture = targetsFixture("gnfc", member, 3, url.searchParams.get("action_scope"));
+    const fixture = targetsFixture(
+      "gnfc",
+      member,
+      3,
+      url.searchParams.get("action_scope"),
+      url.searchParams.get("category"),
+    );
     const candidate = fixture.candidates[0];
     candidate.season_average = { games: 2, minutes: 25, points: 17 };
     candidate.fit_explanation.sample_games = 2;
@@ -165,9 +194,7 @@ const server = createServer((request, response) => {
     candidate.fit_explanation.sample_adjustment = "current_season_only";
     candidate.actionability = { status: "requires_move", reasons: ["roster_drop_required", "current_role_unverified"], role_signal: "insufficient_current_sample", cap_result: "not_applicable", roster_result: "drop_required" };
     candidate.minutes_trend = { basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26", state: "early_increase", sample_games: 2, minutes: 25, previous_minutes: 17, delta_minutes: 8, delta_percent: 47, previous_games: 60, latest_game_date: "2026-10-24" };
-    fixture.needs = [{ key: "points", label: "PTS", of: 12, team_rank: 8, team_z: -0.2, weight: 1 }];
-    fixture.category_recommendations = [{ key: "points", label: "PTS", free_agent_market: "limited", message: "Early current-season help", strong_free_agents: [], best_available: [candidate], trade_targets: [], last_resort: [] }];
-    return send(response, 200, fixture);
+    return send(response, 200, applyTargetsPagination(fixture, url.searchParams));
   }
   const outlookMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players\/(\d+)\/my-trade-outlook$/);
   if (outlookMatch) {
@@ -271,31 +298,90 @@ const server = createServer((request, response) => {
   if (/^\/api\/fantasy\/(ldl|bdb)\/standings$/.test(url.pathname)) {
     return send(response, 200, []);
   }
+  const watchlistMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb|gnfc)\/watchlist(?:\/(\d+))?$/);
+  if (watchlistMatch) {
+    const league = watchlistMatch[1];
+    const playerId = watchlistMatch[2] ? Number(watchlistMatch[2]) : null;
+    const session = sessionFor(request);
+    if (!session) return send(response, 401, { error: "Unauthorized" });
+    if (!session.memberships.some((m) => m.league_slug === league)) {
+      return send(response, 403, { error: "Not a member of this league" });
+    }
+    const subject = request.headers["x-fantasy-identity-subject"];
+    const key = `${subject}:${league}`;
+    if (!watchlistStore.has(key)) {
+      watchlistStore.set(key, seedWatchlistEntries(league, subject));
+    }
+    const entries = watchlistStore.get(key);
+
+    if (request.method === "GET") {
+      const sorted = [...entries].sort((a, b) => {
+        if (a.priority !== b.priority) return a.priority - b.priority;
+        return Date.parse(b.updated_at) - Date.parse(a.updated_at);
+      });
+      return send(response, 200, {
+        league: leagueFixture(league),
+        owner: subject,
+        window_days: Number(url.searchParams.get("window") ?? 7),
+        categories: league === "gnfc" ? ["points", "rebounds", "assists"] : ["points", "rebounds", "assists", "steals", "blocks"],
+        entries: sorted,
+      });
+    }
+
+    if (request.method === "POST") {
+      let rawBody = "";
+      request.on("data", (chunk) => { rawBody += chunk; });
+      request.on("end", () => {
+        const body = JSON.parse(rawBody || "{}");
+        const nbaPlayerId = Number(body?.nba_player_id);
+        const priority = Number(body?.priority ?? 2);
+        const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
+        if (!Number.isInteger(nbaPlayerId) || nbaPlayerId <= 0 || ![1, 2, 3].includes(priority) || notes.length > 2000) {
+          return send(response, 400, { error: "Invalid watchlist entry" });
+        }
+        const existing = entries.find((e) => e.nba_player_id === nbaPlayerId);
+        const now = new Date().toISOString();
+        if (existing) {
+          existing.notes = notes;
+          existing.priority = priority;
+          existing.updated_at = now;
+          return send(response, 200, existing);
+        }
+        const created = {
+          id: entries.length ? Math.max(...entries.map((e) => e.id)) + 1 : 1,
+          owner_subject: subject,
+          league_slug: league,
+          nba_player_id: nbaPlayerId,
+          notes,
+          priority,
+          created_at: now,
+          updated_at: now,
+          resolved: true,
+          player: watchlistPlayerFixture(nbaPlayerId, league, "free_agent"),
+        };
+        entries.push(created);
+        return send(response, 201, created);
+      });
+      return;
+    }
+
+    if (request.method === "DELETE" && playerId) {
+      const next = entries.filter((e) => e.nba_player_id !== playerId);
+      watchlistStore.set(key, next);
+      return send(response, 200, { ok: true });
+    }
+
+    return send(response, 405, { error: "Method not allowed" });
+  }
+
+  if (/^\/api\/fantasy\/gnfc\/free-agent-radar$/.test(url.pathname)) {
+    // GNFC FA market not ready in mock — intentional 503 for Discovery FA Trends empty state.
+    return send(response, 503, { error: "Free-agent market not ready for this league" });
+  }
+
   if (/^\/api\/fantasy\/(ldl|bdb)\/free-agent-radar$/.test(url.pathname)) {
-    return send(response, 200, {
-      league: { slug: url.pathname.includes("/bdb/") ? "bdb" : "ldl", name: "Test league" },
-      categories: ["points"], minimum_games: 3,
-      window: { days: 7, from: "2026-10-01", to: "2026-10-08", season: "2026-27" },
-      players: [{
-        player_id: 21001, nba_id: 21001, name: "Radar Test Player", nba_team: "Test Team",
-        position: "G", photo: null, salary_2026_27: null,
-        window_stats: { games: 4 }, season_average: { games: 20 }, recent_average: { games: 4 },
-        trend_rank: 1, trend_score: 1.25, trend_confidence: "medium",
-        minutes_trend: {
-          basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
-          state: "increase", sample_games: 4, minutes: 24, previous_minutes: 16,
-          delta_minutes: 8, delta_percent: 50, previous_games: 65, latest_game_date: "2026-10-24",
-        },
-        trend_strengths: ["PTS"], category_trends: { PTS: { recent: 18, season: 14, delta: 4, improved: true } },
-        trend_explanation: {
-          schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",
-          reason_code: "recent_vs_season_standardized_category_deltas",
-          recent_games: 4, season_games: 20, minimum_recent_games: 3, score: 1.25,
-          category_contributions: [{ key: "points", label: "PTS", standardized_delta: 1.25, recent: 18, season: 14 }],
-          team_need_fit_in_score: false, salary_and_tokens_in_score: false,
-        },
-      }],
-    });
+    const league = url.pathname.includes("/bdb/") ? "bdb" : "ldl";
+    return send(response, 200, freeAgentRadarFixture(league));
   }
   const ledgerMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/commissioner\/completed-trades$/);
   if (ledgerMatch) {
@@ -344,24 +430,7 @@ const server = createServer((request, response) => {
   }
   const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players$/);
   if (playersMatch) {
-    const league = playersMatch[1];
-    const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
-      sessions[subject].memberships.find((item) => item.league_slug === league)
-    ));
-    const players = members.flatMap((member, teamIndex) => (
-      rosterPerformanceFixture(league, member, false).players.map((item) => ({
-        ...item,
-        nba_id: item.nba_id + teamIndex * 1000,
-        name: `${member.franchise_name} Player ${item.nba_id - 9999}`,
-        fantasy_team: {
-          id: member.fantrax_team_id,
-          name: member.franchise_name,
-          logo: null,
-          owner: null,
-        },
-      }))
-    ));
-    return send(response, 200, { league: leagueFixture(league), players });
+    return send(response, 200, leaguePlayerExplorerFixture(playersMatch[1]));
   }
   const profileMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/category-profile$/);
   if (profileMatch) {
@@ -423,24 +492,14 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    const fixture = targetsFixture(league, membership, session.user.id, url.searchParams.get("action_scope"));
-    if (url.searchParams.get("position") === "PG") {
-      const first = fixture.candidates[0];
-      const all = Array.from({ length: 25 }, (_, index) => ({
-        ...first,
-        nba_id: first.nba_id + 1001 + index,
-        player_id: first.player_id + 1001 + index,
-        name: `Paged candidate ${index + 1}`,
-        short_name: `Paged candidate ${index + 1}`,
-        position: "PG",
-      }));
-      const offset = Number(url.searchParams.get("offset") || 0);
-      fixture.candidates = all.slice(offset, offset + 24);
-      fixture.sample.filtered_candidates = all.length;
-      fixture.sample.returned = fixture.candidates.length;
-      fixture.filters.offset = offset;
-    }
-    return send(response, 200, fixture);
+    const fixture = targetsFixture(
+      league,
+      membership,
+      session.user.id,
+      url.searchParams.get("action_scope"),
+      url.searchParams.get("category"),
+    );
+    return send(response, 200, applyTargetsPagination(fixture, url.searchParams));
   }
   if (/^\/api\/fantasy\/(ldl|bdb)\/trade-suggestions$/.test(url.pathname)) {
     let rawBody = "";
@@ -473,8 +532,7 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    let rawBody = "";
-    request.on("data", (chunk) => { rawBody += chunk; });
+    request.on("data", () => {});
     request.on("end", () => {
       send(response, 200, rosterMoveDiscoveryFixture(league, teamId));
     });
@@ -736,6 +794,201 @@ function membershipByTeam(league, teamId) {
     .find((item) => item.league_slug === league && item.fantrax_team_id === teamId) ?? null;
 }
 
+/** Representative Player Explorer payload for Discovery Browse visual/e2e rendering. */
+function leaguePlayerExplorerFixture(league) {
+  const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
+    sessions[subject].memberships.find((item) => item.league_slug === league)
+  )).filter(Boolean);
+  const categories = league === "bdb"
+    ? ["FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO"]
+    : ["FG%", "FT%", "3PTM", "PTS", "OREB", "DREB", "AST", "ST", "BLK", "TO", "A/TO"];
+  const positions = ["PG", "SG", "SF", "PF", "C", "G", "F"];
+  const nbaTeams = [
+    ["Boston Celtics", "BOS"],
+    ["Minnesota Timberwolves", "MIN"],
+    ["Denver Nuggets", "DEN"],
+    ["New York Knicks", "NYK"],
+    ["Oklahoma City Thunder", "OKC"],
+    ["Dallas Mavericks", "DAL"],
+  ];
+
+  // Rostered identity must remain the shared pre-Discovery explorer contract used by
+  // Trade Analyzer and other consumers of GET /api/fantasy/{league}/players:
+  //   name = "{franchise} Player {n}", nba_id = 10000+n (team A) / 11000+n (team B),
+  //   Player 1 position = "G" so option labels match /^xrtc Player 1 G/.
+  // Browse still gets rich stats/FA rows below; only the identity contract is restored.
+  const rostered = members.flatMap((member, teamIndex) => (
+    Array.from({ length: 6 }, (_, index) => {
+      const rank = teamIndex * 6 + index + 1;
+      const [nbaTeam, nbaShort] = nbaTeams[(teamIndex + index) % nbaTeams.length];
+      const points = 22 - index * 1.4 - teamIndex;
+      const playerNumber = index + 1;
+      return {
+        nba_id: 10_000 + teamIndex * 1_000 + index,
+        player_id: 20_000 + teamIndex * 1_000 + index,
+        name: `${member.franchise_name} Player ${playerNumber}`,
+        short_name: `${member.franchise_name} Player ${playerNumber}`,
+        status: index === 5 ? "Reserve" : "Active",
+        nba_team: index === 0 ? "Test Team" : nbaTeam,
+        nba_team_short: index === 0 ? "TST" : nbaShort,
+        position: index === 0 ? "G" : positions[index % positions.length],
+        photo: null,
+        availability: "rostered",
+        fantasy_team: {
+          id: member.fantrax_team_id,
+          name: member.franchise_name,
+          logo: null,
+          owner: null,
+        },
+        injury: teamIndex === 0 && index === 0
+          ? { status: "GTD", body_part: "ankle", detail: null, source: "fixture", updated_at: null }
+          : null,
+        salary_2026_27: String(28_000_000 - rank * 1_100_000),
+        salaries: { "2026-27": String(28_000_000 - rank * 1_100_000) },
+        latest_game: null,
+        window_stats: {
+          games: 3 + (index % 3),
+          minutes: 32 - index,
+          points: points + 1.5,
+          assists: 6.2 - index * 0.3,
+          rebounds: 7.1 - index * 0.2,
+          oreb: 1.4,
+          dreb: 5.7,
+          steals: 1.2,
+          blocks: 0.8,
+          turnovers: 2.1,
+          three_pm: 2.4,
+          fg_pct: 0.47,
+          ft_pct: 0.84,
+          assist_turnover: 2.9,
+        },
+        season_average: {
+          games: 18 + index,
+          minutes: 30 - index * 0.5,
+          points,
+          assists: 5.8 - index * 0.25,
+          rebounds: 6.8 - index * 0.15,
+          oreb: 1.2,
+          dreb: 5.4,
+          steals: 1.1,
+          blocks: 0.7,
+          turnovers: 2.0,
+          three_pm: 2.1,
+          fg_pct: 0.46,
+          ft_pct: 0.83,
+          assist_turnover: 2.7,
+        },
+        category_strengths: index < 2 ? ["PTS", "AST"] : ["REB"],
+        impact_rank: rank,
+        impact_score: 1.4 - rank * 0.08,
+        freshness: { roster: null, stats: null, injury: null },
+      };
+    })
+  ));
+
+  const freeAgents = Array.from({ length: 8 }, (_, index) => {
+    const rank = rostered.length + index + 1;
+    const [nbaTeam, nbaShort] = nbaTeams[index % nbaTeams.length];
+    return {
+      nba_id: 41_000 + index,
+      player_id: 51_000 + index,
+      name: `Free Agent ${nbaShort} ${index + 1}`,
+      short_name: `FA ${index + 1}`,
+      status: "Active",
+      nba_team: nbaTeam,
+      nba_team_short: nbaShort,
+      position: positions[(index + 2) % positions.length],
+      photo: null,
+      availability: "free_agent",
+      availability_rank: index + 1,
+      availability_of: 8,
+      nba_relevance: index < 6 ? "current_or_recent" : "legacy_only",
+      fantasy_team: null,
+      injury: null,
+      salary_2026_27: String(12_000_000 - index * 700_000),
+      salaries: { "2026-27": String(12_000_000 - index * 700_000) },
+      latest_game: null,
+      window_stats: {
+        games: 4,
+        minutes: 26 - index,
+        points: 16 - index * 0.8,
+        assists: 4.1,
+        rebounds: 5.2,
+        oreb: 1.0,
+        dreb: 4.2,
+        steals: 1.0,
+        blocks: 0.6,
+        turnovers: 1.8,
+        three_pm: 1.9,
+        fg_pct: 0.45,
+        ft_pct: 0.8,
+        assist_turnover: 2.3,
+      },
+      season_average: {
+        games: 12 + index,
+        minutes: 24 - index * 0.4,
+        points: 14.5 - index * 0.6,
+        assists: 3.8,
+        rebounds: 4.9,
+        oreb: 0.9,
+        dreb: 4.0,
+        steals: 0.9,
+        blocks: 0.5,
+        turnovers: 1.7,
+        three_pm: 1.7,
+        fg_pct: 0.44,
+        ft_pct: 0.79,
+        assist_turnover: 2.2,
+      },
+      category_strengths: ["STL"],
+      impact_rank: rank,
+      impact_score: 0.55 - index * 0.05,
+      freshness: { roster: null, stats: null, injury: null },
+    };
+  });
+
+  const players = [...rostered, ...freeAgents];
+  return {
+    league: {
+      ...leagueFixture(league),
+      categories,
+    },
+    snapshot: {
+      captured_at: "2026-10-30T12:00:00Z",
+      generated_at: "2026-10-30T12:01:00Z",
+      source: "database_cache",
+    },
+    window: { days: 7, from: "2026-10-23", to: "2026-10-30", season: "2026-27" },
+    categories,
+    ranking_method: "fixture_category_z_sum",
+    ranking_basis: "season",
+    availability_basis: "latest_league_roster_snapshots",
+    counts: {
+      total: players.length,
+      rostered: rostered.length,
+      free_agents: freeAgents.length,
+      free_agents_ranked: freeAgents.filter((player) => player.availability_rank != null).length,
+      free_agents_current_or_recent: freeAgents.filter((player) => player.nba_relevance === "current_or_recent").length,
+      free_agents_legacy_only: freeAgents.filter((player) => player.nba_relevance === "legacy_only").length,
+      ranked: players.length,
+    },
+    nba_relevance_basis: {
+      classification: "current_or_recent_evidence",
+      contract_season: "2026-27",
+      performance_season: "2026-27",
+      evidence: ["current_team", "current_salary", "recent_performance"],
+      legacy_only_means: "fixture",
+    },
+    teams: members.map((member) => ({
+      id: member.fantrax_team_id,
+      name: member.franchise_name,
+      logo: null,
+      owner: null,
+    })),
+    players,
+  };
+}
+
 function rosterPerformanceFixture(league, membership, incomplete) {
   const playerCount = incomplete ? 8 : 14;
   return {
@@ -823,75 +1076,419 @@ function categoryProfileFixture(league, membership) {
   };
 }
 
-function targetsFixture(league, membership, managerId, actionScope) {
+function strategySummaryFixture(league) {
+  if (league === "gnfc") {
+    return {
+      source: "system_recommended_strategy",
+      minimum_winning_core: 2,
+      recommended_core_size: 2,
+      categories: [
+        { key: "points", label: "PTS", classification: "TARGET", league_rank: 8, percentile: 0.35, z: -0.4, verdict: "weakness", in_core: true },
+        { key: "rebounds", label: "REB", classification: "PROTECT", league_rank: 3, percentile: 0.8, z: 0.9, verdict: "strength", in_core: true },
+        { key: "assists", label: "AST", classification: "FLEX", league_rank: 7, percentile: 0.45, z: -0.1, verdict: "neutral", in_core: false },
+      ],
+    };
+  }
+  return {
+    source: "system_recommended_strategy",
+    minimum_winning_core: 6,
+    recommended_core_size: 7,
+    categories: [
+      { key: "fg_pct", label: "FG%", classification: "TARGET", league_rank: 15, percentile: 0.25, z: -0.8, verdict: "weakness", in_core: true },
+      { key: "ft_pct", label: "FT%", classification: "TARGET", league_rank: 14, percentile: 0.3, z: -0.7, verdict: "weakness", in_core: true },
+      { key: "dreb", label: "DREB", classification: "TARGET", league_rank: 13, percentile: 0.35, z: -0.55, verdict: "weakness", in_core: true },
+      { key: "three_pm", label: "3PTM", classification: "PROTECT", league_rank: 4, percentile: 0.8, z: 0.85, verdict: "strength", in_core: true },
+      { key: "points", label: "PTS", classification: "PROTECT", league_rank: 5, percentile: 0.75, z: 0.7, verdict: "strength", in_core: true },
+      { key: "assists", label: "AST", classification: "PROTECT", league_rank: 3, percentile: 0.85, z: 1.0, verdict: "strength", in_core: true },
+      { key: "steals", label: "STL", classification: "PROTECT", league_rank: 6, percentile: 0.7, z: 0.55, verdict: "strength", in_core: true },
+      { key: "blocks", label: "BLK", classification: "PROTECT", league_rank: 7, percentile: 0.65, z: 0.4, verdict: "strength", in_core: true },
+      { key: "oreb", label: "OREB", classification: "FLEX", league_rank: 11, percentile: 0.45, z: -0.05, verdict: "neutral", in_core: false },
+      { key: "assist_turnover", label: "A/TO", classification: "FLEX", league_rank: 10, percentile: 0.5, z: 0.0, verdict: "neutral", in_core: false },
+      { key: "turnovers", label: "TO", classification: "PUNT_CANDIDATE", league_rank: 18, percentile: 0.1, z: -1.4, verdict: "weakness", in_core: false },
+    ],
+  };
+}
+
+function applyTargetsPagination(fixture, searchParams) {
+  const limit = Math.min(Math.max(Number(searchParams.get("limit") || 24), 1), 100);
+  const offset = Math.min(Math.max(Number(searchParams.get("offset") || 0), 0), 10000);
+  let candidates = fixture.candidates;
+  if (searchParams.get("position") === "PG") {
+    const first = candidates[0];
+    candidates = Array.from({ length: 25 }, (_, index) => ({
+      ...first,
+      nba_id: first.nba_id + 1001 + index,
+      player_id: first.player_id + 1001 + index,
+      name: `Paged candidate ${index + 1}`,
+      short_name: `Paged candidate ${index + 1}`,
+      position: "PG",
+      // Preserve GNFC minutes evidence on every page for Fit pagination tests.
+      minutes_trend: first.minutes_trend,
+      season_average: first.season_average,
+      actionability: first.actionability,
+      fit_explanation: first.fit_explanation,
+    }));
+  }
+  const filtered = candidates.length;
+  fixture.candidates = candidates.slice(offset, offset + limit);
+  fixture.sample.filtered_candidates = filtered;
+  fixture.sample.returned = fixture.candidates.length;
+  fixture.filters = {
+    ...fixture.filters,
+    position: searchParams.get("position") || null,
+    limit,
+    offset,
+  };
+  return fixture;
+}
+
+function targetsFixture(league, membership, managerId, actionScope, selectedCategory = null) {
   const name = league === "gnfc" ? "GNFC Current Form Target" : managerId === 1
     ? `${league.toUpperCase()} Manager A Target`
     : `${league.toUpperCase()} xrtc Target`;
+  const strategy_summary = strategySummaryFixture(league);
+  const categories = strategy_summary.categories.map((row) => row.key);
+  const automaticNeeds = strategy_summary.categories
+    .filter((row) => row.classification === "TARGET")
+    .map((row) => ({
+      key: row.key,
+      label: row.label,
+      of: league === "gnfc" ? 12 : 20,
+      team_rank: row.league_rank,
+      team_z: row.z,
+      weight: 2,
+    }));
+  const explicit = typeof selectedCategory === "string" && selectedCategory.length > 0
+    ? strategy_summary.categories.find((row) => row.key === selectedCategory)
+    : null;
+  const need_source = explicit
+    ? "user_selected_category"
+    : automaticNeeds.length
+      ? "system_recommended_strategy"
+      : "system_recommended_strategy_no_targets";
+  const needs = explicit
+    ? [{
+      key: explicit.key,
+      label: explicit.label,
+      of: league === "gnfc" ? 12 : 20,
+      team_rank: explicit.league_rank,
+      team_z: explicit.z,
+      weight: 2,
+    }]
+    : automaticNeeds;
+  const helpLabel = needs[0]?.label ?? "PTS";
+  const helpKey = needs[0]?.key ?? "points";
+  const readyCandidate = {
+    player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
+    nba_id: managerId * 1_000 + (league === "ldl" ? 1 : 2),
+    name,
+    short_name: name,
+    nba_team: "ORL",
+    nba_team_short: "ORL",
+    position: "G",
+    photo: null,
+    availability: "free_agent",
+    fantasy_team: null,
+    fit_rank: 1,
+    fit_score: managerId === 1 ? 1.25 : 0.85,
+    availability_rank: 1,
+    availability_of: 80,
+    fit_explanation: {
+      schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
+      sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,
+      contributions_field: "need_contributions", market_rank_separate_from_score: true,
+      salary_and_tokens_in_score: false, future_role_and_injury_risk_in_score: false,
+    },
+    recommendation_reason_codes: ["absolute_category_helper", "controlled_tradeoffs"],
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
+    confidence: "high",
+    recommendation_tier: "strong",
+    actionability: {
+      status: "ready",
+      reasons: [],
+      role_signal: "observed_current_minutes",
+      cap_result: league === "gnfc" ? "not_applicable" : "within_known_caps",
+      roster_result: "open_slot",
+    },
+    recommendation_labels: ["fixture"],
+    helps: [helpLabel, "AST"],
+    hurts_needs: [],
+    tradeoffs: ["TO"],
+    salary_2026_27: league === "gnfc" ? null : "$2,400,000",
+    injury: null,
+  };
+  const reviewCandidate = {
+    player_id: 9000 + managerId,
+    nba_id: 9000 + managerId,
+    name: "Conditional FA",
+    short_name: "Conditional FA",
+    nba_team: "DET",
+    nba_team_short: "DET",
+    position: "F",
+    photo: null,
+    availability: "free_agent",
+    fantasy_team: null,
+    fit_rank: 2,
+    fit_score: 0.7,
+    confidence: "medium",
+    recommendation_tier: "best_available",
+    actionability: {
+      status: "needs_review",
+      reasons: ["limited_current_minutes"],
+      role_signal: "historical_only",
+      cap_result: league === "gnfc" ? "not_applicable" : "within_known_caps",
+      roster_result: "open_slot",
+    },
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 0.6, weight: 2, weighted_contribution: 1.2, verdict: "helps" }],
+    helps: [helpLabel],
+    hurts_needs: [],
+    tradeoffs: ["AST"],
+    salary_2026_27: league === "gnfc" ? null : "$1,000,000",
+    injury: null,
+  };
+  const tradeTarget = {
+    player_id: 9100 + managerId,
+    nba_id: 9100 + managerId,
+    name: "Rostered Trade Target",
+    short_name: "Trade Target",
+    nba_team: "BOS",
+    nba_team_short: "BOS",
+    position: "C",
+    photo: null,
+    availability: "rostered",
+    fantasy_team: { id: `${league}-team-b`, name: "Rival Franchise", logo: null },
+    fit_rank: 3,
+    fit_score: 0.95,
+    confidence: "medium",
+    recommendation_tier: "strong",
+    need_contributions: [{ key: helpKey, label: helpLabel, player_z: 0.9, weight: 2, weighted_contribution: 1.8, verdict: "helps" }],
+    helps: [helpLabel, "DREB"],
+    hurts_needs: [],
+    tradeoffs: ["TO"],
+    salary_2026_27: league === "gnfc" ? null : "$8,500,000",
+    injury: null,
+  };
+  const candidates = actionScope === "ready"
+    ? [readyCandidate]
+    : [readyCandidate, reviewCandidate, tradeTarget];
   return {
-    league: leagueFixture(league),
+    league: { ...leagueFixture(league), categories },
     team: { id: membership.fantrax_team_id, name: membership.franchise_name, logo: null, owner: null },
     basis_requested: "season",
     basis_used: "season",
     fallback_reason: null,
     window: { days: 14, from: "2026-08-27", to: "2026-09-10", season: "2026-27" },
-    need_source: "system_recommended_strategy",
-    needs: [],
-    sample: { candidate_universe: 100, eligible_candidates: 80, filtered_candidates: actionScope === "all" ? 2 : 1, returned: actionScope === "all" ? 2 : 1 },
-    filters: { availability: "free_agent", position: null, limit: 12 },
-    candidates: [{
-      player_id: managerId * 100 + (league === "ldl" ? 1 : 2),
-      nba_id: managerId * 1_000 + (league === "ldl" ? 1 : 2),
-      name,
-      short_name: name,
-      nba_team: "Test Team",
-      nba_team_short: "TST",
-      position: "G",
-      photo: null,
-      availability: "free_agent",
-      fantasy_team: null,
-      fit_rank: 1,
-      fit_score: managerId === 1 ? 1.25 : 0.85,
-      availability_rank: 1,
-      availability_of: 80,
-      fit_explanation: {
-        schema_version: 1, score_kind: "team_need_weighted_player_z", basis_used: "season",
-        sample_games: 12, weighted_sum: 2.5, total_weight: 2, score: 1.25,
-        contributions_field: "need_contributions", market_rank_separate_from_score: true,
-        salary_and_tokens_in_score: false, future_role_and_injury_risk_in_score: false,
+    need_source,
+    needs,
+    strategy_summary,
+    sample: {
+      candidate_universe: 100,
+      eligible_candidates: 80,
+      filtered_candidates: candidates.length,
+      returned: candidates.length,
+    },
+    filters: { availability: league === "gnfc" ? "free_agent" : "all", position: null, limit: 24, offset: 0 },
+    acquisition_context: {
+      roster_count: 13,
+      roster_limit: 14,
+      cap_applies: league !== "gnfc",
+      cap_season: league === "gnfc" ? null : "2026-27",
+    },
+    candidates,
+    category_recommendations: needs.map((need) => ({
+      key: need.key,
+      label: need.label,
+      free_agent_market: "limited",
+      message: "Fixture lane",
+      strong_free_agents: [readyCandidate],
+      best_available: [reviewCandidate],
+      trade_targets: [tradeTarget],
+      last_resort: [],
+    })),
+  };
+}
+
+function watchlistPlayerFixture(nbaId, league, availability) {
+  const freeAgent = availability === "free_agent";
+  return {
+    player_id: 40_000 + (nbaId % 10_000),
+    fantrax_scorer_id: null,
+    name: freeAgent ? `Watched FA ${nbaId}` : `Watched Target ${nbaId}`,
+    short_name: freeAgent ? `FA ${nbaId}` : `Target ${nbaId}`,
+    nba_team: freeAgent ? "ORL" : "BOS",
+    nba_team_short: freeAgent ? "ORL" : "BOS",
+    position: freeAgent ? "G" : "F",
+    status: freeAgent ? "Free Agent" : "Active",
+    photo: null,
+    nba_id: nbaId,
+    salary_2026_27: null,
+    identity_status: "resolved",
+    availability,
+    fantasy_team: freeAgent ? null : { id: `${league}-team-b`, name: "Rival Franchise", logo: null, owner: "Rival" },
+    injury: null,
+    window_stats: { games: 3, minutes: 22, fg_pct: 45, three_pm: 1, ft_pct: 80, points: 12, oreb: 1, dreb: 3, assists: 4, steals: 1, blocks: 0, turnovers: 2, assist_turnover: 2 },
+    season_average: { games: 20, minutes: 24, fg_pct: 46, three_pm: 1.2, ft_pct: 78, points: 14, oreb: 1, dreb: 4, assists: 5, steals: 1, blocks: 0.5, turnovers: 2, assist_turnover: 2.5 },
+    category_trends: {
+      PTS: { recent: 16, season: 14, delta: 2, improved: true },
+      AST: { recent: 6, season: 5, delta: 1, improved: true },
+    },
+  };
+}
+
+function seedWatchlistEntries(league, subject) {
+  // manager-b starts empty so empty-state tests stay meaningful.
+  if (subject === "manager-b-subject") return [];
+  return [
+    {
+      id: 1,
+      owner_subject: subject,
+      league_slug: league,
+      nba_player_id: 201001,
+      notes: "Trade target — strong rebounder",
+      priority: 1,
+      created_at: "2026-10-01T10:00:00Z",
+      updated_at: "2026-10-20T12:00:00Z",
+      resolved: true,
+      player: watchlistPlayerFixture(201001, league, "rostered"),
+    },
+    {
+      id: 2,
+      owner_subject: subject,
+      league_slug: league,
+      nba_player_id: 201002,
+      notes: "",
+      priority: 2,
+      created_at: "2026-10-02T10:00:00Z",
+      updated_at: "2026-10-18T09:00:00Z",
+      resolved: true,
+      player: watchlistPlayerFixture(201002, league, "free_agent"),
+    },
+    {
+      id: 3,
+      owner_subject: subject,
+      league_slug: league,
+      nba_player_id: 201003,
+      notes: "Watch minutes after injury return",
+      priority: 3,
+      created_at: "2026-10-03T10:00:00Z",
+      updated_at: "2026-10-19T08:00:00Z",
+      resolved: true,
+      player: {
+        ...watchlistPlayerFixture(201003, league, "free_agent"),
+        name: "Watched Minutes Watch",
+        position: "C",
+        nba_team: "DET",
+        injury: {
+          status: "Questionable",
+          body_part: "Ankle",
+          detail: "Left ankle sprain",
+          source: "fixture",
+          updated_at: "2026-10-25T12:00:00Z",
+        },
       },
-      recommendation_reason_codes: ["absolute_category_helper", "controlled_tradeoffs"],
-      need_contributions: [{ key: "ft_pct", label: "FT%", player_z: 1.25, weight: 2, weighted_contribution: 2.5, verdict: "helps" }],
-      confidence: "high",
-      recommendation_tier: "strong",
-      actionability: { status: "ready", reasons: [], role_signal: "observed_current_minutes", cap_result: "within_known_caps", roster_result: "open_slot" },
-      recommendation_labels: ["fixture"],
-      helps: ["FT%", "AST"],
-      hurts_needs: [],
-      tradeoffs: ["TO"],
-      salary_2026_27: null,
-      injury: null,
-    }, ...(actionScope === "all" ? [{
-      player_id: 9000 + managerId,
-      nba_id: 9000 + managerId,
-      name: "Conditional FA",
-      short_name: "Conditional FA",
-      nba_team: "Test Team",
-      nba_team_short: "TST",
-      position: "F",
-      photo: null,
-      availability: "free_agent",
-      fantasy_team: null,
-      fit_rank: 2,
-      fit_score: 0.7,
-      confidence: "medium",
-      recommendation_tier: "strong",
-      actionability: { status: "requires_move", reasons: ["roster_drop_required"], role_signal: "historical_only", cap_result: "within_known_caps", roster_result: "drop_required" },
-      helps: ["FG%"],
-      hurts_needs: [],
-      tradeoffs: [],
-      salary_2026_27: "$1,000,000",
-      injury: null,
-    }] : [])],
+    },
+  ];
+}
+
+function freeAgentRadarFixture(league) {
+  const categories = ["points", "rebounds", "assists", "steals", "blocks"];
+  const players = [
+    {
+      player_id: 21001, nba_id: 21001, name: "Radar Test Player", nba_team: "ORL", nba_team_short: "ORL",
+      position: "G", photo: null, salary_2026_27: null, status: "Free Agent", short_name: "Test Player",
+      fantrax_scorer_id: null, identity_status: "resolved", availability: "free_agent", fantasy_team: null, injury: null,
+      window_stats: { games: 4, minutes: 28, fg_pct: 48, three_pm: 2, ft_pct: 82, points: 18, oreb: 1, dreb: 3, assists: 6, steals: 1.5, blocks: 0, turnovers: 2, assist_turnover: 3 },
+      season_average: { games: 20, minutes: 22, fg_pct: 45, three_pm: 1.5, ft_pct: 80, points: 14, oreb: 1, dreb: 3, assists: 4, steals: 1, blocks: 0, turnovers: 2, assist_turnover: 2 },
+      recent_average: { games: 4, minutes: 28, fg_pct: 48, three_pm: 2, ft_pct: 82, points: 18, oreb: 1, dreb: 3, assists: 6, steals: 1.5, blocks: 0, turnovers: 2, assist_turnover: 3 },
+      trend_rank: 1, trend_score: 1.45, trend_confidence: "high", trend_strengths: ["PTS", "AST"],
+      minutes_trend: {
+        basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
+        state: "increase", sample_games: 4, minutes: 28, previous_minutes: 18,
+        delta_minutes: 10, delta_percent: 55.6, previous_games: 65, latest_game_date: "2026-10-24",
+      },
+      category_trends: {
+        PTS: { recent: 18, season: 14, delta: 4, improved: true },
+        AST: { recent: 6, season: 4, delta: 2, improved: true },
+        REB: { recent: 4, season: 4, delta: 0, improved: false },
+      },
+      trend_explanation: {
+        schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",
+        reason_code: "recent_vs_season_standardized_category_deltas",
+        recent_games: 4, season_games: 20, minimum_recent_games: 2, score: 1.45,
+        category_contributions: [
+          { key: "points", label: "PTS", standardized_delta: 1.1, recent: 18, season: 14 },
+          { key: "assists", label: "AST", standardized_delta: 0.35, recent: 6, season: 4 },
+        ],
+        team_need_fit_in_score: false, salary_and_tokens_in_score: false,
+      },
+    },
+    {
+      player_id: 21002, nba_id: 21002, name: "Radar Hot Forward", nba_team: "DET", nba_team_short: "DET",
+      position: "F", photo: null, salary_2026_27: null, status: "Free Agent", short_name: "Hot Forward",
+      fantrax_scorer_id: null, identity_status: "resolved", availability: "free_agent", fantasy_team: null, injury: null,
+      window_stats: { games: 3, minutes: 30, fg_pct: 52, three_pm: 1, ft_pct: 75, points: 16, oreb: 2, dreb: 7, assists: 2, steals: 1, blocks: 1, turnovers: 1.5, assist_turnover: 1.3 },
+      season_average: { games: 18, minutes: 24, fg_pct: 48, three_pm: 0.8, ft_pct: 74, points: 12, oreb: 1.5, dreb: 5, assists: 1.5, steals: 0.8, blocks: 0.7, turnovers: 1.5, assist_turnover: 1 },
+      recent_average: { games: 3, minutes: 30, fg_pct: 52, three_pm: 1, ft_pct: 75, points: 16, oreb: 2, dreb: 7, assists: 2, steals: 1, blocks: 1, turnovers: 1.5, assist_turnover: 1.3 },
+      trend_rank: 2, trend_score: 1.05, trend_confidence: "medium", trend_strengths: ["REB", "BLK"],
+      minutes_trend: {
+        basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
+        state: "early_increase", sample_games: 3, minutes: 30, previous_minutes: 20,
+        delta_minutes: 10, delta_percent: 50, previous_games: 50, latest_game_date: "2026-10-23",
+      },
+      category_trends: {
+        REB: { recent: 9, season: 6.5, delta: 2.5, improved: true },
+        BLK: { recent: 1, season: 0.7, delta: 0.3, improved: true },
+        PTS: { recent: 16, season: 12, delta: 4, improved: true },
+      },
+      trend_explanation: {
+        schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",
+        reason_code: "recent_vs_season_standardized_category_deltas",
+        recent_games: 3, season_games: 18, minimum_recent_games: 2, score: 1.05,
+        category_contributions: [
+          { key: "rebounds", label: "REB", standardized_delta: 0.7, recent: 9, season: 6.5 },
+          { key: "points", label: "PTS", standardized_delta: 0.35, recent: 16, season: 12 },
+        ],
+        team_need_fit_in_score: false, salary_and_tokens_in_score: false,
+      },
+    },
+    {
+      player_id: 21003, nba_id: 21003, name: "Radar Cooling Center", nba_team: "CHA", nba_team_short: "CHA",
+      position: "C", photo: null, salary_2026_27: null, status: "Free Agent", short_name: "Cooling Center",
+      fantrax_scorer_id: null, identity_status: "resolved", availability: "free_agent", fantasy_team: null, injury: null,
+      window_stats: { games: 4, minutes: 18, fg_pct: 50, three_pm: 0, ft_pct: 70, points: 8, oreb: 2, dreb: 5, assists: 1, steals: 0.5, blocks: 1, turnovers: 1, assist_turnover: 1 },
+      season_average: { games: 22, minutes: 26, fg_pct: 55, three_pm: 0, ft_pct: 72, points: 12, oreb: 2.5, dreb: 6, assists: 1.2, steals: 0.6, blocks: 1.4, turnovers: 1.2, assist_turnover: 1 },
+      recent_average: { games: 4, minutes: 18, fg_pct: 50, three_pm: 0, ft_pct: 70, points: 8, oreb: 2, dreb: 5, assists: 1, steals: 0.5, blocks: 1, turnovers: 1, assist_turnover: 1 },
+      trend_rank: 3, trend_score: -0.55, trend_confidence: "medium", trend_strengths: [],
+      minutes_trend: {
+        basis: "completed_game_logs", season: "2026-27", previous_season: "2025-26",
+        state: "decrease", sample_games: 4, minutes: 18, previous_minutes: 26,
+        delta_minutes: -8, delta_percent: -30.8, previous_games: 70, latest_game_date: "2026-10-22",
+      },
+      category_trends: {
+        PTS: { recent: 8, season: 12, delta: -4, improved: false },
+        BLK: { recent: 1, season: 1.4, delta: -0.4, improved: false },
+      },
+      trend_explanation: {
+        schema_version: 1, score_kind: "recent_vs_season_category_trend", status: "scored",
+        reason_code: "recent_vs_season_standardized_category_deltas",
+        recent_games: 4, season_games: 22, minimum_recent_games: 2, score: -0.55,
+        category_contributions: [
+          { key: "points", label: "PTS", standardized_delta: -0.4, recent: 8, season: 12 },
+          { key: "blocks", label: "BLK", standardized_delta: -0.15, recent: 1, season: 1.4 },
+        ],
+        team_need_fit_in_score: false, salary_and_tokens_in_score: false,
+      },
+    },
+  ];
+  return {
+    league: leagueFixture(league),
+    generated_at: "2026-10-25T12:00:00Z",
+    source: "database_cache",
+    window: { days: 7, from: "2026-10-18", to: "2026-10-25", season: "2026-27" },
+    minimum_games: 2,
+    categories,
+    method: "recent_vs_season_category_trend",
+    players,
   };
 }
 
