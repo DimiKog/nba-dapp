@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   fetchFantasyWatchlist,
   fetchLeaguePlayerExplorer,
@@ -22,8 +22,12 @@ import {
   type LeagueSlug,
 } from "@/lib/leagues";
 import TeamLogo from "@/components/TeamLogo";
-import InjuryFlag from "@/components/InjuryFlag";
 import { ReviewedInjuryNotice } from "@/components/ReviewedInjuryReport";
+import PlayerIdentityCell from "@/components/discovery/PlayerIdentityCell";
+import {
+  formatBrowseCacheHint,
+  formatBrowseMetadata,
+} from "@/lib/browsePresentation";
 import {
   fantasyStatValue,
   formatFantasyStat,
@@ -75,7 +79,7 @@ export default function LeaguePlayerExplorer({
   const [statsView, setStatsView] = useState<StatsView>("season");
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [direction, setDirection] = useState<Direction>("asc");
-  const [selectedId, setSelectedId] = useState("");
+  const [expandedId, setExpandedId] = useState("");
   const [comparisonIds, setComparisonIds] = useState<string[]>([]);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
   const [hasFantasyAccess, setHasFantasyAccess] = useState(false);
@@ -97,7 +101,7 @@ export default function LeaguePlayerExplorer({
     setFreeAgentScope("current_or_recent");
     setPosition("all");
     setStatus("all");
-    setSelectedId("");
+    setExpandedId("");
     setComparisonIds([]);
     setWatchedIds(new Set());
     setHasFantasyAccess(false);
@@ -121,8 +125,7 @@ export default function LeaguePlayerExplorer({
           watchlist?.entries.map((entry) => entry.nba_player_id) ?? [],
         ));
         setStatsView(data.ranking_basis);
-        const first = [...data.players].sort(rankPlayers)[0];
-        setSelectedId(playerKey(first));
+        setExpandedId("");
         lastRefresh.current = Date.now();
       })
       .catch(() => {
@@ -228,10 +231,6 @@ export default function LeaguePlayerExplorer({
   );
   const visiblePlayers = ordered.slice(0, visibleLimit);
   const remainingPlayers = ordered.length - visiblePlayers.length;
-
-  const selected = ordered.find((player) => playerKey(player) === selectedId)
-    ?? ordered[0]
-    ?? null;
   const injuredCount = filtered.filter((player) => player.injury).length;
   const freeAgentCount = filtered.filter((player) => playerAvailability(player) === "free_agent").length;
   const hasWindowGames = payload?.players.some((player) => player.window_stats.games > 0) ?? false;
@@ -286,16 +285,16 @@ export default function LeaguePlayerExplorer({
     .map((id) => payload?.players.find((player) => playerKey(player) === id))
     .filter((player): player is FantasyPlayerPerformance => Boolean(player));
   const comparisonHref = buildComparisonHref(league, comparisonIds);
+  const cacheHint = payload ? formatBrowseCacheHint(payload.snapshot.captured_at) : null;
 
   const shellClassName = embedded
     ? "w-full min-w-0"
     : "mx-auto w-full min-w-0 max-w-[1500px] px-4 py-8";
-  const Shell = embedded ? "div" : "main";
 
   return (
-    <Shell className={shellClassName}>
-      {!embedded ? (
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className={shellClassName}>
+      {!embedded && (
+        <div className="mb-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Fantasy intelligence</p>
             <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Player Explorer</h1>
@@ -303,156 +302,86 @@ export default function LeaguePlayerExplorer({
               Search and rank rostered players and fantasy free agents by category, performance and contract.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
-            <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-              {LEAGUE_SLUGS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => changeLeague(item)}
-                  className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
-                    league === item
-                      ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
-                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                  }`}
-                >
-                  {leagueLabel(item)}
-                </button>
-              ))}
-            </div>
+          <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+            {LEAGUE_SLUGS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => changeLeague(item)}
+                className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
+                  league === item
+                    ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
+                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                }`}
+              >
+                {leagueLabel(item)}
+              </button>
+            ))}
           </div>
-        </div>
-      ) : (
-        <div className="mb-4 flex justify-end">
-          <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
         </div>
       )}
 
       {loading && <ExplorerLoading />}
       {error && (
-        <div className="mt-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {error}
         </div>
       )}
       {watchError && (
-        <div className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">
+        <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300">
           {watchError}
         </div>
       )}
 
       {!loading && payload && (
         <>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard label="Visible players" value={filtered.length.toString()} detail={`${payload.counts.total} total players`} />
-            <SummaryCard label="Injury alerts" value={injuredCount.toString()} detail="In current result" tone={injuredCount ? "red" : undefined} />
-            <SummaryCard label="Free agents" value={freeAgentCount.toString()} detail={`${payload.counts.free_agents} in league pool`} />
-            <SummaryCard
-              label="Ranking basis"
-              value={payload.ranking_basis === "season" ? "Season" : `${payload.window.days} days`}
-              detail={`${payload.window.season} · cached ${formatTimestamp(payload.snapshot.captured_at)}`}
-            />
-          </div>
+          <BrowseToolbar
+            query={query}
+            onQueryChange={setQuery}
+            team={team}
+            onTeamChange={setTeam}
+            position={position}
+            onPositionChange={setPosition}
+            status={status}
+            onStatusChange={setStatus}
+            availability={availability}
+            onAvailabilityChange={changeAvailability}
+            statsView={statsView}
+            onStatsViewChange={setStatsView}
+            freeAgentScope={freeAgentScope}
+            onFreeAgentScopeChange={setFreeAgentScope}
+            teams={payload.teams}
+            positions={positions}
+            windowDays={payload.window.days}
+            hasWindowGames={hasWindowGames}
+            faCounts={payload.counts}
+            onRefresh={() => void refreshPlayers()}
+            refreshing={loading}
+          />
 
-          <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_repeat(3,minmax(145px,auto))]">
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search player, NBA team or fantasy team…"
-                className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:ring-blue-950"
-              />
-              <FilterSelect label="Fantasy team" value={team} onChange={setTeam} disabled={availability === "free_agent"}>
-                <option value="all">All teams</option>
-                {payload.teams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </FilterSelect>
-              <FilterSelect label="Position" value={position} onChange={setPosition}>
-                <option value="all">All positions</option>
-                {positions.map((item) => <option key={item} value={item}>{item}</option>)}
-              </FilterSelect>
-              <FilterSelect label="Roster status" value={status} onChange={setStatus}>
-                <option value="all">All statuses</option>
-                <option value="Active">Active</option>
-                <option value="Reserve">Reserve</option>
-                <option value="IR">Injured reserve</option>
-                <option value="injured">Any injury alert</option>
-              </FilterSelect>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <div className="flex flex-wrap gap-3">
-                <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-                  {(["all", "free_agent", "rostered"] as const).map((value) => (
-                    <StatsButton key={value} active={availability === value} onClick={() => changeAvailability(value)}>
-                      {value === "all" ? "All players" : value === "free_agent" ? "Free agents" : "Rostered"}
-                    </StatsButton>
-                  ))}
-                </div>
-                <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
-                  <StatsButton active={statsView === "season"} onClick={() => setStatsView("season")}>
-                    Season averages
-                  </StatsButton>
-                  <StatsButton active={statsView === "window"} disabled={!hasWindowGames} onClick={() => setStatsView("window")}>
-                    Last {payload.window.days} days
-                  </StatsButton>
-                </div>
-              </div>
-              {!hasWindowGames && (
-                <p className="text-xs text-slate-500">No games in the recent window; season averages are shown.</p>
-              )}
-            </div>
-            {availability === "free_agent" && (
-              <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-950 dark:bg-emerald-950/20">
-                <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">NBA evidence</span>
-                    <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1 shadow-sm dark:bg-slate-900">
-                      <StatsButton active={freeAgentScope === "ranked"} onClick={() => setFreeAgentScope("ranked")}>
-                        Ranked now · {payload.counts.free_agents_ranked}
-                      </StatsButton>
-                      <StatsButton active={freeAgentScope === "current_or_recent"} onClick={() => setFreeAgentScope("current_or_recent")}>
-                        Current or recent NBA · {payload.counts.free_agents_current_or_recent}
-                      </StatsButton>
-                      <StatsButton active={freeAgentScope === "all_known"} onClick={() => setFreeAgentScope("all_known")}>
-                        All known players · {payload.counts.free_agents}
-                      </StatsButton>
-                    </div>
-                  </div>
-                  <p className="max-w-xl text-xs text-emerald-800/80 dark:text-emerald-300/80">
-                    Legacy-only means no current team, salary or recent performance evidence; it does not prove that a player is inactive.
-                  </p>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {selected && (
-            <PlayerDecisionPanel
-              player={selected}
-              league={league}
-              hasFantasyAccess={hasFantasyAccess}
-              statsView={statsView}
-              windowDays={payload.window.days}
-              categories={categoryColumns}
-              onClose={() => setSelectedId("")}
-            />
-          )}
-
-          <section className="mt-5 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
-            <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
-              <div>
-                <h2 className="font-bold text-slate-950 dark:text-white">{payload.league.name} player rankings</h2>
-                <p className="text-xs text-slate-500">Select a row for contract and injury details.</p>
-              </div>
-              <p className="text-xs font-semibold text-slate-500">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
+              {formatBrowseMetadata({
+                visiblePlayers: ordered.length,
+                freeAgentsInView: freeAgentCount,
+                injuryAlertsInView: injuredCount,
+                basis: statsView,
+                windowDays: payload.window.days,
+                season: payload.window.season,
+              })}
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {cacheHint && <span>{cacheHint}</span>}
+              <span>
                 {ordered.length === 0
                   ? "0 results"
                   : `Showing ${visiblePlayers.length} of ${ordered.length}`}
-              </p>
+              </span>
             </div>
+          </div>
 
-            <div className="space-y-3 p-3 md:hidden">
+          <section className="mt-3 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <div className="space-y-2 p-2 md:hidden">
               {visiblePlayers.map((player) => (
                 <ExplorerMobileCard
                   key={`${player.fantasy_team?.id}-${playerKey(player)}`}
@@ -460,12 +389,14 @@ export default function LeaguePlayerExplorer({
                   league={league}
                   statsView={statsView}
                   categories={categoryColumns}
-                  active={playerKey(player) === playerKey(selected)}
+                  expanded={playerKey(player) === expandedId}
                   compared={comparisonIds.includes(playerKey(player))}
                   comparisonFull={!comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
                   watched={Boolean(player.nba_id && watchedIds.has(player.nba_id))}
                   watchPending={watchPending === player.nba_id}
-                  onSelect={() => setSelectedId(playerKey(player))}
+                  hasFantasyAccess={hasFantasyAccess}
+                  windowDays={payload.window.days}
+                  onToggleExpand={() => setExpandedId((current) => current === playerKey(player) ? "" : playerKey(player))}
                   onCompare={() => toggleComparison(player)}
                   onWatch={() => watchPlayer(player)}
                 />
@@ -473,17 +404,14 @@ export default function LeaguePlayerExplorer({
             </div>
 
             <div className="hidden max-w-full overflow-x-auto md:block">
-              <table className="min-w-[1390px] w-full text-sm">
+              <table className="min-w-[1280px] w-full text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
-                    <SortableHeader label="#" sort="rank" active={sortKey} direction={direction} onSort={changeSort} className="w-14 text-center" />
-                    <th className="w-20 px-3 py-3 text-center">Compare</th>
-                    <th className="w-20 px-3 py-3 text-center">Watch</th>
-                    <SortableHeader label="Player" sort="name" active={sortKey} direction={direction} onSort={changeSort} className="sticky left-0 z-20 min-w-60 bg-slate-50 text-left dark:bg-slate-800" />
-                    <SortableHeader label="Fantasy team" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-44 text-left" />
-                    <th className="px-3 py-3 text-left">Pos</th>
-                    <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-28 text-right" />
-                    <th className="min-w-16 px-3 py-3 text-right">GP</th>
+                    <SortableHeader label="#" sort="rank" active={sortKey} direction={direction} onSort={changeSort} className="w-12 text-center" />
+                    <SortableHeader label="Player" sort="name" active={sortKey} direction={direction} onSort={changeSort} className="sticky left-0 z-20 min-w-56 bg-slate-50 text-left dark:bg-slate-800" />
+                    <SortableHeader label="Status" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-40 text-left" />
+                    <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-24 text-right" />
+                    <th className="min-w-14 px-3 py-2.5 text-right">GP</th>
                     {categoryColumns.map((category) => (
                       <SortableHeader
                         key={category.key}
@@ -492,90 +420,36 @@ export default function LeaguePlayerExplorer({
                         active={sortKey}
                         direction={direction}
                         onSort={changeSort}
-                        className="min-w-16 text-right"
+                        className="min-w-14 text-right"
                       />
                     ))}
+                    <th className="w-16 px-2 py-2.5 text-center">Watch</th>
+                    <th className="w-16 px-2 py-2.5 text-center">Compare</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {visiblePlayers.map((player) => {
-                    const stats = statsFor(player, statsView);
-                    const active = playerKey(player) === playerKey(selected);
+                    const key = playerKey(player);
                     return (
-                      <tr
-                        key={`${player.fantasy_team?.id}-${playerKey(player)}`}
-                        onClick={() => setSelectedId(playerKey(player))}
-                        className={`cursor-pointer transition-colors ${
-                          active
-                            ? "bg-blue-50 dark:bg-blue-950/30"
-                            : "hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                        }`}
-                      >
-                        <td className="px-3 py-3 text-center font-bold tabular-nums text-slate-400">
-                          <span>{player.impact_rank ?? "—"}</span>
-                          {playerAvailability(player) === "free_agent" && player.availability_rank && player.availability_of && (
-                            <span className="mt-0.5 block text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400">FA #{player.availability_rank}/{player.availability_of}</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleComparison(player);
-                            }}
-                            disabled={!comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
-                            className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${
-                              comparisonIds.includes(playerKey(player))
-                                ? "bg-blue-600 text-white"
-                                : "bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
-                            }`}
-                          >
-                            {comparisonIds.includes(playerKey(player)) ? "Selected" : "Add"}
-                          </button>
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          {player.nba_id && watchedIds.has(player.nba_id) ? (
-                            <Link
-                              href="/watchlist"
-                              onClick={(event) => event.stopPropagation()}
-                              className="rounded-md bg-emerald-100 px-2 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-                            >
-                              Watching
-                            </Link>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                watchPlayer(player);
-                              }}
-                              disabled={!player.nba_id || watchPending === player.nba_id}
-                              className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
-                            >
-                              {watchPending === player.nba_id ? "Saving…" : "+ Watch"}
-                            </button>
-                          )}
-                        </td>
-                        <td className={`sticky left-0 z-10 px-3 py-2.5 ${active ? "bg-blue-50 dark:bg-slate-900" : "bg-white dark:bg-slate-900"}`}>
-                          <PlayerIdentity player={player} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <FantasyAvailability league={league} player={player} compact />
-                        </td>
-                        <td className="px-3 py-3 text-slate-500">{player.position || "—"}</td>
-                        <td className="px-3 py-3 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">
-                          {player.salary_2026_27 ?? "$0"}
-                        </td>
-                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-600 dark:text-slate-300">
-                          {stats?.games ?? 0}
-                        </td>
-                        {categoryColumns.map((category) => (
-                          <td key={category.key} className="px-3 py-3 text-right tabular-nums text-slate-700 dark:text-slate-300">
-                            {stats?.games ? formatFantasyStat(stats, category) : "—"}
-                          </td>
-                        ))}
-                      </tr>
+                      <BrowseDesktopRows
+                        key={`${player.fantasy_team?.id}-${key}`}
+                        player={player}
+                        league={league}
+                        stats={statsFor(player, statsView)}
+                        statsView={statsView}
+                        categories={categoryColumns}
+                        expanded={key === expandedId}
+                        compared={comparisonIds.includes(key)}
+                        comparisonFull={!comparisonIds.includes(key) && comparisonIds.length >= 4}
+                        watched={Boolean(player.nba_id && watchedIds.has(player.nba_id))}
+                        watchPending={watchPending === player.nba_id}
+                        hasFantasyAccess={hasFantasyAccess}
+                        windowDays={payload.window.days}
+                        colSpan={7 + categoryColumns.length}
+                        onToggleExpand={() => setExpandedId((current) => current === key ? "" : key)}
+                        onCompare={() => toggleComparison(player)}
+                        onWatch={() => watchPlayer(player)}
+                      />
                     );
                   })}
                 </tbody>
@@ -585,11 +459,11 @@ export default function LeaguePlayerExplorer({
               <div className="p-10 text-center text-sm text-slate-500">No players match these filters.</div>
             )}
             {remainingPlayers > 0 && (
-              <div className="border-t border-slate-200 p-4 text-center dark:border-slate-700">
+              <div className="border-t border-slate-200 p-3 text-center dark:border-slate-700">
                 <button
                   type="button"
                   onClick={() => setVisibleLimit((current) => current + PAGE_SIZE)}
-                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-2 text-sm font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
                 >
                   Show {Math.min(PAGE_SIZE, remainingPlayers)} more · {remainingPlayers} remaining
                 </button>
@@ -606,280 +480,255 @@ export default function LeaguePlayerExplorer({
           )}
         </>
       )}
-    </Shell>
+    </div>
   );
 }
 
-function ExplorerMobileCard({
-  player,
-  league,
-  statsView,
-  categories,
-  active,
-  compared,
-  comparisonFull,
-  watched,
-  watchPending,
-  onSelect,
-  onCompare,
-  onWatch,
+
+function BrowseToolbar({
+  query, onQueryChange, team, onTeamChange, position, onPositionChange, status, onStatusChange,
+  availability, onAvailabilityChange, statsView, onStatsViewChange, freeAgentScope, onFreeAgentScopeChange,
+  teams, positions, windowDays, hasWindowGames, faCounts, onRefresh, refreshing,
 }: {
-  player: FantasyPlayerPerformance;
-  league: LeagueSlug;
-  statsView: StatsView;
-  categories: FantasyCategory[];
-  active: boolean;
-  compared: boolean;
-  comparisonFull: boolean;
-  watched: boolean;
-  watchPending: boolean;
-  onSelect: () => void;
-  onCompare: () => void;
-  onWatch: () => void;
+  query: string; onQueryChange: (value: string) => void;
+  team: string; onTeamChange: (value: string) => void;
+  position: string; onPositionChange: (value: string) => void;
+  status: string; onStatusChange: (value: string) => void;
+  availability: Availability; onAvailabilityChange: (value: Availability) => void;
+  statsView: StatsView; onStatsViewChange: (value: StatsView) => void;
+  freeAgentScope: FreeAgentScope; onFreeAgentScopeChange: (value: FreeAgentScope) => void;
+  teams: ExplorerPayload["teams"]; positions: string[];
+  windowDays: number; hasWindowGames: boolean; faCounts: ExplorerPayload["counts"];
+  onRefresh: () => void; refreshing: boolean;
 }) {
-  const stats = statsFor(player, statsView);
-  const topCategories = categories.slice(0, 3);
   return (
-    <article
-      onClick={onSelect}
-      className={`rounded-xl border p-3 transition ${
-        active
-          ? "border-blue-300 bg-blue-50/70 dark:border-blue-800 dark:bg-blue-950/30"
-          : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
-      }`}
-    >
-      <div className="flex items-start gap-3">
-        <PlayerPhoto player={player} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <p className="truncate font-black text-slate-950 dark:text-white">{player.name}</p>
-                {playerAvailability(player) === "free_agent" && <FreeAgentBadge />}
-              </div>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                #{player.impact_rank ?? "—"}
-                {player.position ? ` · ${player.position}` : ""}
-                {player.nba_status?.recommendation_eligible === false
-                  ? ` · ${player.nba_status.club} (NBA status review)`
-                  : player.nba_team ? ` · ${player.nba_team}` : ""}
-              </p>
-            </div>
-            <p className="shrink-0 text-sm font-bold tabular-nums text-blue-700 dark:text-blue-400">
-              {player.salary_2026_27 ?? "$0"}
-            </p>
-          </div>
-          <div className="mt-2">
-            <FantasyAvailability league={league} player={player} compact />
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            {topCategories.map((category) => (
-              <div
-                key={category.key}
-                className="rounded-lg bg-slate-50 px-2 py-1.5 text-center dark:bg-slate-800/70"
-              >
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                  {category.label}
-                </p>
-                <p className="mt-0.5 text-sm font-black tabular-nums text-slate-900 dark:text-white">
-                  {stats?.games ? formatFantasyStat(stats, category) : "—"}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onCompare();
-              }}
-              disabled={comparisonFull}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${
-                compared
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
-              }`}
-            >
-              {compared ? "Selected" : "Compare"}
+    <section className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search player, NBA team or fantasy team…"
+            className="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:ring-blue-950" />
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:flex lg:shrink-0">
+            <FilterSelect label="Fantasy team" value={team} onChange={onTeamChange} disabled={availability === "free_agent"}>
+              <option value="all">All teams</option>
+              {teams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </FilterSelect>
+            <FilterSelect label="Position" value={position} onChange={onPositionChange}>
+              <option value="all">All positions</option>
+              {positions.map((item) => <option key={item} value={item}>{item}</option>)}
+            </FilterSelect>
+            <FilterSelect label="Roster status" value={status} onChange={onStatusChange}>
+              <option value="all">All statuses</option>
+              <option value="Active">Active</option>
+              <option value="Reserve">Reserve</option>
+              <option value="IR">Injured reserve</option>
+              <option value="injured">Any injury alert</option>
+            </FilterSelect>
+            <button type="button" disabled={refreshing} onClick={onRefresh}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">
+              Refresh
             </button>
-            {watched ? (
-              <Link
-                href="/watchlist"
-                onClick={(event) => event.stopPropagation()}
-                className="rounded-lg bg-emerald-100 px-3 py-1.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
-              >
-                Watching
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onWatch();
-                }}
-                disabled={!player.nba_id || watchPending}
-                className="rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"
-              >
-                {watchPending ? "Saving…" : "+ Watch"}
-              </button>
-            )}
           </div>
         </div>
-      </div>
-    </article>
-  );
-}
-
-function PlayerDecisionPanel({
-  player,
-  league,
-  hasFantasyAccess,
-  statsView,
-  windowDays,
-  categories,
-  onClose,
-}: {
-  player: FantasyPlayerPerformance;
-  league: LeagueSlug;
-  hasFantasyAccess: boolean;
-  statsView: StatsView;
-  windowDays: number;
-  categories: FantasyCategory[];
-  onClose: () => void;
-}) {
-  const stats = statsFor(player, statsView);
-  return (
-    <section className="mt-5 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 shadow-sm dark:border-blue-900 dark:from-blue-950/50 dark:via-slate-900 dark:to-indigo-950/30">
-      <div className="grid gap-5 p-5 xl:grid-cols-[minmax(260px,0.9fr)_minmax(420px,1.5fr)_minmax(300px,1fr)]">
-        <div className="flex gap-4">
-          <PlayerPhoto player={player} large />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xl font-black text-slate-950 dark:text-white">{player.name}</p>
-              {playerAvailability(player) === "free_agent"
-                ? <FreeAgentBadge />
-                : player.status !== "Active" && <StatusBadge status={player.status} />}
-            </div>
-            <p className="mt-1 text-sm text-slate-500">{nbaTeamDisplay(player)} · {player.position || "Position unavailable"}</p>
-            {player.nba_status?.recommendation_eligible === false && player.nba_status.source_url && (
-              <a href={player.nba_status.source_url} target="_blank" rel="noopener noreferrer" className="mt-1 block text-xs font-semibold text-amber-700 underline dark:text-amber-300">
-                Verified club source · {player.nba_status.source_date} ↗
-              </a>
-            )}
-            <div className="mt-3">
-              <FantasyAvailability league={league} player={player} />
-            </div>
-            {player.injury && (
-              <p className="mt-3 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
-                Feed injury: {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
-              </p>
-            )}
-            {hasFantasyAccess && player.nba_id && <div className="mt-3"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>}
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {player.category_strengths.map((strength) => (
-                <span key={strength} className="rounded-full bg-blue-100 px-2 py-1 text-[11px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">{strength}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="@container">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
-            <p className="text-[11px] text-slate-400">Missing salary = $0 cap value</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 @sm:grid-cols-3 @3xl:grid-cols-5">
-            {SALARY_SEASONS.map((season, index) => {
-              const salary = player.salaries?.[season] ?? null;
-              return (
-              <div
-                key={season}
-                className={`rounded-xl border p-3 ${
-                  index === 0
-                    ? "col-span-2 border-blue-300 bg-blue-600 text-white @sm:col-span-1 @sm:scale-[1.04] dark:border-blue-600"
-                    : "border-slate-200 bg-white/80 dark:border-slate-700 dark:bg-slate-900/70"
-                }`}
-              >
-                <p className={`text-[10px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
-                <p className={`mt-1 truncate text-sm font-black tabular-nums ${index === 0 ? "" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
-                {!salary && <p className={`text-[10px] ${index === 0 ? "text-blue-100" : "text-slate-400"}`}>No salary recorded</p>}
-              </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-              {statsView === "season" ? "Season averages" : `Last ${windowDays} days`} · {stats?.games ?? 0} GP
-            </p>
-            {player.player_id && (
-              <Link href={`/players/${player.player_id}?league=${league}&from=explorer`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">
-                Full profile →
-              </Link>
-            )}
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {categories.map((category) => (
-                <div key={category.key} className="rounded-lg border border-slate-200 bg-white/80 p-2 text-center dark:border-slate-700 dark:bg-slate-900/70">
-                  <p className="text-[10px] font-bold text-slate-400">{category.label}</p>
-                  <p className="mt-0.5 font-black tabular-nums text-slate-900 dark:text-white">{stats?.games ? formatFantasyStat(stats, category) : "—"}</p>
-                </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+            {(["all", "free_agent", "rostered"] as const).map((value) => (
+              <StatsButton key={value} active={availability === value} onClick={() => onAvailabilityChange(value)}>
+                {value === "all" ? "All" : value === "free_agent" ? "FA" : "Rostered"}
+              </StatsButton>
             ))}
           </div>
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+            <StatsButton active={statsView === "season"} onClick={() => onStatsViewChange("season")}>Season</StatsButton>
+            <StatsButton active={statsView === "window"} disabled={!hasWindowGames} onClick={() => onStatsViewChange("window")}>Last {windowDays}d</StatsButton>
+          </div>
+          {!hasWindowGames && <p className="text-[11px] text-slate-500">No recent window games — season averages shown.</p>}
         </div>
+        {availability === "free_agent" && (
+          <details className="rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2 dark:border-emerald-950 dark:bg-emerald-950/20">
+            <summary className="cursor-pointer text-xs font-bold text-emerald-800 dark:text-emerald-300">NBA evidence filters</summary>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <StatsButton active={freeAgentScope === "ranked"} onClick={() => onFreeAgentScopeChange("ranked")}>Ranked · {faCounts.free_agents_ranked}</StatsButton>
+              <StatsButton active={freeAgentScope === "current_or_recent"} onClick={() => onFreeAgentScopeChange("current_or_recent")}>Current/recent · {faCounts.free_agents_current_or_recent}</StatsButton>
+              <StatsButton active={freeAgentScope === "all_known"} onClick={() => onFreeAgentScopeChange("all_known")}>All known · {faCounts.free_agents}</StatsButton>
+            </div>
+            <p className="mt-2 text-[11px] text-emerald-800/80 dark:text-emerald-300/80">Legacy-only means no current team, salary or recent performance evidence; it does not prove inactivity.</p>
+          </details>
+        )}
       </div>
-      <button type="button" onClick={onClose} className="sr-only">Close player details</button>
     </section>
   );
 }
 
-function ComparisonTray({
-  players,
-  href,
-  onRemove,
-}: {
-  players: FantasyPlayerPerformance[];
-  href: string;
-  onRemove: (player: FantasyPlayerPerformance) => void;
+function BrowseDesktopRows(props: {
+  player: FantasyPlayerPerformance; league: LeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
+  categories: FantasyCategory[]; expanded: boolean; compared: boolean; comparisonFull: boolean;
+  watched: boolean; watchPending: boolean; hasFantasyAccess: boolean; windowDays: number; colSpan: number;
+  onToggleExpand: () => void; onCompare: () => void; onWatch: () => void;
 }) {
+  const { player, league, stats, statsView, categories, expanded, compared, comparisonFull, watched, watchPending, hasFantasyAccess, windowDays, colSpan, onToggleExpand, onCompare, onWatch } = props;
+  return (
+    <>
+      <tr onClick={onToggleExpand} className={`cursor-pointer transition-colors ${expanded ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"}`}>
+        <td className="px-2 py-2.5 text-center font-bold tabular-nums text-slate-400">
+          <span>{player.impact_rank ?? "—"}</span>
+          {playerAvailability(player) === "free_agent" && player.availability_rank && player.availability_of && (
+            <span className="mt-0.5 block text-[9px] font-bold uppercase text-emerald-600 dark:text-emerald-400">FA #{player.availability_rank}/{player.availability_of}</span>
+          )}
+        </td>
+        <td className={`sticky left-0 z-10 px-3 py-2 ${expanded ? "bg-slate-50 dark:bg-slate-900" : "bg-white dark:bg-slate-900"}`}>
+          <PlayerIdentityCell name={player.name} photo={player.photo} nbaId={player.nba_id} position={player.position} nbaTeam={nbaTeamDisplay(player)} size="sm" injury={Boolean(player.injury)} />
+        </td>
+        <td className="px-3 py-2.5"><FantasyAvailability league={league} player={player} compact /></td>
+        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"}</td>
+        <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-slate-600 dark:text-slate-300">{stats?.games ?? 0}</td>
+        {categories.map((category) => (
+          <td key={category.key} className="px-2 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{stats?.games ? formatFantasyStat(stats, category) : "—"}</td>
+        ))}
+        <td className="px-2 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
+          {player.nba_id && watched ? (
+            <Link href="/players?view=watched" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Watching</Link>
+          ) : (
+            <button type="button" onClick={onWatch} disabled={!player.nba_id || watchPending} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300">{watchPending ? "…" : "+ Watch"}</button>
+          )}
+        </td>
+        <td className="px-2 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
+          <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "On" : "Add"}</button>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="bg-slate-50/90 dark:bg-slate-950/40">
+          <td colSpan={colSpan} className="px-4 py-3">
+            <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ExplorerMobileCard(props: {
+  player: FantasyPlayerPerformance; league: LeagueSlug; statsView: StatsView; categories: FantasyCategory[];
+  expanded: boolean; compared: boolean; comparisonFull: boolean; watched: boolean; watchPending: boolean;
+  hasFantasyAccess: boolean; windowDays: number;
+  onToggleExpand: () => void; onCompare: () => void; onWatch: () => void;
+}) {
+  const { player, league, statsView, categories, expanded, compared, comparisonFull, watched, watchPending, hasFantasyAccess, windowDays, onToggleExpand, onCompare, onWatch } = props;
+  const stats = statsFor(player, statsView);
+  const topCategories = categories.slice(0, 3);
+  return (
+    <article className={`rounded-xl border px-3 py-2.5 transition ${expanded ? "border-slate-300 bg-slate-50 dark:border-slate-600 dark:bg-slate-800/40" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+      <button type="button" onClick={onToggleExpand} className="flex w-full items-start gap-3 text-left">
+        <PlayerIdentityCell
+          name={player.name} photo={player.photo} nbaId={player.nba_id} position={player.position}
+          nbaTeam={player.nba_team_short || player.nba_team} size="sm" injury={Boolean(player.injury)}
+          trailing={<span className="shrink-0 text-[11px] font-bold tabular-nums text-slate-400">#{player.impact_rank ?? "—"}</span>}
+        />
+      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <FantasyAvailability league={league} player={player} compact />
+        {topCategories.map((category) => (
+          <span key={category.key} className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+            <span className="text-slate-400">{category.label}</span>{" "}
+            <span className="tabular-nums text-slate-900 dark:text-white">{stats?.games ? formatFantasyStat(stats, category) : "—"}</span>
+          </span>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        {watched ? (
+          <Link href="/players?view=watched" className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Watching</Link>
+        ) : (
+          <button type="button" onClick={onWatch} disabled={!player.nba_id || watchPending} className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300">{watchPending ? "Saving…" : "+ Watch"}</button>
+        )}
+        <button type="button" onClick={onToggleExpand} className="ml-auto text-[11px] font-bold text-blue-600 dark:text-blue-400">{expanded ? "Less" : "More"}</button>
+      </div>
+      {expanded && (
+        <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+          <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} />
+          <div className="mt-3 flex gap-2">
+            <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "In compare" : "Compare"}</button>
+            <p className="self-center text-[11px] font-semibold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"} · 2026–27</p>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PlayerExpandedDetail({
+  player, league, stats, statsView, categories, hasFantasyAccess, windowDays,
+}: {
+  player: FantasyPlayerPerformance; league: LeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
+  categories: FantasyCategory[]; hasFantasyAccess: boolean; windowDays: number;
+}) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr]">
+      <div>
+        {player.injury && (
+          <p className="mb-2 rounded-lg bg-red-100 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+            Feed injury: {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
+          </p>
+        )}
+        {hasFantasyAccess && player.nba_id && <div className="mb-2"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>}
+        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+          {SALARY_SEASONS.map((season, index) => {
+            const salary = player.salaries?.[season] ?? null;
+            return (
+              <div key={season} className={`rounded-lg border px-2 py-1.5 ${index === 0 ? "border-blue-300 bg-blue-600 text-white dark:border-blue-600" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+                <p className={`text-[9px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
+                <p className={`truncate text-xs font-black tabular-nums ${index === 0 ? "" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{statsView === "season" ? "Season averages" : `Last ${windowDays} days`} · {stats?.games ?? 0} GP</p>
+          {player.player_id && (
+            <Link href={`/players/${player.player_id}?league=${league}&from=explorer`} className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400">Full profile →</Link>
+          )}
+        </div>
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+          {categories.map((category) => (
+            <div key={category.key} className="rounded-lg border border-slate-200 bg-white px-1.5 py-1.5 text-center dark:border-slate-700 dark:bg-slate-900">
+              <p className="text-[9px] font-bold text-slate-400">{category.label}</p>
+              <p className="text-xs font-black tabular-nums text-slate-900 dark:text-white">{stats?.games ? formatFantasyStat(stats, category) : "—"}</p>
+            </div>
+          ))}
+        </div>
+        {player.category_strengths.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {player.category_strengths.map((strength) => (
+              <span key={strength} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{strength}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ComparisonTray({ players, href, onRemove }: { players: FantasyPlayerPerformance[]; href: string; onRemove: (player: FantasyPlayerPerformance) => void }) {
   return (
     <aside className="sticky bottom-4 z-30 mt-5 rounded-2xl border border-blue-300 bg-white/95 p-4 shadow-xl backdrop-blur dark:border-blue-800 dark:bg-slate-900/95">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">
-            Comparison · {players.length}/4
-          </p>
+          <p className="text-xs font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">Comparison · {players.length}/4</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {players.map((player) => (
-              <button
-                key={playerKey(player)}
-                type="button"
-                onClick={() => onRemove(player)}
-                className="flex items-center gap-2 rounded-full bg-slate-100 py-1 pl-1 pr-3 text-xs font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-red-950"
-              >
-                <PlayerPhoto player={player} />
-                <span>{player.name}</span>
-                <span aria-hidden="true">×</span>
+              <button key={playerKey(player)} type="button" onClick={() => onRemove(player)}
+                className="flex items-center gap-2 rounded-full bg-slate-100 py-1 pl-1 pr-3 text-xs font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-red-950">
+                <PlayerPhoto player={player} /><span>{player.name}</span><span aria-hidden="true">×</span>
               </button>
             ))}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          {players.length < 2 && (
-            <p className="text-xs text-slate-500">Select at least two players.</p>
-          )}
-          <Link
-            href={href}
-            aria-disabled={players.length < 2}
-            className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${
-              players.length >= 2
-                ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "pointer-events-none bg-slate-200 text-slate-400 dark:bg-slate-800"
-            }`}
-          >
+          {players.length < 2 && <p className="text-xs text-slate-500">Select at least two players.</p>}
+          <Link href={href} aria-disabled={players.length < 2}
+            className={`rounded-xl px-5 py-2.5 text-sm font-bold transition ${players.length >= 2 ? "bg-blue-600 text-white hover:bg-blue-700" : "pointer-events-none bg-slate-200 text-slate-400 dark:bg-slate-800"}`}>
             Compare players →
           </Link>
         </div>
@@ -894,135 +743,58 @@ function nbaTeamDisplay(player: FantasyPlayerPerformance): string {
     : player.nba_team || "NBA team unverified";
 }
 
-function PlayerIdentity({ player }: { player: FantasyPlayerPerformance }) {
-  return (
-    <div className="flex min-w-0 items-center gap-3">
-      <PlayerPhoto player={player} />
-      <div className="min-w-0">
-        <p className="truncate font-bold text-slate-950 dark:text-white">{player.name}</p>
-        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-          <span>{nbaTeamDisplay(player)}</span>
-          {player.injury && <InjuryFlag showLabel />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function PlayerPhoto({ player, large = false }: { player: FantasyPlayerPerformance; large?: boolean }) {
   const [failed, setFailed] = useState(false);
   const photo = photoUrl(player.photo, player.nba_id);
   const size = large ? 72 : 40;
   if (!photo || failed) {
     return (
-      <span
-        className="inline-flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-black text-slate-500 dark:bg-slate-700 dark:text-slate-300"
-        style={{ width: size, height: size, fontSize: large ? 24 : 14 }}
-      >
+      <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-slate-200 font-black text-slate-500 dark:bg-slate-700 dark:text-slate-300" style={{ width: size, height: size, fontSize: large ? 24 : 14 }}>
         {player.name.charAt(0)}
       </span>
     );
   }
   return (
-    // Photos may be local backend assets or external source URLs.
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={photo}
-      alt=""
-      width={size}
-      height={size}
-      onError={() => setFailed(true)}
-      className="shrink-0 rounded-full bg-slate-100 object-cover dark:bg-slate-800"
-      style={{ width: size, height: size }}
-    />
+    <img src={photo} alt="" width={size} height={size} onError={() => setFailed(true)} className="shrink-0 rounded-full bg-slate-100 object-cover dark:bg-slate-800" style={{ width: size, height: size }} />
   );
 }
 
-function SummaryCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone?: "red" }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-black ${tone === "red" ? "text-red-600 dark:text-red-400" : "text-slate-950 dark:text-white"}`}>{value}</p>
-      <p className="mt-0.5 text-xs text-slate-400">{detail}</p>
-    </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  disabled = false,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
+function FilterSelect({ label, value, onChange, disabled = false, children }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; children: ReactNode }) {
   return (
     <label className="relative">
       <span className="sr-only">{label}</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-      >
+      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
         {children}
       </select>
     </label>
   );
 }
 
-function StatsButton({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {
+function StatsButton({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
-        active
-          ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
-          : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"
-      }`}
-    >
+    <button type="button" disabled={disabled} onClick={onClick}
+      className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${active ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:text-white"}`}>
       {children}
     </button>
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-950 dark:text-amber-300">{status}</span>;
 }
 
 function FreeAgentBadge() {
   return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Free agent</span>;
 }
 
-function FantasyAvailability({
-  league,
-  player,
-  compact = false,
-}: {
-  league: LeagueSlug;
-  player: FantasyPlayerPerformance;
-  compact?: boolean;
-}) {
+function FantasyAvailability({ league, player, compact = false }: { league: LeagueSlug; player: FantasyPlayerPerformance; compact?: boolean }) {
   if (playerAvailability(player) === "free_agent") {
     return (
       <div className="flex flex-wrap items-center gap-2">
         <FreeAgentBadge />
         {player.nba_relevance === "legacy_only" && (
-          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-            Legacy evidence only
-          </span>
+          <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-400">Legacy evidence only</span>
         )}
         {!compact && player.availability_rank && player.availability_of && (
-          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-            Market #{player.availability_rank} of {player.availability_of}
-          </span>
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Market #{player.availability_rank} of {player.availability_of}</span>
         )}
       </div>
     );
@@ -1035,23 +807,9 @@ function FantasyAvailability({
   );
 }
 
-function SortableHeader({
-  label,
-  sort,
-  active,
-  direction,
-  onSort,
-  className = "",
-}: {
-  label: string;
-  sort: SortKey;
-  active: SortKey;
-  direction: Direction;
-  onSort: (key: SortKey) => void;
-  className?: string;
-}) {
+function SortableHeader({ label, sort, active, direction, onSort, className = "" }: { label: string; sort: SortKey; active: SortKey; direction: Direction; onSort: (key: SortKey) => void; className?: string }) {
   return (
-    <th className={`px-3 py-3 ${className}`}>
+    <th className={`px-3 py-2.5 ${className}`}>
       <button type="button" onClick={() => onSort(sort)} className="inline-flex items-center gap-1 font-bold hover:text-blue-600">
         {label}
         {active === sort && <span aria-hidden="true">{direction === "asc" ? "↑" : "↓"}</span>}
@@ -1062,11 +820,9 @@ function SortableHeader({
 
 function ExplorerLoading() {
   return (
-    <div className="mt-8 space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        {[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />)}
-      </div>
-      <div className="h-96 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+    <div className="mt-4 space-y-3">
+      <div className="h-24 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
+      <div className="h-80 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-800" />
     </div>
   );
 }
@@ -1084,33 +840,19 @@ function playerAvailability(player: FantasyPlayerPerformance): "free_agent" | "r
   return player.availability ?? (player.fantasy_team ? "rostered" : "free_agent");
 }
 
-function rankPlayers(a: FantasyPlayerPerformance, b: FantasyPlayerPerformance) {
-  return (a.impact_rank ?? Number.MAX_SAFE_INTEGER) - (b.impact_rank ?? Number.MAX_SAFE_INTEGER);
-}
-
 function statusMatches(player: FantasyPlayerPerformance, status: string) {
   if (status === "all") return true;
   if (status === "injured") return Boolean(player.injury);
   return player.status === status;
 }
 
-function comparePlayers(
-  a: FantasyPlayerPerformance,
-  b: FantasyPlayerPerformance,
-  key: SortKey,
-  direction: Direction,
-  view: StatsView,
-) {
+function comparePlayers(a: FantasyPlayerPerformance, b: FantasyPlayerPerformance, key: SortKey, direction: Direction, view: StatsView) {
   let result = 0;
-  if (key === "rank") {
-    result = (a.impact_rank ?? Number.MAX_SAFE_INTEGER) - (b.impact_rank ?? Number.MAX_SAFE_INTEGER);
-  } else if (key === "name") {
-    result = a.name.localeCompare(b.name);
-  } else if (key === "fantasy_team") {
-    result = (a.fantasy_team?.name ?? "").localeCompare(b.fantasy_team?.name ?? "");
-  } else if (key === "salary") {
-    result = salaryValue(a.salary_2026_27) - salaryValue(b.salary_2026_27);
-  } else {
+  if (key === "rank") result = (a.impact_rank ?? Number.MAX_SAFE_INTEGER) - (b.impact_rank ?? Number.MAX_SAFE_INTEGER);
+  else if (key === "name") result = a.name.localeCompare(b.name);
+  else if (key === "fantasy_team") result = (a.fantasy_team?.name ?? "").localeCompare(b.fantasy_team?.name ?? "");
+  else if (key === "salary") result = salaryValue(a.salary_2026_27) - salaryValue(b.salary_2026_27);
+  else {
     result = (
       statValue(fantasyStatValue(statsFor(a, view), { key, label: key }))
       - statValue(fantasyStatValue(statsFor(b, view), { key, label: key }))
@@ -1125,16 +867,6 @@ function salaryValue(value: string | null) {
 
 function statValue(value: number | null | undefined) {
   return typeof value === "number" ? value : Number.NEGATIVE_INFINITY;
-}
-
-function formatTimestamp(value: string | null) {
-  if (!value) return "unknown";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
 }
 
 function buildComparisonHref(league: LeagueSlug, ids: string[]) {
