@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PlayerIdentityCell from "@/components/discovery/PlayerIdentityCell";
 import MinutesTrendEvidence from "@/components/MinutesTrendEvidence";
 import type {
@@ -367,6 +367,31 @@ export default function DiscoveryFitView({
   const [secondaryOpen, setSecondaryOpen] = useState(false);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
   const requestSequence = useRef(0);
+  const readyTeamId = teamContext.kind === "ready" ? teamContext.teamId : null;
+  const targetsFetchKey = readyTeamId
+    ? [
+      league,
+      readyTeamId,
+      basis,
+      availability,
+      category,
+      position,
+      actionScope,
+      league === "gnfc" ? "all" : capScope,
+    ].join("|")
+    : null;
+  const [activeTargetsFetchKey, setActiveTargetsFetchKey] = useState<string | null>(null);
+
+  // Match LeaguePlayerExplorer: adjust loading UI during render when the fetch identity changes,
+  // so the effect body never calls setState synchronously.
+  if (targetsFetchKey && targetsFetchKey !== activeTargetsFetchKey) {
+    setActiveTargetsFetchKey(targetsFetchKey);
+    setLoading(true);
+    setLoadingMore(false);
+    setLoadMoreError(false);
+    setError(null);
+    setUnavailable(null);
+  }
 
   function buildTargetParams(offset = 0) {
     const params = new URLSearchParams({
@@ -385,7 +410,7 @@ export default function DiscoveryFitView({
 
   useEffect(() => {
     let cancelled = false;
-    setTeamContext({ kind: "loading" });
+    // Initial state is already "loading"; remount via parent key resets on league/team change.
     void (async () => {
       try {
         const res = await fetch("/api/fantasy/session", { cache: "no-store" });
@@ -417,55 +442,43 @@ export default function DiscoveryFitView({
   }, [league, urlTeam]);
 
   useEffect(() => {
-    setAvailability(league === "gnfc" ? "free_agent" : "all");
-    setCapScope("all");
-    setCategory("");
-    setBasis("season");
-    setPosition("");
-    setActionScope("all");
-  }, [league]);
-
-  const loadTargets = useCallback(async () => {
-    if (teamContext.kind !== "ready") return;
+    if (!targetsFetchKey || !readyTeamId) return;
     const requestId = ++requestSequence.current;
-    setLoading(true);
-    setLoadingMore(false);
-    setLoadMoreError(false);
-    setError(null);
-    setUnavailable(null);
-    try {
-      const params = buildTargetParams(0);
-      const res = await fetch(
-        `/api/fantasy/${league}/roster/${encodeURIComponent(teamContext.teamId)}/targets?${params}`,
-        { cache: "no-store" },
-      );
-      if (requestId !== requestSequence.current) return;
-      if (res.status === 503) {
-        setUnavailable("Free-agent market data is not ready for this league yet.");
+    let cancelled = false;
+    const params = buildTargetParams(0);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/fantasy/${league}/roster/${encodeURIComponent(readyTeamId)}/targets?${params}`,
+          { cache: "no-store" },
+        );
+        if (cancelled || requestId !== requestSequence.current) return;
+        if (res.status === 503) {
+          setUnavailable("Free-agent market data is not ready for this league yet.");
+          setTargets(null);
+          setVisibleCandidates([]);
+          return;
+        }
+        if (!res.ok) throw new Error("Failed to load Fit candidates");
+        const data = await res.json() as FantasyCategoryTargets;
+        if (cancelled || requestId !== requestSequence.current) return;
+        setTargets(data);
+        setVisibleCandidates(data.candidates);
+      } catch (err) {
+        if (cancelled || requestId !== requestSequence.current) return;
+        setError(err instanceof Error ? err.message : "Failed to load Fit");
         setTargets(null);
         setVisibleCandidates([]);
-        return;
+      } finally {
+        if (!cancelled && requestId === requestSequence.current) setLoading(false);
       }
-      if (!res.ok) throw new Error("Failed to load Fit candidates");
-      const data = await res.json() as FantasyCategoryTargets;
-      if (requestId !== requestSequence.current) return;
-      setTargets(data);
-      setVisibleCandidates(data.candidates);
-    } catch (err) {
-      if (requestId !== requestSequence.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load Fit");
-      setTargets(null);
-      setVisibleCandidates([]);
-    } finally {
-      if (requestId === requestSequence.current) setLoading(false);
-    }
-  // buildTargetParams closes over filter state; listing those deps keeps resets correct.
+    })();
+    return () => {
+      cancelled = true;
+    };
+  // Filter values are captured in targetsFetchKey / params at effect start.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamContext, league, basis, availability, category, position, actionScope, capScope]);
-
-  useEffect(() => {
-    void loadTargets();
-  }, [loadTargets]);
+  }, [targetsFetchKey, readyTeamId, league]);
 
   async function loadMoreCandidates() {
     if (teamContext.kind !== "ready" || !targets || loading || loadingMore) return;

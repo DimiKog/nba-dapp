@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PlayerIdentityCell from "@/components/discovery/PlayerIdentityCell";
 import {
   MinutesTrendEvidence,
@@ -170,17 +170,27 @@ export default function DiscoveryFaTrendsView({
   const [position, setPosition] = useState("ALL");
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [watchedIds, setWatchedIds] = useState<Set<number>>(new Set());
+  const radarFetchKey = `${league}|${minimumGames}`;
+  const [activeRadarFetchKey, setActiveRadarFetchKey] = useState(radarFetchKey);
 
-  const reload = useCallback(async () => {
+  // League remounts via parent key; min-games changes adjust loading UI during render
+  // so the effect body never calls setState synchronously.
+  if (radarFetchKey !== activeRadarFetchKey) {
+    setActiveRadarFetchKey(radarFetchKey);
     setState({ kind: "loading" });
     setVisible(PAGE_SIZE);
-    const next = await loadRadar(league, minimumGames);
-    setState(next);
-  }, [league, minimumGames]);
+  }
 
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    let cancelled = false;
+    void (async () => {
+      const next = await loadRadar(league, minimumGames);
+      if (!cancelled) setState(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [radarFetchKey, league, minimumGames]);
 
   // Seed watch buttons once while FA Trends is active — not a dual 60s refresh loop.
   useEffect(() => {

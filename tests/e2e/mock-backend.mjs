@@ -532,8 +532,7 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
-    let rawBody = "";
-    request.on("data", (chunk) => { rawBody += chunk; });
+    request.on("data", () => {});
     request.on("end", () => {
       send(response, 200, rosterMoveDiscoveryFixture(league, teamId));
     });

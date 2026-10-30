@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PlayerIdentityCell from "@/components/discovery/PlayerIdentityCell";
 import type { FantasyWatchlist, FantasyWatchlistEntry } from "@/lib/api";
 import { fetchFantasyWatchlist } from "@/lib/api";
@@ -64,8 +64,8 @@ function WatchedRow({
   onSaved: (entry: FantasyWatchlistEntry) => void;
   onUnwatch: (id: number) => void;
 }) {
-  const [notes, setNotes] = useState(entry.notes);
-  const [priority, setPriority] = useState<WatchlistPriority>(entry.priority);
+  const [draftNotes, setDraftNotes] = useState(entry.notes);
+  const [draftPriority, setDraftPriority] = useState<WatchlistPriority>(entry.priority);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editing = editingId === entry.nba_player_id;
@@ -75,13 +75,12 @@ function WatchedRow({
     ? `/players/${player.player_id}?league=${league}&from=watchlist`
     : null;
 
-  useEffect(() => {
-    if (!editing) {
-      setNotes(entry.notes);
-      setPriority(entry.priority);
-      setError(null);
-    }
-  }, [editing, entry.notes, entry.priority]);
+  function beginEdit() {
+    setDraftNotes(entry.notes);
+    setDraftPriority(entry.priority);
+    setError(null);
+    onStartEdit(entry.nba_player_id);
+  }
 
   async function save() {
     setBusy(true);
@@ -89,14 +88,14 @@ function WatchedRow({
     try {
       const res = await upsertWatchlistEntry(league, {
         nbaPlayerId: entry.nba_player_id,
-        notes,
-        priority,
+        notes: draftNotes,
+        priority: draftPriority,
       });
       if (!res.ok) throw new Error("Could not update watchlist entry");
       onSaved({
         ...entry,
-        notes: notes.trim(),
-        priority,
+        notes: draftNotes.trim(),
+        priority: draftPriority,
         updated_at: new Date().toISOString(),
       });
     } catch (err) {
@@ -161,7 +160,7 @@ function WatchedRow({
           {!editing ? (
             <button
               type="button"
-              onClick={() => onStartEdit(entry.nba_player_id)}
+              onClick={beginEdit}
               className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Edit
@@ -184,8 +183,8 @@ function WatchedRow({
           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">
             Priority
             <select
-              value={priority}
-              onChange={(e) => setPriority(Number(e.target.value) as WatchlistPriority)}
+              value={draftPriority}
+              onChange={(e) => setDraftPriority(Number(e.target.value) as WatchlistPriority)}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
               data-testid="watched-priority"
             >
@@ -197,8 +196,8 @@ function WatchedRow({
           <label className="block text-xs font-bold text-slate-500 dark:text-slate-400">
             Note
             <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={draftNotes}
+              onChange={(e) => setDraftNotes(e.target.value)}
               rows={3}
               maxLength={2000}
               className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
@@ -245,26 +244,30 @@ export default function DiscoveryWatchedView({
   const [priorityFilter, setPriorityFilter] = useState<"ALL" | "1" | "2" | "3">("ALL");
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchFantasyWatchlist(league, 7);
-      setPayload({
-        ...data,
-        entries: sortWatchlistEntries(data.entries),
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load watchlist");
-      setPayload(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [league]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
+    let active = true;
+    // Initial loading=true; parent remounts on league change so no sync setState here.
+    void (async () => {
+      try {
+        const data = await fetchFantasyWatchlist(league, 7);
+        if (!active) return;
+        setPayload({
+          ...data,
+          entries: sortWatchlistEntries(data.entries),
+        });
+        setError(null);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "Failed to load watchlist");
+        setPayload(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [league]);
 
   const positions = useMemo(() => {
     const set = new Set<string>();

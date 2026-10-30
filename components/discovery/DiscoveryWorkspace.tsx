@@ -105,10 +105,10 @@ export default function DiscoveryWorkspace() {
       </div>
 
       <div className="mt-6" data-discovery-view={view} data-discovery-league={league}>
-        {view === "browse" && <DiscoveryBrowseView league={league} />}
-        {view === "fit" && <DiscoveryFitView league={league} />}
-        {view === "watched" && <DiscoveryWatchedView league={league} />}
-        {view === "fa-trends" && <DiscoveryFaTrendsView league={league} />}
+        {view === "browse" && <DiscoveryBrowseView key={league} league={league} />}
+        {view === "fit" && <DiscoveryFitView key={`${league}:${urlTeam ?? ""}`} league={league} />}
+        {view === "watched" && <DiscoveryWatchedView key={league} league={league} />}
+        {view === "fa-trends" && <DiscoveryFaTrendsView key={league} league={league} />}
       </div>
     </main>
   );
