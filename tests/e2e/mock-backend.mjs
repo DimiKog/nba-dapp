@@ -76,10 +76,17 @@ function membership(league, franchiseId, franchiseName, teamId, commissioner) {
   };
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "http://127.0.0.1:3102",
+  "Access-Control-Allow-Headers": "cf-access-jwt-assertion, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+};
+
 function send(response, status, payload) {
   response.writeHead(status, {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
+    ...corsHeaders,
   });
   response.end(JSON.stringify(payload));
 }
@@ -90,6 +97,11 @@ function sessionFor(request) {
 
 const server = createServer((request, response) => {
   const url = new URL(request.url ?? "/", "http://127.0.0.1:3101");
+
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, corsHeaders);
+    return response.end();
+  }
 
   if (url.pathname === "/api/health") {
     return send(response, 200, { status: "ok" });
@@ -344,24 +356,7 @@ const server = createServer((request, response) => {
   }
   const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players$/);
   if (playersMatch) {
-    const league = playersMatch[1];
-    const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
-      sessions[subject].memberships.find((item) => item.league_slug === league)
-    ));
-    const players = members.flatMap((member, teamIndex) => (
-      rosterPerformanceFixture(league, member, false).players.map((item) => ({
-        ...item,
-        nba_id: item.nba_id + teamIndex * 1000,
-        name: `${member.franchise_name} Player ${item.nba_id - 9999}`,
-        fantasy_team: {
-          id: member.fantrax_team_id,
-          name: member.franchise_name,
-          logo: null,
-          owner: null,
-        },
-      }))
-    ));
-    return send(response, 200, { league: leagueFixture(league), players });
+    return send(response, 200, leaguePlayerExplorerFixture(playersMatch[1]));
   }
   const profileMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/category-profile$/);
   if (profileMatch) {
@@ -734,6 +729,195 @@ function membershipByTeam(league, teamId) {
   return Object.values(sessions)
     .flatMap((session) => session.memberships)
     .find((item) => item.league_slug === league && item.fantrax_team_id === teamId) ?? null;
+}
+
+/** Representative Player Explorer payload for Discovery Browse visual/e2e rendering. */
+function leaguePlayerExplorerFixture(league) {
+  const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
+    sessions[subject].memberships.find((item) => item.league_slug === league)
+  )).filter(Boolean);
+  const categories = league === "bdb"
+    ? ["FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO"]
+    : ["FG%", "FT%", "3PTM", "PTS", "OREB", "DREB", "AST", "ST", "BLK", "TO", "A/TO"];
+  const positions = ["PG", "SG", "SF", "PF", "C", "G", "F"];
+  const nbaTeams = [
+    ["Boston Celtics", "BOS"],
+    ["Minnesota Timberwolves", "MIN"],
+    ["Denver Nuggets", "DEN"],
+    ["New York Knicks", "NYK"],
+    ["Oklahoma City Thunder", "OKC"],
+    ["Dallas Mavericks", "DAL"],
+  ];
+
+  const rostered = members.flatMap((member, teamIndex) => (
+    Array.from({ length: 6 }, (_, index) => {
+      const rank = teamIndex * 6 + index + 1;
+      const [nbaTeam, nbaShort] = nbaTeams[(teamIndex + index) % nbaTeams.length];
+      const points = 22 - index * 1.4 - teamIndex;
+      return {
+        nba_id: 21_000 + teamIndex * 100 + index,
+        player_id: 31_000 + teamIndex * 100 + index,
+        name: `${member.franchise_name.split(" ")[0]} ${positions[index % positions.length]} ${index + 1}`,
+        short_name: `${member.franchise_name.split(" ")[0]} ${index + 1}`,
+        status: index === 5 ? "Reserve" : "Active",
+        nba_team: nbaTeam,
+        nba_team_short: nbaShort,
+        position: positions[index % positions.length],
+        photo: null,
+        availability: "rostered",
+        fantasy_team: {
+          id: member.fantrax_team_id,
+          name: member.franchise_name,
+          logo: null,
+          owner: null,
+        },
+        injury: teamIndex === 0 && index === 0
+          ? { status: "GTD", body_part: "ankle", detail: null, source: "fixture", updated_at: null }
+          : null,
+        salary_2026_27: String(28_000_000 - rank * 1_100_000),
+        salaries: { "2026-27": String(28_000_000 - rank * 1_100_000) },
+        latest_game: null,
+        window_stats: {
+          games: 3 + (index % 3),
+          minutes: 32 - index,
+          points: points + 1.5,
+          assists: 6.2 - index * 0.3,
+          rebounds: 7.1 - index * 0.2,
+          oreb: 1.4,
+          dreb: 5.7,
+          steals: 1.2,
+          blocks: 0.8,
+          turnovers: 2.1,
+          three_pm: 2.4,
+          fg_pct: 0.47,
+          ft_pct: 0.84,
+          assist_turnover: 2.9,
+        },
+        season_average: {
+          games: 18 + index,
+          minutes: 30 - index * 0.5,
+          points,
+          assists: 5.8 - index * 0.25,
+          rebounds: 6.8 - index * 0.15,
+          oreb: 1.2,
+          dreb: 5.4,
+          steals: 1.1,
+          blocks: 0.7,
+          turnovers: 2.0,
+          three_pm: 2.1,
+          fg_pct: 0.46,
+          ft_pct: 0.83,
+          assist_turnover: 2.7,
+        },
+        category_strengths: index < 2 ? ["PTS", "AST"] : ["REB"],
+        impact_rank: rank,
+        impact_score: 1.4 - rank * 0.08,
+        freshness: { roster: null, stats: null, injury: null },
+      };
+    })
+  ));
+
+  const freeAgents = Array.from({ length: 8 }, (_, index) => {
+    const rank = rostered.length + index + 1;
+    const [nbaTeam, nbaShort] = nbaTeams[index % nbaTeams.length];
+    return {
+      nba_id: 41_000 + index,
+      player_id: 51_000 + index,
+      name: `Free Agent ${nbaShort} ${index + 1}`,
+      short_name: `FA ${index + 1}`,
+      status: "Active",
+      nba_team: nbaTeam,
+      nba_team_short: nbaShort,
+      position: positions[(index + 2) % positions.length],
+      photo: null,
+      availability: "free_agent",
+      availability_rank: index + 1,
+      availability_of: 8,
+      nba_relevance: index < 6 ? "current_or_recent" : "legacy_only",
+      fantasy_team: null,
+      injury: null,
+      salary_2026_27: String(12_000_000 - index * 700_000),
+      salaries: { "2026-27": String(12_000_000 - index * 700_000) },
+      latest_game: null,
+      window_stats: {
+        games: 4,
+        minutes: 26 - index,
+        points: 16 - index * 0.8,
+        assists: 4.1,
+        rebounds: 5.2,
+        oreb: 1.0,
+        dreb: 4.2,
+        steals: 1.0,
+        blocks: 0.6,
+        turnovers: 1.8,
+        three_pm: 1.9,
+        fg_pct: 0.45,
+        ft_pct: 0.8,
+        assist_turnover: 2.3,
+      },
+      season_average: {
+        games: 12 + index,
+        minutes: 24 - index * 0.4,
+        points: 14.5 - index * 0.6,
+        assists: 3.8,
+        rebounds: 4.9,
+        oreb: 0.9,
+        dreb: 4.0,
+        steals: 0.9,
+        blocks: 0.5,
+        turnovers: 1.7,
+        three_pm: 1.7,
+        fg_pct: 0.44,
+        ft_pct: 0.79,
+        assist_turnover: 2.2,
+      },
+      category_strengths: ["STL"],
+      impact_rank: rank,
+      impact_score: 0.55 - index * 0.05,
+      freshness: { roster: null, stats: null, injury: null },
+    };
+  });
+
+  const players = [...rostered, ...freeAgents];
+  return {
+    league: {
+      ...leagueFixture(league),
+      categories,
+    },
+    snapshot: {
+      captured_at: "2026-10-30T12:00:00Z",
+      generated_at: "2026-10-30T12:01:00Z",
+      source: "database_cache",
+    },
+    window: { days: 7, from: "2026-10-23", to: "2026-10-30", season: "2026-27" },
+    categories,
+    ranking_method: "fixture_category_z_sum",
+    ranking_basis: "season",
+    availability_basis: "latest_league_roster_snapshots",
+    counts: {
+      total: players.length,
+      rostered: rostered.length,
+      free_agents: freeAgents.length,
+      free_agents_ranked: freeAgents.filter((player) => player.availability_rank != null).length,
+      free_agents_current_or_recent: freeAgents.filter((player) => player.nba_relevance === "current_or_recent").length,
+      free_agents_legacy_only: freeAgents.filter((player) => player.nba_relevance === "legacy_only").length,
+      ranked: players.length,
+    },
+    nba_relevance_basis: {
+      classification: "current_or_recent_evidence",
+      contract_season: "2026-27",
+      performance_season: "2026-27",
+      evidence: ["current_team", "current_salary", "recent_performance"],
+      legacy_only_means: "fixture",
+    },
+    teams: members.map((member) => ({
+      id: member.fantrax_team_id,
+      name: member.franchise_name,
+      logo: null,
+      owner: null,
+    })),
+    players,
+  };
 }
 
 function rosterPerformanceFixture(league, membership, incomplete) {

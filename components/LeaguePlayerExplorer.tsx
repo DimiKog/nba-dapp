@@ -41,7 +41,19 @@ type SortKey = "rank" | "name" | "fantasy_team" | "salary" | FantasyCategoryKey;
 const SALARY_SEASONS = ["2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
 const PAGE_SIZE = 40;
 
-export default function LeaguePlayerExplorer() {
+function explorerPlayersHref(searchParams: URLSearchParams, league: LeagueSlug): string {
+  const params = new URLSearchParams(searchParams.toString());
+  params.set("league", league);
+  const query = params.toString();
+  return query ? `/players?${query}` : `/players?league=${league}`;
+}
+
+export default function LeaguePlayerExplorer({
+  embedded = false,
+}: {
+  /** When true, Discovery shell owns page chrome / league tabs — keep Explorer body only. */
+  embedded?: boolean;
+} = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlLeague = searchParams.get("league");
@@ -154,14 +166,15 @@ export default function LeaguePlayerExplorer() {
 
   useEffect(() => {
     storeLeague(league);
+    if (embedded) return;
     if (urlLeague !== league) {
-      router.replace(`/players?league=${league}`, { scroll: false });
+      router.replace(explorerPlayersHref(searchParams, league), { scroll: false });
     }
-  }, [league, router, urlLeague]);
+  }, [league, router, urlLeague, embedded, searchParams]);
 
   function changeLeague(next: LeagueSlug) {
     if (next === league) return;
-    router.replace(`/players?league=${next}`, { scroll: false });
+    router.replace(explorerPlayersHref(searchParams, next), { scroll: false });
   }
 
   const filterKey = [
@@ -274,36 +287,47 @@ export default function LeaguePlayerExplorer() {
     .filter((player): player is FantasyPlayerPerformance => Boolean(player));
   const comparisonHref = buildComparisonHref(league, comparisonIds);
 
+  const shellClassName = embedded
+    ? "w-full min-w-0"
+    : "mx-auto w-full min-w-0 max-w-[1500px] px-4 py-8";
+  const Shell = embedded ? "div" : "main";
+
   return (
-    <main className="mx-auto w-full min-w-0 max-w-[1500px] px-4 py-8">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Fantasy intelligence</p>
-          <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Player Explorer</h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Search and rank rostered players and fantasy free agents by category, performance and contract.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
-          <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {LEAGUE_SLUGS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => changeLeague(item)}
-                className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
-                  league === item
-                    ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
-                    : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-                }`}
-              >
-                {leagueLabel(item)}
-              </button>
-            ))}
+    <Shell className={shellClassName}>
+      {!embedded ? (
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Fantasy intelligence</p>
+            <h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">Player Explorer</h1>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+              Search and rank rostered players and fantasy free agents by category, performance and contract.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
+            <div className="flex w-fit gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              {LEAGUE_SLUGS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => changeLeague(item)}
+                  className={`rounded-lg px-6 py-2 text-sm font-bold transition-colors ${
+                    league === item
+                      ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white"
+                      : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                  }`}
+                >
+                  {leagueLabel(item)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-4 flex justify-end">
+          <button type="button" disabled={loading} onClick={() => void refreshPlayers()} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200">Refresh data</button>
+        </div>
+      )}
 
       {loading && <ExplorerLoading />}
       {error && (
@@ -582,7 +606,7 @@ export default function LeaguePlayerExplorer() {
           )}
         </>
       )}
-    </main>
+    </Shell>
   );
 }
 

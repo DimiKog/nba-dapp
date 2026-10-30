@@ -56,9 +56,10 @@ export default function Navbar({
   }, [league]);
 
   const membership = session?.memberships.find((item) => item.league_slug === league);
+  const playersLeague = gnfcPage ? "gnfc" : league;
   const links: NavLink[] = [
+    { href: `/players?league=${playersLeague}`, path: "/players", label: "Players" },
     ...(!gnfcPage ? [
-      { href: `/players?league=${league}`, path: "/players", label: "Player Explorer" },
       { href: `/watchlist?league=${league}`, path: "/watchlist", label: "Watchlist" },
       { href: `/draft-assets?league=${league}`, path: "/draft-assets", label: "Draft Assets" },
     ] : []),
