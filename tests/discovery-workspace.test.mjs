@@ -5,6 +5,7 @@ import {
   discoveryLeagueLabel,
   isDiscoveryLeagueSlug,
   isExplorerLeagueSlug,
+  isStoredExplorerLeagueSlug,
   parseDiscoveryLeagueSlug,
   resolveDiscoveryLeague,
 } from "../lib/discoveryLeagues.ts";
@@ -54,7 +55,10 @@ test("Discovery leagues treat LDL, BDB and GNFC as distinct and never remap GNFC
   assert.equal(discoveryLeagueLabel("gnfc"), "GNFC");
   assert.equal(isExplorerLeagueSlug("ldl"), true);
   assert.equal(isExplorerLeagueSlug("bdb"), true);
-  assert.equal(isExplorerLeagueSlug("gnfc"), false);
+  assert.equal(isExplorerLeagueSlug("gnfc"), true);
+  assert.equal(isStoredExplorerLeagueSlug("ldl"), true);
+  assert.equal(isStoredExplorerLeagueSlug("bdb"), true);
+  assert.equal(isStoredExplorerLeagueSlug("gnfc"), false);
 });
 
 test("canonical Discovery hrefs encode view and league without inventing analytics", () => {
@@ -85,6 +89,32 @@ test("watchlist compatibility redirects preserve league including GNFC", () => {
   assert.equal(buildWatchlistRedirectHref("gnfc"), "/players?view=watched&league=gnfc");
   assert.equal(buildWatchlistRedirectHref(undefined), "/players?view=watched");
   assert.equal(buildWatchlistRedirectHref(""), "/players?view=watched");
+});
+
+test("GNFC Browse mounts embedded explorer with explicit league and no placeholder", async () => {
+  const { readFileSync } = await import("node:fs");
+  const browse = readFileSync(
+    new URL("../components/discovery/DiscoveryBrowseView.tsx", import.meta.url),
+    "utf8",
+  );
+  const explorer = readFileSync(
+    new URL("../components/LeaguePlayerExplorer.tsx", import.meta.url),
+    "utf8",
+  );
+  const leagues = readFileSync(
+    new URL("../lib/discoveryLeagues.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(leagues, /league === "gnfc"/);
+  assert.match(browse, /LeaguePlayerExplorer embedded league=\{league\}/);
+  assert.match(browse, /isExplorerLeagueSlug\(league\)/);
+  assert.match(explorer, /league\?: DiscoveryLeagueSlug/);
+  assert.match(explorer, /leagueProp/);
+  assert.match(explorer, /showSalary = league !== "gnfc"/);
+  assert.match(explorer, /showCompare = league !== "gnfc"/);
+  assert.match(explorer, /data-testid="browse-not-ready"/);
+  assert.match(explorer, /ApiResponseError/);
+  assert.match(explorer, /leagueProp\s*\n\s*\?\? resolveClientLeague/);
 });
 
 test("Step 3C navbar drops Watchlist and Draft Assets while Players remains", async () => {

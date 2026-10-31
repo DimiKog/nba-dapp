@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
+  ApiResponseError,
   fetchFantasyWatchlist,
   fetchLeaguePlayerExplorer,
   photoUrl,
@@ -11,6 +12,10 @@ import {
   type FantasyPlayerStats,
   type LeaguePlayerExplorer as ExplorerPayload,
 } from "@/lib/api";
+import {
+  discoveryLeagueLabel,
+  type DiscoveryLeagueSlug,
+} from "@/lib/discoveryLeagues";
 import {
   getServerLeagueSnapshot,
   getStoredLeagueSnapshot,
@@ -54,11 +59,18 @@ function explorerPlayersHref(searchParams: URLSearchParams, league: LeagueSlug):
   return query ? `/players?${query}` : `/players?league=${league}`;
 }
 
+function explorerDisplayLabel(league: DiscoveryLeagueSlug): string {
+  return league === "gnfc" ? discoveryLeagueLabel(league) : leagueLabel(league);
+}
+
 export default function LeaguePlayerExplorer({
   embedded = false,
+  league: leagueProp,
 }: {
   /** When true, Discovery shell owns page chrome / league tabs — keep Explorer body only. */
   embedded?: boolean;
+  /** Explicit Discovery league when embedded — required for GNFC (never remap via legacy store). */
+  league?: DiscoveryLeagueSlug;
 } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,10 +80,15 @@ export default function LeaguePlayerExplorer({
     getStoredLeagueSnapshot,
     getServerLeagueSnapshot,
   );
-  const league = resolveClientLeague(urlLeague, storedLeague);
+  // Embedded Discovery always wins. Standalone explorer remains LDL/BδB-only via resolveClientLeague.
+  const league: DiscoveryLeagueSlug = leagueProp
+    ?? resolveClientLeague(urlLeague, storedLeague);
+  const showSalary = league !== "gnfc";
+  const showCompare = league !== "gnfc";
   const [payload, setPayload] = useState<ExplorerPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notReady, setNotReady] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [team, setTeam] = useState("all");
   const [availability, setAvailability] = useState<Availability>("all");
@@ -96,6 +113,7 @@ export default function LeaguePlayerExplorer({
     setFilterLeague(league);
     setLoading(true);
     setError(null);
+    setNotReady(null);
     setPayload(null);
     setQuery("");
     setTeam("all");
@@ -109,6 +127,10 @@ export default function LeaguePlayerExplorer({
     setHasFantasyAccess(false);
     setWatchError(null);
     setVisibleLimit(PAGE_SIZE);
+    if (sortKey === "salary" && league === "gnfc") {
+      setSortKey("rank");
+      setDirection("asc");
+    }
   }
 
   useEffect(() => {
@@ -122,6 +144,8 @@ export default function LeaguePlayerExplorer({
       .then(([data, watchlist]) => {
         if (!active || currentRequest !== requestId.current) return;
         setPayload(data);
+        setNotReady(null);
+        setError(null);
         setHasFantasyAccess(Boolean(watchlist));
         setWatchedIds(new Set(
           watchlist?.entries.map((entry) => entry.nba_player_id) ?? [],
@@ -130,8 +154,16 @@ export default function LeaguePlayerExplorer({
         setExpandedId("");
         lastRefresh.current = Date.now();
       })
-      .catch(() => {
-        if (active && currentRequest === requestId.current) setError(`Could not load ${leagueLabel(league)} players.`);
+      .catch((err: unknown) => {
+        if (!active || currentRequest !== requestId.current) return;
+        setPayload(null);
+        if (err instanceof ApiResponseError && err.status === 503) {
+          setNotReady(err.message || "Free-agent market data is not ready for this league yet.");
+          setError(null);
+          return;
+        }
+        setNotReady(null);
+        setError(`Could not load ${explorerDisplayLabel(league)} players.`);
       })
       .finally(() => {
         if (active && currentRequest === requestId.current) setLoading(false);
@@ -148,10 +180,19 @@ export default function LeaguePlayerExplorer({
       const data = await fetchLeaguePlayerExplorer(league);
       if (currentRequest !== requestId.current) return;
       setPayload(data);
+      setNotReady(null);
       setError(null);
       lastRefresh.current = Date.now();
-    } catch {
-      if (currentRequest === requestId.current) setError(`Could not refresh ${leagueLabel(league)} players.`);
+    } catch (err: unknown) {
+      if (currentRequest !== requestId.current) return;
+      setPayload(null);
+      if (err instanceof ApiResponseError && err.status === 503) {
+        setNotReady(err.message || "Free-agent market data is not ready for this league yet.");
+        setError(null);
+        return;
+      }
+      setNotReady(null);
+      setError(`Could not refresh ${explorerDisplayLabel(league)} players.`);
     }
   }, [league]);
 
@@ -170,8 +211,10 @@ export default function LeaguePlayerExplorer({
   }, [refreshPlayers]);
 
   useEffect(() => {
-    storeLeague(league);
+    // Standalone explorer only — Discovery owns league tabs and never stores gnfc.
     if (embedded) return;
+    if (league !== "ldl" && league !== "bdb") return;
+    storeLeague(league);
     if (urlLeague !== league) {
       router.replace(explorerPlayersHref(searchParams, league), { scroll: false });
     }
@@ -279,18 +322,23 @@ export default function LeaguePlayerExplorer({
     }
   }
 
-  const comparisonPlayers = comparisonIds
-    .map((id) => payload?.players.find((player) => playerKey(player) === id))
-    .filter((player): player is FantasyPlayerPerformance => Boolean(player));
-  const comparisonHref = buildComparisonHref(league, comparisonIds);
+  const comparisonPlayers = showCompare
+    ? comparisonIds
+      .map((id) => payload?.players.find((player) => playerKey(player) === id))
+      .filter((player): player is FantasyPlayerPerformance => Boolean(player))
+    : [];
+  const comparisonHref = showCompare && (league === "ldl" || league === "bdb")
+    ? buildComparisonHref(league, comparisonIds)
+    : "/players";
   const cacheHint = payload ? formatBrowseCacheHint(payload.snapshot.captured_at) : null;
+  const watchedHref = `/players?view=watched&league=${league}`;
 
   const shellClassName = embedded
     ? "w-full min-w-0"
     : "mx-auto w-full min-w-0 max-w-[1500px] px-4 py-8";
 
   return (
-    <div className={shellClassName}>
+    <div className={shellClassName} data-testid="league-player-explorer" data-explorer-league={league}>
       {!embedded && (
         <div className="mb-5 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -320,6 +368,19 @@ export default function LeaguePlayerExplorer({
       )}
 
       {loading && <ExplorerLoading />}
+      {!loading && notReady && (
+        <div
+          className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-8 text-center dark:border-amber-900 dark:bg-amber-950/30"
+          data-testid="browse-not-ready"
+        >
+          <p className="text-base font-bold text-amber-950 dark:text-amber-100">
+            Free-agent market data is not ready for this league yet.
+          </p>
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-200">
+            {notReady}
+          </p>
+        </div>
+      )}
       {error && (
         <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
           {error}
@@ -331,7 +392,7 @@ export default function LeaguePlayerExplorer({
         </div>
       )}
 
-      {!loading && payload && (
+      {!loading && !notReady && payload && (
         <>
           <BrowseToolbar
             query={query}
@@ -388,12 +449,15 @@ export default function LeaguePlayerExplorer({
                   statsView={statsView}
                   categories={categoryColumns}
                   expanded={playerKey(player) === expandedId}
-                  compared={comparisonIds.includes(playerKey(player))}
-                  comparisonFull={!comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
+                  compared={showCompare && comparisonIds.includes(playerKey(player))}
+                  comparisonFull={showCompare && !comparisonIds.includes(playerKey(player)) && comparisonIds.length >= 4}
                   watched={Boolean(player.nba_id && watchedIds.has(player.nba_id))}
                   watchPending={watchPending === player.nba_id}
                   hasFantasyAccess={hasFantasyAccess}
                   windowDays={payload.window.days}
+                  showSalary={showSalary}
+                  showCompare={showCompare}
+                  watchedHref={watchedHref}
                   onToggleExpand={() => setExpandedId((current) => current === playerKey(player) ? "" : playerKey(player))}
                   onCompare={() => toggleComparison(player)}
                   onWatch={() => watchPlayer(player)}
@@ -402,13 +466,15 @@ export default function LeaguePlayerExplorer({
             </div>
 
             <div className="hidden max-w-full overflow-x-auto md:block">
-              <table className="min-w-[1280px] w-full text-sm">
+              <table className={`w-full text-sm ${showSalary ? "min-w-[1280px]" : "min-w-[1100px]"}`}>
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                   <tr>
                     <SortableHeader label="#" sort="rank" active={sortKey} direction={direction} onSort={changeSort} className="w-12 text-center" />
                     <SortableHeader label="Player" sort="name" active={sortKey} direction={direction} onSort={changeSort} className="sticky left-0 z-20 min-w-56 bg-slate-50 text-left dark:bg-slate-800" />
                     <SortableHeader label="Status" sort="fantasy_team" active={sortKey} direction={direction} onSort={changeSort} className="min-w-40 text-left" />
-                    <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-24 text-right" />
+                    {showSalary ? (
+                      <SortableHeader label="2026–27" sort="salary" active={sortKey} direction={direction} onSort={changeSort} className="min-w-24 text-right" />
+                    ) : null}
                     <th className="min-w-14 px-3 py-2.5 text-right">GP</th>
                     {categoryColumns.map((category) => (
                       <SortableHeader
@@ -422,7 +488,9 @@ export default function LeaguePlayerExplorer({
                       />
                     ))}
                     <th className="w-16 px-2 py-2.5 text-center">Watch</th>
-                    <th className="w-16 px-2 py-2.5 text-center">Compare</th>
+                    {showCompare ? (
+                      <th className="w-16 px-2 py-2.5 text-center">Compare</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -437,13 +505,16 @@ export default function LeaguePlayerExplorer({
                         statsView={statsView}
                         categories={categoryColumns}
                         expanded={key === expandedId}
-                        compared={comparisonIds.includes(key)}
-                        comparisonFull={!comparisonIds.includes(key) && comparisonIds.length >= 4}
+                        compared={showCompare && comparisonIds.includes(key)}
+                        comparisonFull={showCompare && !comparisonIds.includes(key) && comparisonIds.length >= 4}
                         watched={Boolean(player.nba_id && watchedIds.has(player.nba_id))}
                         watchPending={watchPending === player.nba_id}
                         hasFantasyAccess={hasFantasyAccess}
                         windowDays={payload.window.days}
-                        colSpan={7 + categoryColumns.length}
+                        showSalary={showSalary}
+                        showCompare={showCompare}
+                        watchedHref={watchedHref}
+                        colSpan={(showSalary ? 6 : 5) + categoryColumns.length + (showCompare ? 1 : 0)}
                         onToggleExpand={() => setExpandedId((current) => current === key ? "" : key)}
                         onCompare={() => toggleComparison(player)}
                         onWatch={() => watchPlayer(player)}
@@ -469,7 +540,7 @@ export default function LeaguePlayerExplorer({
             )}
           </section>
 
-          {comparisonPlayers.length > 0 && (
+          {showCompare && comparisonPlayers.length > 0 && (
             <ComparisonTray
               players={comparisonPlayers}
               href={comparisonHref}
@@ -559,12 +630,16 @@ function BrowseToolbar({
 }
 
 function BrowseDesktopRows(props: {
-  player: FantasyPlayerPerformance; league: LeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
+  player: FantasyPlayerPerformance; league: DiscoveryLeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
   categories: FantasyCategory[]; expanded: boolean; compared: boolean; comparisonFull: boolean;
   watched: boolean; watchPending: boolean; hasFantasyAccess: boolean; windowDays: number; colSpan: number;
+  showSalary: boolean; showCompare: boolean; watchedHref: string;
   onToggleExpand: () => void; onCompare: () => void; onWatch: () => void;
 }) {
-  const { player, league, stats, statsView, categories, expanded, compared, comparisonFull, watched, watchPending, hasFantasyAccess, windowDays, colSpan, onToggleExpand, onCompare, onWatch } = props;
+  const {
+    player, league, stats, statsView, categories, expanded, compared, comparisonFull, watched, watchPending,
+    hasFantasyAccess, windowDays, colSpan, showSalary, showCompare, watchedHref, onToggleExpand, onCompare, onWatch,
+  } = props;
   return (
     <>
       <tr onClick={onToggleExpand} className={`cursor-pointer transition-colors ${expanded ? "bg-slate-50 dark:bg-slate-800/50" : "hover:bg-slate-50/80 dark:hover:bg-slate-800/40"}`}>
@@ -578,26 +653,30 @@ function BrowseDesktopRows(props: {
           <PlayerIdentityCell name={player.name} photo={player.photo} nbaId={player.nba_id} position={player.position} nbaTeam={nbaTeamDisplay(player)} size="sm" injury={Boolean(player.injury)} />
         </td>
         <td className="px-3 py-2.5"><FantasyAvailability league={league} player={player} compact /></td>
-        <td className="px-3 py-2.5 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"}</td>
+        {showSalary ? (
+          <td className="px-3 py-2.5 text-right font-bold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"}</td>
+        ) : null}
         <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-slate-600 dark:text-slate-300">{stats?.games ?? 0}</td>
         {categories.map((category) => (
           <td key={category.key} className="px-2 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{stats?.games ? formatFantasyStat(stats, category) : "—"}</td>
         ))}
         <td className="px-2 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
           {player.nba_id && watched ? (
-            <Link href="/players?view=watched" className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Watching</Link>
+            <Link href={watchedHref} className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">Watching</Link>
           ) : (
             <button type="button" onClick={onWatch} disabled={!player.nba_id || watchPending} className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300">{watchPending ? "…" : "+ Watch"}</button>
           )}
         </td>
-        <td className="px-2 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
-          <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "On" : "Add"}</button>
-        </td>
+        {showCompare ? (
+          <td className="px-2 py-2.5 text-center" onClick={(event) => event.stopPropagation()}>
+            <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-md px-2 py-1 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "On" : "Add"}</button>
+          </td>
+        ) : null}
       </tr>
       {expanded && (
         <tr className="bg-slate-50/90 dark:bg-slate-950/40">
           <td colSpan={colSpan} className="px-4 py-3">
-            <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} />
+            <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} showSalary={showSalary} />
           </td>
         </tr>
       )}
@@ -606,12 +685,15 @@ function BrowseDesktopRows(props: {
 }
 
 function ExplorerMobileCard(props: {
-  player: FantasyPlayerPerformance; league: LeagueSlug; statsView: StatsView; categories: FantasyCategory[];
+  player: FantasyPlayerPerformance; league: DiscoveryLeagueSlug; statsView: StatsView; categories: FantasyCategory[];
   expanded: boolean; compared: boolean; comparisonFull: boolean; watched: boolean; watchPending: boolean;
-  hasFantasyAccess: boolean; windowDays: number;
+  hasFantasyAccess: boolean; windowDays: number; showSalary: boolean; showCompare: boolean; watchedHref: string;
   onToggleExpand: () => void; onCompare: () => void; onWatch: () => void;
 }) {
-  const { player, league, statsView, categories, expanded, compared, comparisonFull, watched, watchPending, hasFantasyAccess, windowDays, onToggleExpand, onCompare, onWatch } = props;
+  const {
+    player, league, statsView, categories, expanded, compared, comparisonFull, watched, watchPending,
+    hasFantasyAccess, windowDays, showSalary, showCompare, watchedHref, onToggleExpand, onCompare, onWatch,
+  } = props;
   const stats = statsFor(player, statsView);
   const topCategories = categories.slice(0, 3);
   return (
@@ -634,7 +716,7 @@ function ExplorerMobileCard(props: {
       </div>
       <div className="mt-2 flex items-center gap-2">
         {watched ? (
-          <Link href="/players?view=watched" className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Watching</Link>
+          <Link href={watchedHref} className="rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Watching</Link>
         ) : (
           <button type="button" onClick={onWatch} disabled={!player.nba_id || watchPending} className="rounded-lg bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600 disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300">{watchPending ? "Saving…" : "+ Watch"}</button>
         )}
@@ -642,11 +724,17 @@ function ExplorerMobileCard(props: {
       </div>
       {expanded && (
         <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-700">
-          <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} />
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "In compare" : "Compare"}</button>
-            <p className="self-center text-[11px] font-semibold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"} · 2026–27</p>
-          </div>
+          <PlayerExpandedDetail player={player} league={league} stats={stats} statsView={statsView} categories={categories} hasFantasyAccess={hasFantasyAccess} windowDays={windowDays} showSalary={showSalary} />
+          {(showCompare || showSalary) ? (
+            <div className="mt-3 flex gap-2">
+              {showCompare ? (
+                <button type="button" onClick={onCompare} disabled={comparisonFull} className={`rounded-lg px-3 py-1.5 text-[11px] font-bold transition ${compared ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-300"}`}>{compared ? "In compare" : "Compare"}</button>
+              ) : null}
+              {showSalary ? (
+                <p className="self-center text-[11px] font-semibold tabular-nums text-blue-700 dark:text-blue-400">{player.salary_2026_27 ?? "$0"} · 2026–27</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
     </article>
@@ -654,11 +742,12 @@ function ExplorerMobileCard(props: {
 }
 
 function PlayerExpandedDetail({
-  player, league, stats, statsView, categories, hasFantasyAccess, windowDays,
+  player, league, stats, statsView, categories, hasFantasyAccess, windowDays, showSalary,
 }: {
-  player: FantasyPlayerPerformance; league: LeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
-  categories: FantasyCategory[]; hasFantasyAccess: boolean; windowDays: number;
+  player: FantasyPlayerPerformance; league: DiscoveryLeagueSlug; stats: FantasyPlayerStats | null; statsView: StatsView;
+  categories: FantasyCategory[]; hasFantasyAccess: boolean; windowDays: number; showSalary: boolean;
 }) {
+  const injuryLeague = league === "ldl" || league === "bdb" ? league : null;
   return (
     <div className="grid gap-3 lg:grid-cols-[1.1fr_1fr]">
       <div>
@@ -667,19 +756,25 @@ function PlayerExpandedDetail({
             Feed injury: {player.injury.body_part ? `${player.injury.body_part} · ` : ""}{player.injury.detail}
           </p>
         )}
-        {hasFantasyAccess && player.nba_id && <div className="mb-2"><ReviewedInjuryNotice league={league} nbaId={player.nba_id} /></div>}
-        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
-        <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-          {SALARY_SEASONS.map((season, index) => {
-            const salary = player.salaries?.[season] ?? null;
-            return (
-              <div key={season} className={`rounded-lg border px-2 py-1.5 ${index === 0 ? "border-blue-300 bg-blue-600 text-white dark:border-blue-600" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
-                <p className={`text-[9px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
-                <p className={`truncate text-xs font-black tabular-nums ${index === 0 ? "" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
-              </div>
-            );
-          })}
-        </div>
+        {hasFantasyAccess && player.nba_id && injuryLeague && (
+          <div className="mb-2"><ReviewedInjuryNotice league={injuryLeague} nbaId={player.nba_id} /></div>
+        )}
+        {showSalary ? (
+          <>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Contract timeline</p>
+            <div className="mt-1.5 grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+              {SALARY_SEASONS.map((season, index) => {
+                const salary = player.salaries?.[season] ?? null;
+                return (
+                  <div key={season} className={`rounded-lg border px-2 py-1.5 ${index === 0 ? "border-blue-300 bg-blue-600 text-white dark:border-blue-600" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}>
+                    <p className={`text-[9px] font-bold ${index === 0 ? "text-blue-100" : "text-slate-500"}`}>{season}</p>
+                    <p className={`truncate text-xs font-black tabular-nums ${index === 0 ? "" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
       </div>
       <div>
         <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -783,7 +878,7 @@ function FreeAgentBadge() {
   return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Free agent</span>;
 }
 
-function FantasyAvailability({ league, player, compact = false }: { league: LeagueSlug; player: FantasyPlayerPerformance; compact?: boolean }) {
+function FantasyAvailability({ league, player, compact = false }: { league: DiscoveryLeagueSlug; player: FantasyPlayerPerformance; compact?: boolean }) {
   if (playerAvailability(player) === "free_agent") {
     return (
       <div className="flex flex-wrap items-center gap-2">

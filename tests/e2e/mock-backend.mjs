@@ -428,7 +428,7 @@ const server = createServer((request, response) => {
       logo: null, owner: null, players: [],
     });
   }
-  const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb)\/players$/);
+  const playersMatch = url.pathname.match(/^\/api\/fantasy\/(ldl|bdb|gnfc)\/players$/);
   if (playersMatch) {
     return send(response, 200, leaguePlayerExplorerFixture(playersMatch[1]));
   }
@@ -796,12 +796,16 @@ function membershipByTeam(league, teamId) {
 
 /** Representative Player Explorer payload for Discovery Browse visual/e2e rendering. */
 function leaguePlayerExplorerFixture(league) {
-  const members = ["manager-a-subject", "manager-b-subject"].map((subject) => (
-    sessions[subject].memberships.find((item) => item.league_slug === league)
-  )).filter(Boolean);
-  const categories = league === "bdb"
-    ? ["FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO"]
-    : ["FG%", "FT%", "3PTM", "PTS", "OREB", "DREB", "AST", "ST", "BLK", "TO", "A/TO"];
+  const members = league === "gnfc"
+    ? [sessions["gnfc-manager-subject"].memberships[0]]
+    : ["manager-a-subject", "manager-b-subject"].map((subject) => (
+      sessions[subject].memberships.find((item) => item.league_slug === league)
+    )).filter(Boolean);
+  const categories = league === "gnfc"
+    ? ["PTS", "REB", "AST"]
+    : league === "bdb"
+      ? ["FG%", "FT%", "3PTM", "PTS", "REB", "AST", "ST", "BLK", "TO"]
+      : ["FG%", "FT%", "3PTM", "PTS", "OREB", "DREB", "AST", "ST", "BLK", "TO", "A/TO"];
   const positions = ["PG", "SG", "SF", "PF", "C", "G", "F"];
   const nbaTeams = [
     ["Boston Celtics", "BOS"],
@@ -843,8 +847,8 @@ function leaguePlayerExplorerFixture(league) {
         injury: teamIndex === 0 && index === 0
           ? { status: "GTD", body_part: "ankle", detail: null, source: "fixture", updated_at: null }
           : null,
-        salary_2026_27: String(28_000_000 - rank * 1_100_000),
-        salaries: { "2026-27": String(28_000_000 - rank * 1_100_000) },
+        salary_2026_27: league === "gnfc" ? null : String(28_000_000 - rank * 1_100_000),
+        salaries: league === "gnfc" ? null : { "2026-27": String(28_000_000 - rank * 1_100_000) },
         latest_game: null,
         window_stats: {
           games: 3 + (index % 3),
@@ -905,8 +909,8 @@ function leaguePlayerExplorerFixture(league) {
       nba_relevance: index < 6 ? "current_or_recent" : "legacy_only",
       fantasy_team: null,
       injury: null,
-      salary_2026_27: String(12_000_000 - index * 700_000),
-      salaries: { "2026-27": String(12_000_000 - index * 700_000) },
+      salary_2026_27: league === "gnfc" ? null : String(12_000_000 - index * 700_000),
+      salaries: league === "gnfc" ? null : { "2026-27": String(12_000_000 - index * 700_000) },
       latest_game: null,
       window_stats: {
         games: 4,
