@@ -51,7 +51,6 @@ test("Discovery Watched and FA Trends views mount real functionality, not placeh
   assert.doesNotMatch(fa, /My watchlist/);
   assert.doesNotMatch(fa, /team.?need/i);
 
-  // Placeholders remain only for Fit (and browse-pending for GNFC).
   assert.match(placeholder, /Fit to my plan is being consolidated/);
 });
 

@@ -1867,7 +1867,13 @@ export async function fetchLeaguePlayerExplorer(
     `${BASE}/api/fantasy/${encodeURIComponent(league)}/players?window=${window}`,
     { cache: "no-store" },
   );
-  if (!res.ok) throw new Error("Failed to fetch league player explorer");
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { error?: string; code?: string } | null;
+    throw new ApiResponseError(
+      payload?.error ?? "Failed to fetch league player explorer",
+      res.status,
+    );
+  }
   return res.json();
 }
 

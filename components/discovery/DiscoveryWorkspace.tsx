@@ -10,7 +10,7 @@ import DiscoveryLeagueControl from "@/components/discovery/DiscoveryLeagueContro
 import DiscoveryTabs from "@/components/discovery/DiscoveryTabs";
 import DiscoveryWatchedView from "@/components/discovery/DiscoveryWatchedView";
 import {
-  isExplorerLeagueSlug,
+  isStoredExplorerLeagueSlug,
   resolveDiscoveryLeague,
   type DiscoveryLeagueSlug,
 } from "@/lib/discoveryLeagues";
@@ -57,7 +57,8 @@ export default function DiscoveryWorkspace() {
   const view = parseDiscoveryView(urlView);
 
   useEffect(() => {
-    if (isExplorerLeagueSlug(league)) {
+    // Only persist LDL/BδB in the legacy store — never write gnfc there.
+    if (isStoredExplorerLeagueSlug(league)) {
       storeLeague(league);
     }
 
@@ -74,7 +75,7 @@ export default function DiscoveryWorkspace() {
 
   function changeLeague(next: DiscoveryLeagueSlug) {
     if (next === league) return;
-    if (isExplorerLeagueSlug(next)) {
+    if (isStoredExplorerLeagueSlug(next)) {
       storeLeague(next);
     }
     router.replace(

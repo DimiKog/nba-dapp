@@ -8,8 +8,8 @@ import {
 } from "@/lib/discoveryLeagues";
 
 /**
- * Slice 0: mount existing Explorer for LDL/BδB with minimal embed.
- * GNFC Browse stays a deliberate placeholder — no silent LDL remap, no premature API fetch.
+ * Mount the shared neutral LeaguePlayerExplorer for every Discovery explorer league.
+ * Pass league explicitly so GNFC never remaps to LDL/BδB via legacy storage helpers.
  */
 export default function DiscoveryBrowseView({
   league,
@@ -20,5 +20,5 @@ export default function DiscoveryBrowseView({
     return <DiscoveryViewPlaceholder view="browse" league={league} variant="browse-pending" />;
   }
 
-  return <LeaguePlayerExplorer embedded />;
+  return <LeaguePlayerExplorer embedded league={league} />;
 }

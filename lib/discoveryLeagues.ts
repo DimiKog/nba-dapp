@@ -44,7 +44,15 @@ export function discoveryLeagueLabel(league: DiscoveryLeagueSlug): string {
   return DISCOVERY_LEAGUE_LABELS[league];
 }
 
-/** True when Browse can mount the existing LDL/BδB Player Explorer. */
-export function isExplorerLeagueSlug(league: DiscoveryLeagueSlug): league is LeagueSlug {
+/**
+ * True when Browse can mount LeaguePlayerExplorer for this Discovery league.
+ * Includes GNFC — identity must stay explicit (never remapped to LDL/BδB).
+ */
+export function isExplorerLeagueSlug(league: DiscoveryLeagueSlug): boolean {
+  return league === "ldl" || league === "bdb" || league === "gnfc";
+}
+
+/** LDL/BδB only — safe for the legacy sessionStorage league preference. */
+export function isStoredExplorerLeagueSlug(league: DiscoveryLeagueSlug): league is LeagueSlug {
   return league === "ldl" || league === "bdb";
 }
