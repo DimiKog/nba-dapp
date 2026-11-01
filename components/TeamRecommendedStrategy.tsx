@@ -4,7 +4,7 @@ import {
   groupRecommendedStrategy,
 } from "@/lib/teamIntelligencePresentation";
 
-type DiscoveryStatus = "loading" | "ready" | "empty" | "error";
+type DiscoveryStatus = "loading" | "ready" | "empty" | "error" | "unavailable";
 
 /**
  * System recommended strategy from discovery.recommended_strategy.
@@ -29,6 +29,12 @@ export default function TeamRecommendedStrategy({
       </p>
 
       {status === "loading" && <StrategySkeleton />}
+
+      {status === "unavailable" && (
+        <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+          System recommended strategy unlocks when free-agent availability is ready.
+        </p>
+      )}
 
       {status === "error" && (
         <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">

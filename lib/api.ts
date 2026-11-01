@@ -1915,9 +1915,13 @@ export async function fetchFantasyMatchupsForTeam(
   return res.json();
 }
 
-export async function fetchFantasyLeagues(): Promise<FantasyLeague[]> {
+export async function fetchFantasyLeagues(
+  options: { cache?: RequestCache } = {},
+): Promise<FantasyLeague[]> {
   const res = await fetch(`${BASE}/api/fantasy/leagues`, {
-    next: { revalidate: 60 },
+    ...(options.cache
+      ? { cache: options.cache }
+      : { next: { revalidate: 60 } }),
   });
   if (!res.ok) throw new Error("Failed to fetch fantasy leagues");
   return res.json();
@@ -1953,7 +1957,7 @@ export type {
 } from "@/lib/rosterMoveTypes";
 
 export async function fetchRosterMoveDiscovery(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   teamId: string,
   body: RosterMoveDiscoveryRequest = { basis: "season" },
 ): Promise<RosterMoveDiscovery> {
@@ -1977,7 +1981,7 @@ export async function fetchRosterMoveDiscovery(
 }
 
 export async function fetchRosterMoveAnalysis(
-  league: "ldl" | "bdb",
+  league: "ldl" | "bdb" | "gnfc",
   teamId: string,
   body: RosterMoveAnalysisRequest,
 ): Promise<RosterMoveAnalysis> {

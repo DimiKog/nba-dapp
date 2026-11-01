@@ -8,9 +8,10 @@ import {
   INITIAL_RECOMMENDATION_COUNT,
   visibleRecommendations,
 } from "@/lib/rosterMovePresentation";
+import type { TeamPageLeagueSlug } from "@/lib/teamPageLeagues";
 import RecommendedMoveCard from "@/components/RecommendedMoveCard";
 
-type LoadState = "loading" | "ready" | "empty" | "error";
+type LoadState = "loading" | "ready" | "empty" | "error" | "unavailable";
 
 export type SharedDiscoveryState = {
   status: LoadState;
@@ -24,7 +25,7 @@ export default function RecommendedMovesSection({
   embedded = false,
   sharedDiscovery,
 }: {
-  league: "ldl" | "bdb";
+  league: TeamPageLeagueSlug;
   teamId: string;
   /** When true, omit the outer Team Intelligence chrome (parent area owns it). */
   embedded?: boolean;
@@ -97,6 +98,13 @@ export default function RecommendedMovesSection({
       {heading}
 
       {state === "loading" && <RecommendedMovesSkeleton />}
+
+      {state === "unavailable" && (
+        <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/80 px-4 py-8 text-center text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+          {error
+            ?? "Recommended moves unlock when free-agent availability is ready. No recommendations are shown until then."}
+        </div>
+      )}
 
       {state === "error" && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">

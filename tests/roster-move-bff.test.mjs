@@ -45,7 +45,12 @@ test("backend proxy URL uses personal team id path segment", () => {
     backendRosterMoveUrl("https://api.example", "bdb", "t 1", "roster-move-analysis"),
     "https://api.example/api/fantasy/bdb/roster/t%201/roster-move-analysis",
   );
+  assert.equal(
+    backendRosterMoveUrl("https://api.example", "gnfc", "gnfc-athens", "roster-move-discovery"),
+    "https://api.example/api/fantasy/gnfc/roster/gnfc-athens/roster-move-discovery",
+  );
 });
+
 
 test("identity headers are forwarded server-side and not mirrored as browser body secrets", () => {
   const identity = new Headers({
