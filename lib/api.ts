@@ -206,7 +206,7 @@ export async function fetchPlayer(id: number): Promise<PlayerDetail> {
 
 export async function fetchPlayerIntelligence(
   playerId: number,
-  options: { league?: "ldl" | "bdb"; nbaId?: number | null; window?: number } = {},
+  options: { league?: "ldl" | "bdb" | "gnfc"; nbaId?: number | null; window?: number } = {},
 ): Promise<PlayerIntelligence> {
   const window = options.window ?? 14;
   const path = options.league && options.nbaId

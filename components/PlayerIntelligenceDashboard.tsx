@@ -8,7 +8,12 @@ import { overallDetail } from "@/lib/playerIntelligenceFormat";
 import PlayerOutlookPilot from "@/components/PlayerOutlookPilot";
 import RefreshDataButton from "@/components/RefreshDataButton";
 import PreseasonAveragesPanel from "@/components/PreseasonAveragesPanel";
-import { leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
+import {
+  isPlayerDetailOutlookLeague,
+  PLAYER_DETAIL_LEAGUE_SLUGS,
+  playerDetailLeagueLabel,
+  type PlayerDetailLeagueSlug,
+} from "@/lib/playerDetailLeagues";
 
 type View = "season" | "recent";
 const CONTRACT_YEARS = ["2024-25", "2025-26", "2026-27", "2027-28", "2028-29", "2029-30", "2030-31"] as const;
@@ -18,7 +23,7 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
   preseason: PlayerPreseasonAverages | null;
   contract: Contract;
   birthDate: string | null;
-  league: LeagueSlug | null;
+  league: PlayerDetailLeagueSlug | null;
   source: string | null;
   initiallyWatched: boolean;
   hasLeagueAccess: boolean;
@@ -32,6 +37,8 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
   const [watchError, setWatchError] = useState<string | null>(null);
   const sample = view === "recent" ? player.window_stats_intelligence : player.season_average_intelligence;
   const photo = photoUrl(player.photo, player.nba_id);
+  const showOutlook = isPlayerDetailOutlookLeague(league) && hasLeagueAccess && Boolean(player.nba_id);
+  const nbaContractLabel = league === "gnfc";
 
   async function addToWatchlist() {
     if (!league || !player.nba_id || watched || watchPending) return;
@@ -53,7 +60,7 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10">
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:py-10" data-testid="player-intelligence" data-player-league={league ?? "nba"}>
       <Link href={backHref(source, league)} className="text-sm font-semibold text-blue-600 hover:underline dark:text-blue-400">
         ← {backLabel(source)}
       </Link>
@@ -71,7 +78,7 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
                 {player.position ?? "Position unavailable"} · {player.nba_team ?? "NBA team unavailable"}{birthDate ? ` · Born ${birthDate}` : ""}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                {league && <span className={`rounded-full px-3 py-1 text-xs font-bold ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{player.availability === "free_agent" ? `${intelligence.league?.name} free agent` : player.fantasy_team?.name ?? "Rostered"}</span>}
+                {league && <span className={`rounded-full px-3 py-1 text-xs font-bold ${player.availability === "free_agent" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"}`}>{player.availability === "free_agent" ? `${intelligence.league?.name ?? playerDetailLeagueLabel(league)} free agent` : player.fantasy_team?.name ?? "Rostered"}</span>}
                 {player.injury && <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-bold text-rose-700 dark:bg-rose-950 dark:text-rose-300">Feed: {injuryLabel(player.injury)}</span>}
                 {!sample.qualified && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">Small sample</span>}
               </div>
@@ -84,10 +91,10 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
           {watchError && <p className="mt-4 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">{watchError}</p>}
         </div>
         <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex w-fit gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800">
+          <div className="flex w-fit flex-wrap gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800" data-testid="player-context-tabs">
             <ContextLink label="NBA" active={!league} href={contextHref(player.player_id, null, source)} />
-            {LEAGUE_SLUGS.map((item) => (
-              <ContextLink key={item} label={leagueLabel(item)} active={league === item} href={contextHref(player.player_id, item, source)} />
+            {PLAYER_DETAIL_LEAGUE_SLUGS.map((item) => (
+              <ContextLink key={item} label={playerDetailLeagueLabel(item)} active={league === item} href={contextHref(player.player_id, item, source)} />
             ))}
           </div>
           <div className="flex w-fit gap-1 rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800">
@@ -99,15 +106,26 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
 
       {!hasRecent && <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">No games are available in the latest {intelligence.window.days}-day window. Season intelligence is shown.</div>}
 
-      {league && hasLeagueAccess && player.nba_id && <PlayerOutlookPilot
-        league={league} nbaId={player.nba_id} name={player.name} canReviewInjury={canReviewInjury}
-        freeAgent={player.availability === "free_agent"}
-      />}
+      {showOutlook && (
+        <PlayerOutlookPilot
+          league={league}
+          nbaId={player.nba_id!}
+          name={player.name}
+          canReviewInjury={canReviewInjury}
+          freeAgent={player.availability === "free_agent"}
+        />
+      )}
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <DecisionCard label="Current salary" value={player.salary_2026_27 ?? "$0"} detail={player.salary_2026_27 ? "2026–27 contract" : "No contract · free agent"} />
+        <DecisionCard
+          label={nbaContractLabel ? "NBA contract" : "Current salary"}
+          value={player.salary_2026_27 ?? "$0"}
+          detail={nbaContractLabel
+            ? (player.salary_2026_27 ? "2026–27 NBA salary" : "No NBA contract on file")
+            : (player.salary_2026_27 ? "2026–27 contract" : "No contract · free agent")}
+        />
         <DecisionCard label="NBA rank" value={overallRank(sample, "nba")} detail={overallDetail(sample, "nba")} />
-        <DecisionCard label={league ? `${intelligence.league?.name} market` : "Sample"} value={league ? overallRank(sample, "market") : `${sample.games} games`} detail={league ? overallDetail(sample, "market") : `Minimum ${sample.minimum_games} to qualify`} />
+        <DecisionCard label={league ? `${intelligence.league?.name ?? playerDetailLeagueLabel(league)} market` : "Sample"} value={league ? overallRank(sample, "market") : `${sample.games} games`} detail={league ? overallDetail(sample, "market") : `Minimum ${sample.minimum_games} to qualify`} />
         <DecisionCard label="Category profile" value={`${sample.strengths.length} strong`} detail={`${sample.weaknesses.length} ${sample.weaknesses.length === 1 ? "weakness" : "weaknesses"} · ${sample.games} games`} />
       </section>
 
@@ -119,7 +137,10 @@ export default function PlayerIntelligenceDashboard({ intelligence, preseason, c
         <div className="mt-5 flex flex-wrap gap-4 border-t border-slate-100 pt-4 text-xs dark:border-slate-800"><ProfileChips label="Strengths" values={sample.strengths} tone="green" /><ProfileChips label="Weaknesses" values={sample.weaknesses} tone="red" /></div>
       </section>
 
-      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[0.9fr_1.1fr]"><LatestGame intelligence={intelligence} /><ContractTimeline contract={contract} salaries={player.salaries} /></div>
+      <div className="mt-5 grid items-start gap-5 lg:grid-cols-[0.9fr_1.1fr]">
+        <LatestGame intelligence={intelligence} />
+        <ContractTimeline contract={contract} salaries={player.salaries} nbaContract={nbaContractLabel} />
+      </div>
       <footer className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-900">Stats updated {formatTimestamp(intelligence.freshness.stats)} · Injury updated {formatTimestamp(intelligence.freshness.injury)}</footer>
     </main>
   );
@@ -129,7 +150,7 @@ function ContextLink({ label, active, href }: { label: string; active: boolean; 
 function ViewButton({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: ReactNode }) { return <button type="button" disabled={disabled} onClick={onClick} className={`rounded-lg px-4 py-2 text-sm font-bold ${active ? "bg-white text-slate-950 shadow-sm dark:bg-slate-700 dark:text-white" : "text-slate-500 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400"}`}>{children}</button>; }
 function DecisionCard({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900"><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-xl font-black tabular-nums text-slate-950 dark:text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
 
-function CategoryCard({ category, league }: { category: PlayerIntelligenceCategory; league: LeagueSlug | null }) {
+function CategoryCard({ category, league }: { category: PlayerIntelligenceCategory; league: PlayerDetailLeagueSlug | null }) {
   const tone = category.z == null ? "neutral" : category.z >= 0.5 ? "strong" : category.z <= -0.5 ? "weak" : "neutral";
   const classes = tone === "strong" ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/20" : tone === "weak" ? "border-rose-200 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/20" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60";
   return <article className={`rounded-2xl border p-4 ${classes}`}><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold text-slate-500">{category.label}</p><p className="mt-1 text-2xl font-black tabular-nums text-slate-950 dark:text-white">{formatValue(category)}</p></div><span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${tone === "strong" ? "bg-emerald-100 text-emerald-700" : tone === "weak" ? "bg-rose-100 text-rose-700" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"}`}>{category.z == null ? "No data" : `${category.z > 0 ? "+" : ""}${category.z.toFixed(2)} z`}</span></div><div className="mt-4 grid grid-cols-2 gap-3 border-t border-slate-200/70 pt-3 text-xs dark:border-slate-700"><Rank label="NBA rank" rank={category.nba_rank} total={category.nba_of} />{league ? <Rank label="Market rank" rank={category.fantasy_market_rank} total={category.fantasy_market_of} /> : <p className="text-right text-slate-400">NBA-wide context</p>}</div></article>;
@@ -147,26 +168,57 @@ function LatestGame({ intelligence }: { intelligence: PlayerIntelligence }) {
 
 function GameStat({ label, value }: { label: string; value: number | string }) { return <div className="rounded-xl bg-slate-50 p-2.5 text-center dark:bg-slate-800"><p className="text-[10px] font-bold text-slate-400">{label}</p><p className="mt-1 font-black tabular-nums text-slate-900 dark:text-white">{value}</p></div>; }
 
-function ContractTimeline({ contract, salaries }: { contract: Contract; salaries: Record<string, string | null> }) {
-  return <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900"><p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Contract</p><h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">Salary timeline</h2><div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{CONTRACT_YEARS.map((year) => { const salary = contract[year] ?? salaries[year]; const current = year === "2026-27"; return <div key={year} className={`rounded-xl border p-3 ${current ? "col-span-2 border-blue-600 bg-blue-600 text-white sm:col-span-1 sm:scale-[1.04]" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"}`}><p className={`text-[10px] font-bold ${current ? "text-blue-100" : "text-slate-500"}`}>{year}{current ? " · current" : ""}</p><p className={`mt-1 font-black tabular-nums ${current ? "text-lg" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>{!salary && <p className={`text-[10px] ${current ? "text-blue-100" : "text-slate-400"}`}>No salary</p>}</div>; })}</div>{contract.guaranteed && <p className="mt-4 border-t border-slate-100 pt-3 text-sm text-slate-500 dark:border-slate-800">Guaranteed: <span className="font-bold text-slate-800 dark:text-slate-200">{contract.guaranteed}</span></p>}</section>;
+function ContractTimeline({ contract, salaries, nbaContract }: { contract: Contract; salaries: Record<string, string | null>; nbaContract: boolean }) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">{nbaContract ? "NBA contract" : "Contract"}</p>
+      <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">{nbaContract ? "NBA salary timeline" : "Salary timeline"}</h2>
+      <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {CONTRACT_YEARS.map((year) => {
+          const salary = contract[year] ?? salaries[year];
+          const current = year === "2026-27";
+          return (
+            <div key={year} className={`rounded-xl border p-3 ${current ? "col-span-2 border-blue-600 bg-blue-600 text-white sm:col-span-1 sm:scale-[1.04]" : "border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800"}`}>
+              <p className={`text-[10px] font-bold ${current ? "text-blue-100" : "text-slate-500"}`}>{year}{current ? " · current" : ""}</p>
+              <p className={`mt-1 font-black tabular-nums ${current ? "text-lg" : "text-slate-900 dark:text-white"}`}>{salary ?? "$0"}</p>
+              {!salary && <p className={`text-[10px] ${current ? "text-blue-100" : "text-slate-400"}`}>{nbaContract ? "No NBA salary" : "No salary"}</p>}
+            </div>
+          );
+        })}
+      </div>
+      {contract.guaranteed && <p className="mt-4 border-t border-slate-100 pt-3 text-sm text-slate-500 dark:border-slate-800">Guaranteed: <span className="font-bold text-slate-800 dark:text-slate-200">{contract.guaranteed}</span></p>}
+    </section>
+  );
 }
 
 function overallRank(sample: PlayerIntelligenceSample, kind: "nba" | "market") { const overall = sample.overall; if (!overall) return `${sample.categories.length} ranked cats`; const rank = kind === "nba" ? overall.nba_rank : overall.fantasy_market_rank; const total = kind === "nba" ? overall.nba_of : overall.fantasy_market_of; return rank && total ? `#${rank} of ${total}` : "Not ranked"; }
 function formatValue(category: PlayerIntelligenceCategory) { if (category.value == null) return "—"; if (category.key === "fg_pct" || category.key === "ft_pct") return `${category.value.toFixed(1)}%`; return category.value.toFixed(category.value >= 10 ? 1 : 2); }
 function injuryLabel(injury: NonNullable<PlayerIntelligence["player"]["injury"]>) { return [injury.body_part, injury.detail ?? injury.status.replaceAll("_", " ")].filter(Boolean).join(" · "); }
 function formatTimestamp(value: string | null) { if (!value) return "unavailable"; return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Athens" }).format(new Date(value)); }
-function contextHref(id: number, league: LeagueSlug | null, source: string | null) { const params = new URLSearchParams(); if (league) params.set("league", league); if (source) params.set("from", source); return `/players/${id}${params.size ? `?${params}` : ""}`; }
-function backHref(source: string | null, league: LeagueSlug | null) {
+function contextHref(id: number, league: PlayerDetailLeagueSlug | null, source: string | null) { const params = new URLSearchParams(); if (league) params.set("league", league); if (source) params.set("from", source); return `/players/${id}${params.size ? `?${params}` : ""}`; }
+function backHref(source: string | null, league: PlayerDetailLeagueSlug | null) {
   if (source === "watchlist") {
     const params = new URLSearchParams({ view: "watched" });
     if (league) params.set("league", league);
     return `/players?${params}`;
   }
-  if ((source === "roster" || source === "recommendations") && league) return `/fantasy/${league}`;
+  if (source === "explorer" || source === "fit" || source === "fa-trends") {
+    const params = new URLSearchParams();
+    if (source === "explorer") params.set("view", "browse");
+    else if (source === "fit") params.set("view", "fit");
+    else params.set("view", "fa-trends");
+    if (league) params.set("league", league);
+    return `/players?${params}`;
+  }
+  if ((source === "roster" || source === "recommendations") && league && league !== "gnfc") return `/fantasy/${league}`;
+  if (league) return `/players?league=${league}`;
   return "/players";
 }
 function backLabel(source: string | null) {
   if (source === "watchlist") return "Watched";
+  if (source === "explorer") return "Browse";
+  if (source === "fit") return "Fit";
+  if (source === "fa-trends") return "FA Trends";
   if (source === "roster" || source === "recommendations") return "Fantasy league";
   return "Players";
 }

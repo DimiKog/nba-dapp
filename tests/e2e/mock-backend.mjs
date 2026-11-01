@@ -273,6 +273,42 @@ const server = createServer((request, response) => {
   if (url.pathname === "/api/nba/news") {
     return send(response, 200, []);
   }
+  const nbaPlayerMatch = url.pathname.match(/^\/api\/nba\/players\/(\d+)$/);
+  if (nbaPlayerMatch) {
+    return send(response, 200, nbaPlayerDetailFixture(Number(nbaPlayerMatch[1])));
+  }
+  const nbaIntelligenceMatch = url.pathname.match(/^\/api\/nba\/players\/(\d+)\/intelligence$/);
+  if (nbaIntelligenceMatch) {
+    return send(response, 200, playerIntelligenceFixture({
+      playerId: Number(nbaIntelligenceMatch[1]),
+      league: null,
+    }));
+  }
+  const fantasyIntelligenceMatch = url.pathname.match(
+    /^\/api\/fantasy\/(ldl|bdb|gnfc)\/players\/(\d+)\/intelligence$/,
+  );
+  if (fantasyIntelligenceMatch) {
+    const [, league, nbaId] = fantasyIntelligenceMatch;
+    return send(response, 200, playerIntelligenceFixture({
+      playerId: Number(nbaId),
+      nbaId: Number(nbaId),
+      league,
+    }));
+  }
+  const preseasonByNbaId = url.pathname.match(/^\/api\/nba\/players\/by-nba-id\/(\d+)\/preseason-averages$/);
+  if (preseasonByNbaId) {
+    return send(response, 200, {
+      season: "2026-27",
+      games: 2,
+      last_game_date: "2026-10-12",
+      status: "available",
+      source: "ESPN",
+      averages: {
+        minutes: 22.5, fg_pct: 45, three_pm: 1, ft_pct: 80,
+        points: 10, rebounds: 5, assists: 8, steals: 1, blocks: 0, turnovers: 2,
+      },
+    });
+  }
   if (url.pathname === "/api/nba/players/preseason-averages") {
     response.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:3102");
     response.setHeader("Access-Control-Allow-Headers", "cf-access-jwt-assertion");
@@ -1493,6 +1529,121 @@ function freeAgentRadarFixture(league) {
     categories,
     method: "recent_vs_season_category_trend",
     players,
+  };
+}
+
+function nbaPlayerDetailFixture(playerId) {
+  const nbaId = playerId >= 40_000 ? playerId - 10_000 : playerId;
+  return {
+    id: playerId,
+    name: playerId === 51_000 ? "Free Agent ORL 1" : `Detail Player ${playerId}`,
+    position: "G",
+    team: "Orlando Magic",
+    photo: null,
+    nba_id: nbaId,
+    salary_current: "$25,000,000",
+    birth_date: "1999-01-01",
+    contract: {
+      "2024-25": "$23,000,000",
+      "2025-26": "$24,000,000",
+      "2026-27": "$25,000,000",
+      "2027-28": null,
+      "2028-29": null,
+      "2029-30": null,
+      "2030-31": null,
+      guaranteed: "$72,000,000",
+      retrieved_at: "2026-10-01T00:00:00Z",
+    },
+  };
+}
+
+function intelligenceSample(qualified = true) {
+  const categories = [
+    { key: "points", label: "PTS", value: 18.2, z: 0.8, nba_rank: 40, nba_of: 200, fantasy_market_rank: 12, fantasy_market_of: 80 },
+    { key: "rebounds", label: "REB", value: 4.1, z: -0.2, nba_rank: 110, nba_of: 200, fantasy_market_rank: 40, fantasy_market_of: 80 },
+    { key: "assists", label: "AST", value: 5.5, z: 0.6, nba_rank: 35, nba_of: 200, fantasy_market_rank: 10, fantasy_market_of: 80 },
+  ];
+  return {
+    games: qualified ? 12 : 1,
+    minimum_games: 2,
+    qualified,
+    sample: qualified ? "qualified" : "small_sample",
+    strengths: ["PTS", "AST"],
+    weaknesses: ["REB"],
+    categories,
+    overall: {
+      z_score: 1.2,
+      nba_rank: 40,
+      nba_of: 200,
+      fantasy_market_rank: 12,
+      fantasy_market_of: 80,
+    },
+  };
+}
+
+function playerIntelligenceFixture({ playerId, nbaId = null, league = null }) {
+  const resolvedNbaId = nbaId ?? (playerId >= 40_000 ? playerId - 10_000 : playerId);
+  const season = intelligenceSample(true);
+  const recent = intelligenceSample(true);
+  const leagueMeta = league
+    ? { slug: league, name: league === "gnfc" ? "GNFC" : league === "bdb" ? "BδB" : "LDL", categories: ["points", "rebounds", "assists"] }
+    : null;
+  return {
+    generated_at: "2026-11-01T12:00:00Z",
+    source: "database_cache",
+    window: { days: 7, season: "2026-27" },
+    freshness: { injury: null, roster: league ? "2026-11-01T08:00:00Z" : null, stats: "2026-10-31T22:00:00Z" },
+    categories: [
+      { key: "points", label: "PTS" },
+      { key: "rebounds", label: "REB" },
+      { key: "assists", label: "AST" },
+    ],
+    ...(leagueMeta ? { league: leagueMeta } : {}),
+    player: {
+      player_id: playerId,
+      nba_id: resolvedNbaId,
+      name: playerId === 51_000 ? "Free Agent ORL 1" : `Detail Player ${playerId}`,
+      short_name: "Detail",
+      position: "G",
+      nba_team: "Orlando Magic",
+      nba_team_short: "ORL",
+      photo: null,
+      identity_status: "resolved",
+      status: league ? "Free Agent" : null,
+      availability: league ? "free_agent" : undefined,
+      fantasy_team: null,
+      injury: null,
+      latest_game: {
+        date: "2026-10-31",
+        game_id: "e2e-latest",
+        is_home: true,
+        minutes: 25,
+        opponent: "BOS",
+        team: "ORL",
+        stats: {
+          points: 18, oreb: 1, dreb: 3, assists: 6, steals: 1, blocks: 0,
+          turnovers: 2, three_pm: 3, fgm: 7, fga: 15, ftm: 1, fta: 1,
+        },
+      },
+      salaries: {
+        "2026-27": "$25,000,000",
+        "2027-28": null,
+        "2028-29": null,
+        "2029-30": null,
+        "2030-31": null,
+      },
+      salary_2026_27: "$25,000,000",
+      season_average: season.categories.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+      }, { games: 12, minutes: 30 }),
+      window_stats: recent.categories.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+      }, { games: 4, minutes: 28 }),
+      season_average_intelligence: season,
+      window_stats_intelligence: recent,
+    },
   };
 }
 

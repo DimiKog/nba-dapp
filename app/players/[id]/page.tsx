@@ -4,8 +4,13 @@ import { notFound } from "next/navigation";
 import PlayerIntelligenceDashboard from "@/components/PlayerIntelligenceDashboard";
 import { ApiResponseError, fetchPlayer, fetchPlayerIntelligence, fetchPlayerPreseasonAverages, photoUrl, type FantasyWatchlist, type PlayerDetail } from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
+import {
+  isPlayerDetailOutlookLeague,
+  parsePlayerDetailLeagueSlug,
+  PLAYER_DETAIL_LEAGUE_SLUGS,
+  playerDetailLeagueLabel,
+} from "@/lib/playerDetailLeagues";
 import { readWatchlist } from "@/lib/watchlistServer";
-import { isLeagueSlug, leagueLabel, LEAGUE_SLUGS, type LeagueSlug } from "@/lib/leagues";
 
 export default async function PlayerPage({ params, searchParams }: {
   params: Promise<{ id: string }>;
@@ -15,8 +20,11 @@ export default async function PlayerPage({ params, searchParams }: {
   const playerId = Number(id);
   if (!Number.isInteger(playerId)) notFound();
 
-  const requestedLeague: LeagueSlug | null = isLeagueSlug(query.league) ? query.league : null;
-  const source = ["watchlist", "explorer", "recommendations", "roster"].includes(query.from ?? "") ? query.from! : null;
+  // Accept ldl | bdb | gnfc without writing gnfc into legacy LEAGUE_SLUGS storage.
+  const requestedLeague = parsePlayerDetailLeagueSlug(query.league);
+  const source = ["watchlist", "explorer", "recommendations", "roster", "fit", "fa-trends", "home"].includes(query.from ?? "")
+    ? query.from!
+    : null;
   let player: PlayerDetail;
   try {
     player = await fetchPlayer(playerId);
@@ -45,8 +53,22 @@ export default async function PlayerPage({ params, searchParams }: {
         .catch(() => null)
     : null;
   const initiallyWatched = Boolean(player.nba_id && watchlist?.entries.some((entry) => entry.nba_player_id === player.nba_id));
+  const outlookLeague = isPlayerDetailOutlookLeague(league);
+  const canReviewInjury = Boolean(outlookLeague && membership?.commissioner);
 
-  return <PlayerIntelligenceDashboard intelligence={intelligence} preseason={preseason} contract={player.contract} birthDate={player.birth_date} league={league} source={source} initiallyWatched={initiallyWatched} hasLeagueAccess={Boolean(membership)} canReviewInjury={Boolean(membership?.commissioner)} />;
+  return (
+    <PlayerIntelligenceDashboard
+      intelligence={intelligence}
+      preseason={preseason}
+      contract={player.contract}
+      birthDate={player.birth_date}
+      league={league}
+      source={source}
+      initiallyWatched={initiallyWatched}
+      hasLeagueAccess={Boolean(membership)}
+      canReviewInjury={canReviewInjury}
+    />
+  );
 }
 
 function PlayerIdentityUnresolved({ player }: { player: PlayerDetail }) {
@@ -62,7 +84,7 @@ function PlayerIdentityUnresolved({ player }: { player: PlayerDetail }) {
           <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">Identity match pending</p><h1 className="mt-1 text-3xl font-black text-slate-950 dark:text-white">{player.name}</h1><p className="mt-1 text-sm text-slate-500">{player.position ?? "Position unavailable"} · {player.team ?? "NBA team unavailable"}</p></div>
         </div>
         <div className="border-t border-amber-200 bg-amber-50 p-5 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-          NBA and fantasy intelligence cannot be calculated until this player is matched to an NBA identity. The player record remains available, but {LEAGUE_SLUGS.map(leagueLabel).join(" and ")} context is disabled for now.
+          NBA and fantasy intelligence cannot be calculated until this player is matched to an NBA identity. The player record remains available, but {PLAYER_DETAIL_LEAGUE_SLUGS.map(playerDetailLeagueLabel).join(", ")} context is disabled for now.
         </div>
       </section>
     </main>
