@@ -7,6 +7,7 @@ import type {
   FantasyTeamCategoryProfile,
 } from "@/lib/api";
 import type { RosterMoveDiscovery } from "@/lib/rosterMoveTypes";
+import type { TeamPageLeagueSlug } from "@/lib/teamPageLeagues";
 import RecommendedMovesSection, {
   type SharedDiscoveryState,
 } from "@/components/RecommendedMovesSection";
@@ -17,23 +18,29 @@ import TeamRecommendedStrategy from "@/components/TeamRecommendedStrategy";
 type DiscoveryLoadState = SharedDiscoveryState["status"];
 
 /**
- * LDL/BDB Team Intelligence composition unit.
+ * Shared Team Intelligence composition unit (LDL / BδB / GNFC).
  * Swap with TeamDataArea in FantasyRosterPage to reverse page order.
  *
  * Personal teams: one shared roster-move-discovery request feeds
- * Recommended Strategy + Recommended Moves.
+ * Recommended Strategy + Recommended Moves when discovery is enabled.
  */
 export default function TeamIntelligenceArea({
   league,
   teamId,
   showRecommendedMoves,
+  discoveryEnabled = true,
   seasonProfile,
   windowProfile,
   seasonActuals,
 }: {
-  league: "ldl" | "bdb";
+  league: TeamPageLeagueSlug;
   teamId: string;
   showRecommendedMoves: boolean;
+  /**
+   * When false (e.g. GNFC availability not ready), skip discovery fetch and
+   * show an honest unavailable state instead of empty/misleading recommendations.
+   */
+  discoveryEnabled?: boolean;
   seasonProfile: FantasyTeamCategoryProfile | null;
   windowProfile: FantasyTeamCategoryProfile | null;
   seasonActuals: FantasySeasonCategoryActuals | null;
@@ -49,9 +56,10 @@ export default function TeamIntelligenceArea({
 
         {showRecommendedMoves ? (
           <PersonalIntelligence
-            key={`${league}:${teamId}`}
+            key={`${league}:${teamId}:${discoveryEnabled ? "on" : "off"}`}
             league={league}
             teamId={teamId}
+            discoveryEnabled={discoveryEnabled}
             seasonProfile={seasonProfile}
             windowProfile={windowProfile}
             seasonActuals={seasonActuals}
@@ -73,17 +81,19 @@ export default function TeamIntelligenceArea({
 function PersonalIntelligence({
   league,
   teamId,
+  discoveryEnabled,
   seasonProfile,
   windowProfile,
   seasonActuals,
 }: {
-  league: "ldl" | "bdb";
+  league: TeamPageLeagueSlug;
   teamId: string;
+  discoveryEnabled: boolean;
   seasonProfile: FantasyTeamCategoryProfile | null;
   windowProfile: FantasyTeamCategoryProfile | null;
   seasonActuals: FantasySeasonCategoryActuals | null;
 }) {
-  const shared = useSharedDiscovery(league, teamId);
+  const shared = useSharedDiscovery(league, teamId, discoveryEnabled);
 
   return (
     <>
@@ -92,7 +102,7 @@ function PersonalIntelligence({
           <TeamIntelligenceSummary
             profile={seasonProfile}
             strategy={shared.discovery?.recommended_strategy}
-            discoveryStatus={shared.status}
+            discoveryStatus={shared.status === "unavailable" ? "error" : shared.status}
           />
         )}
         <TeamRecommendedStrategy
@@ -128,7 +138,7 @@ function PublicIntelligence({
   windowProfile,
   seasonActuals,
 }: {
-  league: "ldl" | "bdb";
+  league: TeamPageLeagueSlug;
   teamId: string;
   seasonProfile: FantasyTeamCategoryProfile;
   windowProfile: FantasyTeamCategoryProfile | null;
@@ -166,7 +176,7 @@ function FullCategoryAnalysisDetails({
   seasonProfile: FantasyTeamCategoryProfile;
   windowProfile: FantasyTeamCategoryProfile | null;
   seasonActuals: FantasySeasonCategoryActuals | null;
-  league: "ldl" | "bdb";
+  league: TeamPageLeagueSlug;
   teamId: string;
 }) {
   return (
@@ -199,15 +209,23 @@ function FullCategoryAnalysisDetails({
   );
 }
 
+const AVAILABILITY_UNAVAILABLE: SharedDiscoveryState = {
+  status: "unavailable",
+  discovery: null,
+  error: "Free-agent recommendations unlock when league availability is ready.",
+};
+
 function useSharedDiscovery(
-  league: "ldl" | "bdb",
+  league: TeamPageLeagueSlug,
   teamId: string,
+  discoveryEnabled: boolean,
 ): SharedDiscoveryState {
   const [status, setStatus] = useState<DiscoveryLoadState>("loading");
   const [discovery, setDiscovery] = useState<RosterMoveDiscovery | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!discoveryEnabled) return;
     let active = true;
     fetchRosterMoveDiscovery(league, teamId, { basis: "season" })
       .then((result) => {
@@ -222,17 +240,28 @@ function useSharedDiscovery(
       .catch((err: unknown) => {
         if (!active) return;
         setDiscovery(null);
-        setStatus("error");
-        setError(
+        const message =
           err instanceof ApiResponseError
             ? err.message
-            : "Could not load team intelligence",
-        );
+            : "Could not load team intelligence";
+        // Backend availability gate returns 503 with availability_not_ready /
+        // incomplete_league_roster — treat as honest unavailable, not a soft empty list.
+        if (
+          (err instanceof ApiResponseError && err.status === 503)
+          || /availability|not (active|ready)|incomplete/i.test(message)
+        ) {
+          setStatus("unavailable");
+          setError(message);
+          return;
+        }
+        setStatus("error");
+        setError(message);
       });
     return () => {
       active = false;
     };
-  }, [league, teamId]);
+  }, [league, teamId, discoveryEnabled]);
 
+  if (!discoveryEnabled) return AVAILABILITY_UNAVAILABLE;
   return { status, discovery, error };
 }

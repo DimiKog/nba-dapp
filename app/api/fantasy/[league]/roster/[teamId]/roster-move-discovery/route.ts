@@ -1,5 +1,5 @@
 import { authorizeFantasyRequest } from "@/lib/fantasySessionServer";
-import { isLeagueSlug } from "@/lib/leagues";
+import { isRosterMoveLeagueSlug } from "@/lib/teamPageLeagues";
 import {
   backendIdentityForwardHeaders,
   backendRosterMoveUrl,
@@ -16,7 +16,7 @@ export async function POST(
   context: { params: Promise<{ league: string; teamId: string }> },
 ) {
   const { league, teamId } = await context.params;
-  if (!isLeagueSlug(league)) {
+  if (!isRosterMoveLeagueSlug(league)) {
     return Response.json({ error: "Unknown league" }, { status: 404 });
   }
   if (!validRosterMoveTeamId(teamId)) {

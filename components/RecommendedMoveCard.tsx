@@ -21,7 +21,7 @@ export default function RecommendedMoveCard({
   teamId,
   move,
 }: {
-  league: "ldl" | "bdb";
+  league: "ldl" | "bdb" | "gnfc";
   teamId: string;
   move: RosterMoveRecommendation;
 }) {

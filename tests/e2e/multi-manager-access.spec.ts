@@ -554,9 +554,11 @@ test("GNFC roster shows current-season FA form and provisional minutes evidence"
   await page.goto(`${app}/fantasy/gnfc/roster/gnfc-athens`);
 
   await expect(page.getByRole("heading", { name: "Athens BrickLayers" })).toBeVisible();
-  await page.locator("#team-analysis").getByRole("button", { name: "Fantrax rank" }).click();
-  await expect(page.locator("#team-analysis").getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
-  await expect(page.getByRole("link", { name: "2026–27 free agents" })).toBeVisible();
+  await expect(page.locator("#intelligence")).toBeVisible();
+  await page.locator("#intelligence").getByText("View full category analysis").click();
+  await page.locator("#intelligence #team-analysis").getByRole("button", { name: "Fantrax rank" }).click();
+  await expect(page.locator("#intelligence #team-analysis").getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
+  await expect(page.locator("#player-targets")).toBeVisible();
   const form = page.getByRole("region", { name: "2026–27 free-agent form" });
   await expect(form.getByText("This season's games drive the FA ranking.")).toBeVisible();
   const candidate = page.locator("article").filter({ has: page.getByRole("heading", { name: "GNFC Current Form Target" }) });

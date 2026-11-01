@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   ApiResponseError,
   fetchFantasyRoster,
@@ -17,15 +18,33 @@ import TeamDataArea from "@/components/TeamDataArea";
 import RefreshDataButton from "@/components/RefreshDataButton";
 import { notFound } from "next/navigation";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
-import { leagueLabel, type LeagueSlug } from "@/lib/leagues";
+import {
+  teamPageCapabilities,
+  type TeamPageLeagueSlug,
+} from "@/lib/teamPageLeagues";
 
 export default async function FantasyRosterPage({
   league,
   teamId,
+  discoveryEnabled = true,
+  availabilityNotice = null,
+  beforeIntelligence = null,
+  afterData = null,
 }: {
-  league: LeagueSlug;
+  league: TeamPageLeagueSlug;
   teamId: string;
+  /**
+   * When false (GNFC availability not ready), Team Intelligence still mounts
+   * but does not fetch or display misleading recommended moves.
+   */
+  discoveryEnabled?: boolean;
+  availabilityNotice?: ReactNode;
+  /** Legacy / league-specific content between nav and intelligence (e.g. RosterWatchPanel). */
+  beforeIntelligence?: ReactNode;
+  /** Legacy / league-specific content after Team Data (e.g. PowerSummary, CategoryNeeds). */
+  afterData?: ReactNode;
 }) {
+  const caps = teamPageCapabilities(league);
   let roster;
   let performance = null;
   let seasonProfile = null;
@@ -57,11 +76,17 @@ export default async function FantasyRosterPage({
   const reserve = roster.players.filter((p) => p.status === "Reserve");
   const ir      = roster.players.filter((p) => p.status === "IR");
   const showIntelligence = isPersonalTeam || Boolean(seasonProfile);
+  const showPayroll = caps.showPayroll && Boolean(performance?.payroll);
+  // LDL/BδB keep roster-watch cues inside the roster table only (no standalone nav).
+  // GNFC still surfaces the legacy RosterWatchPanel + nav anchor.
+  const hasWatchNav = caps.usesAvailabilityGate
+    && isPersonalTeam
+    && Boolean(performance?.players.some((player) => player.roster_watch));
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-10">
-      <Link href={`/fantasy/${league}`} className="text-sm text-blue-500 hover:underline">
-        ← {leagueLabel(league)} Standings
+      <Link href={caps.standingsHref} className="text-sm text-blue-500 hover:underline">
+        ← {caps.standingsLabel}
       </Link>
 
       <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -70,31 +95,43 @@ export default async function FantasyRosterPage({
             <Image src={roster.logo} alt={roster.team_name ?? ""} width={56} height={56} className="h-14 w-14 rounded-full" unoptimized />
           )}
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{roster.team_name}</h1>
+            {caps.brandEyebrow && (
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">
+                {caps.brandEyebrow}
+              </p>
+            )}
+            <h1 className={`${caps.brandEyebrow ? "mt-1 " : ""}text-2xl font-bold text-slate-900 dark:text-slate-100`}>
+              {roster.team_name}
+            </h1>
             {roster.owner && (
-              <p className="text-sm text-slate-500 dark:text-slate-400">Owner: {roster.owner}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                {caps.ownerLabel}: {roster.owner}
+              </p>
             )}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <RefreshDataButton />
-          {isPersonalTeam && (
-            <>
-              <Link href={`/fantasy/${league}/strategy`} className="w-fit rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
-                Category strategy
-              </Link>
-              <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
-                Analyze a trade →
-              </Link>
-            </>
+          {isPersonalTeam && caps.showCategoryStrategyLink && (
+            <Link href={`/fantasy/${league}/strategy`} className="w-fit rounded-xl border border-blue-200 bg-white px-5 py-2.5 text-sm font-black text-blue-700 shadow-sm transition hover:bg-blue-50 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-300 dark:hover:bg-slate-800">
+              Category strategy
+            </Link>
+          )}
+          {isPersonalTeam && caps.showTradeAnalyze && (
+            <Link href={`/fantasy/${league}/roster/${encodeURIComponent(teamId)}/trade`} className="w-fit rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+              Analyze a trade →
+            </Link>
           )}
         </div>
       </div>
+
+      {availabilityNotice}
 
       {/* A. OVERVIEW */}
       {performance && (
         <TeamPageOverview
           performance={performance}
+          showCap={caps.showCap}
           insightsHref="#intelligence"
           insightsLabel="Team intelligence"
         />
@@ -103,11 +140,13 @@ export default async function FantasyRosterPage({
         hasOverview={Boolean(performance)}
         hasIntelligence={showIntelligence}
         hasRecommendedMoves={false}
-        hasWatch={false}
-        hasPayroll={Boolean(performance?.payroll)}
+        hasWatch={hasWatchNav}
+        hasPayroll={showPayroll}
         hasAnalysis={false}
         hasTargets={false}
       />
+
+      {beforeIntelligence}
 
       {/*
         B. TEAM INTELLIGENCE  →  C. TEAM DATA
@@ -117,6 +156,7 @@ export default async function FantasyRosterPage({
         league={league}
         teamId={teamId}
         showRecommendedMoves={isPersonalTeam}
+        discoveryEnabled={discoveryEnabled}
         seasonProfile={seasonProfile}
         windowProfile={windowProfile}
         seasonActuals={seasonActuals}
@@ -126,6 +166,13 @@ export default async function FantasyRosterPage({
         <section id="roster" className="scroll-mt-32">
           {performance ? (
             <RosterPerformanceTable performance={performance} league={league} showWatch={isPersonalTeam} />
+          ) : roster.players.length === 0 ? (
+            <section className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900">
+              <h2 className="text-lg font-black text-slate-950 dark:text-white">No drafted players yet</h2>
+              <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Fantrax currently shows an empty roster. This page will show players as the draft and roster updates arrive.
+              </p>
+            </section>
           ) : (
           <div className="mt-8 space-y-6">
             {[
@@ -143,7 +190,9 @@ export default async function FantasyRosterPage({
                           <th className="px-4 py-2 text-left">Player</th>
                           <th className="px-4 py-2 text-left hidden sm:table-cell">NBA Team</th>
                           <th className="px-4 py-2 text-left">Pos</th>
-                          <th className="px-4 py-2 text-right">2026-27 Salary</th>
+                          {caps.showSalaryInFallbackRoster && (
+                            <th className="px-4 py-2 text-right">2026-27 Salary</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -174,9 +223,11 @@ export default async function FantasyRosterPage({
                                 {p.nba_team_short || p.nba_team || "—"}
                               </td>
                               <td className="px-4 py-2.5 text-slate-600 dark:text-slate-400">{p.position}</td>
-                              <td className="px-4 py-2.5 text-right font-semibold text-blue-700 dark:text-blue-400 tabular-nums">
-                                {p.salary_2026_27 ?? <span className="text-slate-400">—</span>}
-                              </td>
+                              {caps.showSalaryInFallbackRoster && (
+                                <td className="px-4 py-2.5 text-right font-semibold text-blue-700 dark:text-blue-400 tabular-nums">
+                                  {p.salary_2026_27 ?? <span className="text-slate-400">—</span>}
+                                </td>
+                              )}
                             </tr>
                           );
                         })}
@@ -190,8 +241,12 @@ export default async function FantasyRosterPage({
           )}
         </section>
 
-        {performance?.payroll && <TeamPayrollPanel payroll={performance.payroll} />}
+        {showPayroll && performance?.payroll && (
+          <TeamPayrollPanel payroll={performance.payroll} />
+        )}
       </TeamDataArea>
+
+      {afterData}
     </main>
   );
 }

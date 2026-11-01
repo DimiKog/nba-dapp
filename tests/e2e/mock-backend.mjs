@@ -64,6 +64,8 @@ const performanceDelays = new Map();
 const sessionDelays = new Map();
 /** In-memory watchlists keyed by `${subject}:${league}`. */
 const watchlistStore = new Map();
+/** E2E toggle for GNFC free-agent availability readiness (default ready). */
+let gnfcAvailabilityReady = true;
 
 
 function membership(league, franchiseId, franchiseName, teamId, commissioner) {
@@ -156,6 +158,16 @@ const server = createServer((request, response) => {
       return;
     }
     return send(response, 200, session);
+  }
+  if (url.pathname === "/__e2e/gnfc-availability" && request.method === "POST") {
+    let rawBody = "";
+    request.on("data", (chunk) => { rawBody += chunk; });
+    request.on("end", () => {
+      const body = JSON.parse(rawBody || "{}");
+      gnfcAvailabilityReady = body.ready !== false;
+      send(response, 200, { availability_ready: gnfcAvailabilityReady });
+    });
+    return;
   }
   if (url.pathname === "/api/fantasy/leagues") {
     return send(response, 200, [leagueFixture("ldl"), leagueFixture("bdb"), leagueFixture("gnfc")]);
@@ -558,7 +570,7 @@ const server = createServer((request, response) => {
     return;
   }
   const discoveryMatch = url.pathname.match(
-    /^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/roster-move-discovery$/,
+    /^\/api\/fantasy\/(ldl|bdb|gnfc)\/roster\/([^/]+)\/roster-move-discovery$/,
   );
   if (discoveryMatch && request.method === "POST") {
     const [, league, teamId] = discoveryMatch;
@@ -568,6 +580,14 @@ const server = createServer((request, response) => {
       item.league_slug === league && item.fantrax_team_id === teamId
     ));
     if (!membership) return send(response, 403, { error: "Not your team" });
+    if (league === "gnfc" && !gnfcAvailabilityReady) {
+      request.on("data", () => {});
+      request.on("end", () => send(response, 503, {
+        error: "GNFC free-agent availability is not active yet",
+        code: "availability_not_ready",
+      }));
+      return;
+    }
     request.on("data", () => {});
     request.on("end", () => {
       send(response, 200, rosterMoveDiscoveryFixture(league, teamId));
@@ -575,7 +595,7 @@ const server = createServer((request, response) => {
     return;
   }
   const analysisMatch = url.pathname.match(
-    /^\/api\/fantasy\/(ldl|bdb)\/roster\/([^/]+)\/roster-move-analysis$/,
+    /^\/api\/fantasy\/(ldl|bdb|gnfc)\/roster\/([^/]+)\/roster-move-analysis$/,
   );
   if (analysisMatch && request.method === "POST") {
     const [, league, teamId] = analysisMatch;
@@ -638,13 +658,15 @@ function rosterMoveDiscoveryFixture(league, teamId) {
         z_delta: 0.35,
       },
     ],
-    salary_cap: {
-      applies: true,
-      status: "applicable",
-      verified: true,
-      delta: -200_000,
-      cap_result: "compliant",
-    },
+    salary_cap: league === "gnfc"
+      ? { applies: false, status: "not_applicable", verified: true, delta: null, cap_result: "not_applicable" }
+      : {
+        applies: true,
+        status: "applicable",
+        verified: true,
+        delta: -200_000,
+        cap_result: "compliant",
+      },
     invented_drop: false,
     reason_codes: [],
   }));
@@ -733,7 +755,8 @@ function leagueFixture(slug) {
     personal_team_id: "global-config-must-not-be-used",
     personal_team_name: "Global config must not be used",
     enabled: true,
-    availability_ready: slug === "gnfc",
+    availability_ready: slug === "gnfc" ? gnfcAvailabilityReady : false,
+    expected_team_count: slug === "gnfc" ? 12 : undefined,
     categories: slug === "gnfc" ? ["points", "rebounds", "assists"] : undefined,
     season_phase: "off_season",
     roster_rules: { minimum_players: 13, standard_maximum: 14 },
