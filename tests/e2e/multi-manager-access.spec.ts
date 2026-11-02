@@ -548,7 +548,7 @@ test("LDL team page omits Category Needs from the main flow", async ({ page, req
   await expect(page.locator("#payroll")).toBeVisible();
 });
 
-test("GNFC roster shows current-season FA form and provisional minutes evidence", async ({ page, request }) => {
+test("GNFC roster routes player discovery to Fit and keeps category analysis", async ({ page, request }) => {
   const token = await tokenFor(request, "gnfc-manager-subject");
   await page.context().setExtraHTTPHeaders({ [accessHeader]: token });
   await page.goto(`${app}/fantasy/gnfc/roster/gnfc-athens`);
@@ -558,13 +558,14 @@ test("GNFC roster shows current-season FA form and provisional minutes evidence"
   await page.locator("#intelligence").getByText("View full category analysis").click();
   await page.locator("#intelligence #team-analysis").getByRole("button", { name: "Fantrax rank" }).click();
   await expect(page.locator("#intelligence #team-analysis").getByText("Actual season results · Fantrax Season Stats")).toBeVisible();
-  await expect(page.locator("#player-targets")).toBeVisible();
-  const form = page.getByRole("region", { name: "2026–27 free-agent form" });
-  await expect(form.getByText("This season's games drive the FA ranking.")).toBeVisible();
-  const candidate = page.locator("article").filter({ has: page.getByRole("heading", { name: "GNFC Current Form Target" }) });
-  await expect(candidate.getByText("2 games recorded")).toBeVisible();
-  await expect(candidate.getByText(/Provisional sample · 40% statistical weight/)).toBeVisible();
-  await expect(candidate.getByLabel("Early Minutes ↑, show minutes evidence")).toBeVisible();
+  await expect(page.locator("#player-targets")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "2026–27 free-agent form" })).toHaveCount(0);
+  const fitCta = page.getByRole("link", { name: "Open Fit to my plan →" });
+  await expect(fitCta).toHaveAttribute("href", "/players?view=fit&league=gnfc&team=gnfc-athens");
+  await fitCta.click();
+  await expect(page).toHaveURL(/\/players\?.*view=fit.*league=gnfc.*team=gnfc-athens|\/players\?.*league=gnfc.*view=fit.*team=gnfc-athens/);
+  await expect(page.getByTestId("discovery-fit")).toBeVisible();
+  await expect(page.getByTestId("fit-provisional-sample").first()).toContainText("40% statistical weight");
 });
 
 test("LDL team page keeps Overview → Intelligence → Data section order", async ({ page, request }) => {

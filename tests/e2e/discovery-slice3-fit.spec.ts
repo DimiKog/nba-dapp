@@ -90,7 +90,13 @@ test.describe("Discovery Slice 3 — Fit to my plan", () => {
     await expect(page.getByTestId("fit-team-context")).toContainText("Athens BrickLayers");
     await expect(page.getByTestId("fit-strategy-targets")).toContainText("PTS");
     await expect(page.getByText(/Minutes ↑/i).first()).toBeVisible();
+    await expect(page.getByTestId("fit-provisional-sample").first()).toContainText("Provisional sample · 40% statistical weight");
+    await expect(page.getByTestId("fit-actionability-reason").first()).toBeVisible();
+    await expect(page.getByText("statistical helpers")).toHaveCount(0);
+    await expect(page.getByText("Last resort")).toHaveCount(0);
+    await expect(page.getByText("Best available")).toHaveCount(0);
   });
+
 
   test("inactive Discovery views do not fetch targets", async ({ page, request }) => {
     const token = await tokenFor(request);

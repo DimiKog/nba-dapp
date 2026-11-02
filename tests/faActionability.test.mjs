@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { roleEvidenceSummary, selectReadyFreeAgent } from "../lib/faActionability.ts";
+import {
+  formatActionabilityReason,
+  primaryActionabilityReason,
+  provisionalSampleEvidence,
+  roleEvidenceSummary,
+  selectReadyFreeAgent,
+} from "../lib/faActionability.ts";
 
 const candidate = (name, status, tier = "strong") => ({
   name,
@@ -54,4 +60,66 @@ test("current observed minutes remain evidence rather than a guarantee", () => {
   });
   assert.match(summary, /current minutes meet/i);
   assert.match(summary, /not a future guarantee/);
+});
+
+test("provisional sample evidence uses backend sample_weight only", () => {
+  assert.equal(provisionalSampleEvidence(null), null);
+  assert.equal(provisionalSampleEvidence({
+    schema_version: 1,
+    score_kind: "team_need_weighted_player_z",
+    basis_used: "season",
+    sample_games: 12,
+    weighted_sum: 1,
+    total_weight: 1,
+    score: 1,
+    contributions_field: "need_contributions",
+    market_rank_separate_from_score: true,
+    salary_and_tokens_in_score: false,
+    future_role_and_injury_risk_in_score: false,
+    sample_weight: 1,
+    full_weight_games: 5,
+  }), null);
+  const provisional = provisionalSampleEvidence({
+    schema_version: 1,
+    score_kind: "team_need_weighted_player_z",
+    basis_used: "season",
+    sample_games: 2,
+    weighted_sum: 1,
+    total_weight: 1,
+    score: 1,
+    contributions_field: "need_contributions",
+    market_rank_separate_from_score: true,
+    salary_and_tokens_in_score: false,
+    future_role_and_injury_risk_in_score: false,
+    sample_weight: 0.4,
+    full_weight_games: 5,
+    sample_adjustment: "current_season_only",
+  });
+  assert.deepEqual(provisional, {
+    sampleGames: 2,
+    sampleWeight: 0.4,
+    fullWeightGames: 5,
+    weightPercent: 40,
+  });
+});
+
+test("primary actionability reason stays concise and skips ready candidates", () => {
+  assert.equal(primaryActionabilityReason({
+    status: "ready",
+    reasons: [],
+    role_signal: "observed_current_minutes",
+    cap_result: "not_applicable",
+    roster_result: "open_slot",
+  }), null);
+  assert.equal(
+    primaryActionabilityReason({
+      status: "needs_review",
+      reasons: ["limited_current_minutes", "injury_review_required"],
+      role_signal: "historical_only",
+      cap_result: "not_applicable",
+      roster_result: "open_slot",
+    }),
+    "Current observed minutes are limited",
+  );
+  assert.equal(formatActionabilityReason("current_role_unverified"), "Current minutes and role unverified");
 });

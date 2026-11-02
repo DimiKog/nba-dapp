@@ -17,6 +17,10 @@ import {
 import type { FantasySession } from "@/lib/fantasySessionTypes";
 import { upsertWatchlistEntry, removeWatchlistEntry } from "@/lib/watchlistClient";
 import { PLAYER_POSITION_OPTIONS } from "@/lib/categoryTargetDiscovery";
+import {
+  primaryActionabilityReason,
+  provisionalSampleEvidence,
+} from "@/lib/faActionability";
 import { CATEGORY_LABELS } from "@/lib/teamCategoryStrategy";
 
 const PAGE_SIZE = 24;
@@ -202,6 +206,10 @@ function FitCandidateCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const actionability = player.availability === "free_agent" ? player.actionability : undefined;
+  const reviewReason = primaryActionabilityReason(actionability);
+  const provisional = league === "gnfc"
+    ? provisionalSampleEvidence(player.fit_explanation)
+    : null;
   const intelligenceHref = player.player_id
     ? `/players/${player.player_id}?league=${league}&from=fit`
     : null;
@@ -265,6 +273,24 @@ function FitCandidateCard({
                   : ""}
               </span>
             </div>
+            {reviewReason ? (
+              <p
+                className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+                data-testid="fit-actionability-reason"
+              >
+                {reviewReason}
+              </p>
+            ) : null}
+            {provisional ? (
+              <p
+                className="mt-1 text-[11px] font-medium text-slate-500 dark:text-slate-400"
+                data-testid="fit-provisional-sample"
+              >
+                Provisional sample · {provisional.weightPercent}% statistical weight
+                {" · "}
+                full weight at {provisional.fullWeightGames} games
+              </p>
+            ) : null}
           </div>
           <div className="flex shrink-0 flex-wrap gap-1.5">
             {intelligenceHref ? (
