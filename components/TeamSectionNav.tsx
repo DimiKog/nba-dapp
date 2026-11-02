@@ -32,12 +32,13 @@ export default function TeamSectionNav({
   const links = LINKS.filter(([id]) =>
     (hasOverview || id !== "overview") &&
     (hasIntelligence || id !== "intelligence") &&
-    // Legacy LDL items stay off when Intelligence is the LDL/BDB nav model.
+    // Legacy recommended-moves / analysis stay off when Intelligence is the nav model.
     ((hasRecommendedMoves && !hasIntelligence) || id !== "recommended-moves") &&
     (hasWatch || id !== "roster-watch") &&
     (hasPayroll || id !== "payroll") &&
     ((hasAnalysis && !hasIntelligence) || id !== "team-analysis") &&
-    ((hasTargets && !hasIntelligence) || id !== "player-targets"),
+    // Category Needs may remain alongside Intelligence until Discovery Fit migration.
+    (hasTargets || id !== "player-targets"),
   );
   return (
     <nav aria-label="Team page sections" className="sticky top-14 z-20 -mx-4 mt-5 border-y border-slate-200 bg-white/95 px-4 py-2 backdrop-blur dark:border-slate-700 dark:bg-slate-950/95">
