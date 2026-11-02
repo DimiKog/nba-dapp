@@ -1,23 +1,17 @@
 import CategoryNeedsSection from "@/components/CategoryNeedsSection";
 import FantasyRosterPage from "@/components/FantasyRosterPage";
 import GnfcAvailabilityNotice from "@/components/GnfcAvailabilityNotice";
-import GnfcPowerSummary from "@/components/GnfcPowerSummary";
-import RosterWatchPanel from "@/components/RosterWatchPanel";
 import {
   fetchFantasyCategoryTargets,
   fetchFantasyLeagues,
   fetchFantasyRoster,
-  fetchFantasyRosterPerformance,
   fetchFantasyStandings,
-  fetchFantasyTeamCategoryProfile,
-  fetchFantasyTeamPowerOutlook,
 } from "@/lib/api";
 import { loadCurrentFantasyAccess, membershipFor } from "@/lib/fantasySessionServer";
 
 /**
  * GNFC personal Team page — shared FantasyRosterPage / Team Intelligence shell.
- * Legacy GNFC sections (Power Summary, Roster Watch, Category Needs) stay mounted
- * for production review; cleanup is intentionally deferred.
+ * CategoryNeedsSection remains until Step 4C Discovery Fit migration.
  */
 export default async function GnfcRosterPage({
   params,
@@ -28,14 +22,11 @@ export default async function GnfcRosterPage({
   const access = await loadCurrentFantasyAccess();
   const isPersonalTeam = membershipFor(access?.session ?? null, "gnfc")?.fantrax_team_id === teamId;
 
-  const [teams, leagues, roster, performance, seasonProfile, outlook] = await Promise.all([
+  const [teams, leagues, roster] = await Promise.all([
     fetchFantasyStandings("gnfc").catch(() => []),
     // Availability readiness must not be served from a stale cache.
     fetchFantasyLeagues({ cache: "no-store" }).catch(() => []),
     fetchFantasyRoster("gnfc", teamId).catch(() => null),
-    fetchFantasyRosterPerformance("gnfc", teamId).catch(() => null),
-    fetchFantasyTeamCategoryProfile("gnfc", teamId).catch(() => null),
-    fetchFantasyTeamPowerOutlook("gnfc").catch(() => null),
   ]);
 
   const config = leagues.find((league) => league.slug === "gnfc");
@@ -55,6 +46,8 @@ export default async function GnfcRosterPage({
       league="gnfc"
       teamId={teamId}
       discoveryEnabled={availabilityReady}
+      hasTargets={showTargets}
+      targetsLabel="2026–27 free agents"
       availabilityNotice={
         !availabilityReady ? (
           <div className="mt-7">
@@ -66,37 +59,16 @@ export default async function GnfcRosterPage({
           </div>
         ) : null
       }
-      beforeIntelligence={
-        isPersonalTeam && performance ? (
-          <RosterWatchPanel
+      afterData={
+        showTargets && roster ? (
+          <CategoryNeedsSection
             league="gnfc"
-            players={performance.players}
-            hasTargets={showTargets}
+            teamId={teamId}
+            teamName={roster.team_name}
+            initialTargets={initialTargets}
+            isPersonalTeam
           />
         ) : null
-      }
-      afterData={
-        <>
-          {(seasonProfile || outlook) && (
-            <div className="mt-8 space-y-4">
-              <GnfcPowerSummary outlook={outlook} teamId={teamId} />
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Roster potential uses the current Fantrax roster and{" "}
-                {seasonProfile?.window.season ?? "current-season"} NBA production. It is not the
-                official Fantrax Season Stats ranking or a final-standings forecast.
-              </p>
-            </div>
-          )}
-          {showTargets && roster && (
-            <CategoryNeedsSection
-              league="gnfc"
-              teamId={teamId}
-              teamName={roster.team_name}
-              initialTargets={initialTargets}
-              isPersonalTeam
-            />
-          )}
-        </>
       }
     />
   );

@@ -69,14 +69,32 @@ test("GNFC personal Team page uses shared shell with Team Intelligence when avai
   await expect(intelligence.locator("#team-analysis")).toBeVisible();
 
   await expect(page.locator("#roster")).toBeVisible();
+  await expect(page.locator("#roster").getByText("Lower minutes").first()).toBeVisible();
   await expect(page.locator("#payroll")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Payroll" })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "Roster watch" })).toHaveCount(0);
   await expect(page.getByText("Cap", { exact: true })).toHaveCount(0);
   await expect(page.getByText("2026–27 salary")).toHaveCount(0);
 
-  await expect(page.locator("#roster-watch")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Players to review" })).toBeVisible();
+  // Legacy standalone panels removed after Team Intelligence parity.
+  await expect(page.locator("#roster-watch")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Players to review" })).toHaveCount(0);
+  await expect(page.getByText("Provisional roster strength")).toHaveCount(0);
+
   await expect(page.locator("#player-targets")).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Team page sections" }).getByRole("link", { name: "2026–27 free agents" }),
+  ).toBeVisible();
+
+  const orderWithTargets = await page.evaluate(() => {
+    const ids = ["overview", "intelligence", "roster", "player-targets"];
+    return ids
+      .map((id) => document.getElementById(id))
+      .filter(Boolean)
+      .sort((a, b) => (a!.compareDocumentPosition(b!) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      .map((el) => el!.id);
+  });
+  expect(orderWithTargets).toEqual(["overview", "intelligence", "roster", "player-targets"]);
 
   expect(discoveryUrls.some((url) => url.includes("/api/fantasy/gnfc/roster/gnfc-athens/roster-move-discovery"))).toBeTruthy();
   expect(discoveryUrls.some((url) => /\/api\/fantasy\/(ldl|bdb)\//.test(url))).toBeFalsy();

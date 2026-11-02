@@ -27,6 +27,8 @@ export default async function FantasyRosterPage({
   league,
   teamId,
   discoveryEnabled = true,
+  hasTargets = false,
+  targetsLabel = "Player targets",
   availabilityNotice = null,
   beforeIntelligence = null,
   afterData = null,
@@ -38,10 +40,13 @@ export default async function FantasyRosterPage({
    * but does not fetch or display misleading recommended moves.
    */
   discoveryEnabled?: boolean;
+  /** Keep Category Needs in the section nav while that legacy section remains (GNFC). */
+  hasTargets?: boolean;
+  targetsLabel?: string;
   availabilityNotice?: ReactNode;
-  /** Legacy / league-specific content between nav and intelligence (e.g. RosterWatchPanel). */
+  /** Optional league-specific content between nav and intelligence. */
   beforeIntelligence?: ReactNode;
-  /** Legacy / league-specific content after Team Data (e.g. PowerSummary, CategoryNeeds). */
+  /** League-specific content after Team Data (e.g. CategoryNeeds). */
   afterData?: ReactNode;
 }) {
   const caps = teamPageCapabilities(league);
@@ -77,11 +82,6 @@ export default async function FantasyRosterPage({
   const ir      = roster.players.filter((p) => p.status === "IR");
   const showIntelligence = isPersonalTeam || Boolean(seasonProfile);
   const showPayroll = caps.showPayroll && Boolean(performance?.payroll);
-  // LDL/BδB keep roster-watch cues inside the roster table only (no standalone nav).
-  // GNFC still surfaces the legacy RosterWatchPanel + nav anchor.
-  const hasWatchNav = caps.usesAvailabilityGate
-    && isPersonalTeam
-    && Boolean(performance?.players.some((player) => player.roster_watch));
 
   return (
     <main className="mx-auto w-full min-w-0 max-w-6xl px-4 py-10">
@@ -140,10 +140,11 @@ export default async function FantasyRosterPage({
         hasOverview={Boolean(performance)}
         hasIntelligence={showIntelligence}
         hasRecommendedMoves={false}
-        hasWatch={hasWatchNav}
+        hasWatch={false}
         hasPayroll={showPayroll}
         hasAnalysis={false}
-        hasTargets={false}
+        hasTargets={hasTargets}
+        targetsLabel={targetsLabel}
       />
 
       {beforeIntelligence}
