@@ -27,8 +27,6 @@ export default async function FantasyRosterPage({
   league,
   teamId,
   discoveryEnabled = true,
-  hasTargets = false,
-  targetsLabel = "Player targets",
   availabilityNotice = null,
   beforeIntelligence = null,
   afterData = null,
@@ -40,13 +38,10 @@ export default async function FantasyRosterPage({
    * but does not fetch or display misleading recommended moves.
    */
   discoveryEnabled?: boolean;
-  /** Keep Category Needs in the section nav while that legacy section remains (GNFC). */
-  hasTargets?: boolean;
-  targetsLabel?: string;
   availabilityNotice?: ReactNode;
   /** Optional league-specific content between nav and intelligence. */
   beforeIntelligence?: ReactNode;
-  /** League-specific content after Team Data (e.g. CategoryNeeds). */
+  /** Optional content after Team Data (e.g. Discovery Fit CTA). */
   afterData?: ReactNode;
 }) {
   const caps = teamPageCapabilities(league);
@@ -143,8 +138,7 @@ export default async function FantasyRosterPage({
         hasWatch={false}
         hasPayroll={showPayroll}
         hasAnalysis={false}
-        hasTargets={hasTargets}
-        targetsLabel={targetsLabel}
+        hasTargets={false}
       />
 
       {beforeIntelligence}

@@ -68,9 +68,11 @@ test("GNFC personal Team page reuses FantasyRosterPage and TeamIntelligenceArea"
   assert.match(page, /FantasyRosterPage/);
   assert.match(page, /league="gnfc"/);
   assert.match(page, /GnfcAvailabilityNotice/);
-  assert.match(page, /CategoryNeedsSection/);
+  assert.match(page, /buildDiscoveryHref/);
+  assert.match(page, /view: \"fit\"/);
+  assert.match(page, /Open Fit to my plan/);
   assert.match(page, /discoveryEnabled=\{availabilityReady\}/);
-  assert.match(page, /hasTargets=\{showTargets\}/);
+  assert.doesNotMatch(page, /CategoryNeedsSection/);
   assert.doesNotMatch(page, /GnfcPowerSummary/);
   assert.doesNotMatch(page, /RosterWatchPanel/);
   assert.doesNotMatch(page, /league=\"ldl\"/);
@@ -82,6 +84,7 @@ test("GNFC personal Team page reuses FantasyRosterPage and TeamIntelligenceArea"
   assert.match(shell, /TeamPageLeagueSlug/);
   assert.match(shell, /discoveryEnabled/);
   assert.match(shell, /hasWatch=\{false\}/);
+  assert.match(shell, /hasTargets=\{false\}/);
 
   assert.match(intelligence, /TeamPageLeagueSlug/);
   assert.match(intelligence, /discoveryEnabled/);

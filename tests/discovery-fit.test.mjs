@@ -76,3 +76,14 @@ test("desktop Fit cards tighten vertical spacing without dropping explainability
   assert.match(fit, /fit-watch/);
   assert.doesNotMatch(fit, /sm:flex-col sm:items-stretch/);
 });
+
+test("Fit surfaces backend provisional sample weight and one actionability reason without legacy lanes", () => {
+  assert.match(fit, /provisionalSampleEvidence/);
+  assert.match(fit, /primaryActionabilityReason/);
+  assert.match(fit, /fit-provisional-sample/);
+  assert.match(fit, /fit-actionability-reason/);
+  assert.doesNotMatch(fit, /statistical helpers/);
+  assert.doesNotMatch(fit, /category_recommendations/);
+  assert.doesNotMatch(fit, /Last resort/);
+  assert.doesNotMatch(fit, /Best available/);
+});
